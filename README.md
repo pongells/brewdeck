@@ -188,6 +188,18 @@ leave it out.
 Pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md), especially the safety rules for anything that
 talks to the machine. Security problems: please report them privately, see [SECURITY.md](SECURITY.md).
 
+## Roadmap
+
+Plans, not promises:
+
+- **More screens**: an unlocked ESP32-P4 board (Guition JC4880P443, 4.3" 480x800), with a speaker for optional
+  sounds ([#2](https://github.com/pongells/brewdeck/issues/2)).
+- **Updates over Wi-Fi** for the screen, and later **switching between UIs** from the screen itself
+  ([#3](https://github.com/pongells/brewdeck/issues/3)).
+- **Your own UI in your own repository**, built against a tagged core release, with a list of UIs here
+  ([#1](https://github.com/pongells/brewdeck/issues/1)).
+- Maybe: an optional beeper on the current board (a small hardware addition).
+
 ## License
 
 Brewdeck is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE): you may use, change and share
