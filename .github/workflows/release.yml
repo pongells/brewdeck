@@ -1,0 +1,40 @@
+name: Release
+
+# A tag like v0.1.0 builds the release image (no debug web server, no Wi-Fi network built in) and publishes it as a
+# GitHub release: brewdeck-<tag>-esp32s3.zip (images, flash.sh, SHA256SUMS, INSTALL.txt), notes from CHANGELOG.md.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build and publish the release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2   # v10.3.3 (Node 24)
+      - uses: actions/cache@v6
+        with:
+          path: ~/.platformio
+          key: platformio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+      - name: Build and package
+        run: |
+          # pioarduino can install a pioarduino package its own version check rejects (6.2.0.post1 vs >=6.2.0)
+          tools/make_release.sh "$GITHUB_REF_NAME" || { uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0 && tools/make_release.sh "$GITHUB_REF_NAME"; }
+      - name: Release notes from CHANGELOG.md
+        run: |
+          # the section "## <tag> ..." up to the next "## "
+          awk -v t="$GITHUB_REF_NAME" '$0 ~ "^## " {p = ($2 == t)} p' CHANGELOG.md | tail -n +2 > notes.md
+          [ -s notes.md ] || { echo "CHANGELOG.md has no section for $GITHUB_REF_NAME"; exit 1; }
+          echo >> notes.md
+          echo "Install: download the zip, read INSTALL.txt (backup first). SHA-256 of the zip:" >> notes.md
+          echo '`'"$(sha256sum dist/brewdeck-$GITHUB_REF_NAME-esp32s3.zip | cut -d' ' -f1)"'`' >> notes.md
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "dist/brewdeck-$GITHUB_REF_NAME-esp32s3.zip" --title "Brewdeck $GITHUB_REF_NAME" --notes-file notes.md

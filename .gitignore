@@ -31,3 +31,5 @@ __pycache__/
 # local output of tools/extract_proto.py (Gaggiuino's schema, not for this repo)
 *.proto
 ws_schema*.json
+firmware/include/wifi_config.h.local
+dist/

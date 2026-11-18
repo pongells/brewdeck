@@ -18,7 +18,7 @@ where a tap selects a profile. It is under the MIT license, so you can copy it a
 2. In `BD_UI`, give it its own name (at most 15 characters: it is also the namespace of its saved settings).
 3. Try it in the emulator: `UI=myui sim/build-emu.sh && sim/emu-myui`.
 4. Build the firmware: `UI=myui ./build-pio.sh ui` in `firmware/`. Add `--flash` to flash it: the script asks the
-   board whether its flash is encrypted and writes accordingly, and wants a backup first (README, "Building";
+   board whether its flash is encrypted and writes accordingly, and wants a backup first (README, "Installing";
    `DRY_RUN=1` shows what it would do).
 
 Brewdeck's own UI (`firmware/src/ui`) is the large example: every screen, the settings, the shot review.

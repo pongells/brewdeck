@@ -83,22 +83,11 @@ below), but that is untested.
 **Planned**: other screens, starting with an unlocked ESP32-P4 board (Guition JC4880P443, 4.3" 480x800) bought on its
 own: not the Gaggiuino Gen 3.5 screen, which uses a similar P4 board but is locked the same way.
 
-## Building
+## Installing
 
-The main build uses [pioarduino](https://github.com/pioarduino/platform-espressif32) (PlatformIO). It recompiles the
-Arduino core with the `custom_sdkconfig` in [`firmware/platformio.ini`](firmware/platformio.ini) (code and data run
-from PSRAM, cache line 64 B, an IRAM-safe panel interrupt), which keeps the picture steady while Wi-Fi is busy.
-
-You need [uv](https://docs.astral.sh/uv/) (the script runs PlatformIO through `uvx --python 3.14`; pioarduino does
-not support newer Python yet), git, and for flashing [esptool](https://github.com/espressif/esptool) v5
-(`brew install esptool` or `pip install esptool`; esptool 4.x spells the commands `read_flash` / `write_flash`). The
-first build downloads the toolchain and recompiles the core (several minutes); later builds take about 30 s. If
-PlatformIO then complains that its own `pioarduino` package is too old (`6.2.0.post1` does not satisfy `>=6.2.0`), pin
-it: `uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0`.
-
-The build and flash script is bash (macOS, Linux); on Windows it is untested (WSL may work). The serial port is
-`/dev/cu.usbserial-…` on macOS, `/dev/ttyUSB0` or similar on Linux. Always flash with `build-pio.sh --flash`, never with
-`pio run -t upload` (it skips the checks below).
+You need [esptool](https://github.com/espressif/esptool) v5 (`brew install esptool` or `pip install esptool`; esptool
+4.x spells the commands `read_flash` / `write_flash`) and bash (macOS, Linux; on Windows untested, WSL may work). The
+serial port is `/dev/cu.usbserial-…` on macOS, `/dev/ttyUSB0` or similar on Linux.
 
 **1. Check the screen** (reads only, writes nothing). "Flash Encryption: Enabled" is a Gaggiuino Gen 3 screen,
 "Disabled" a plain board; "Secure download mode" means it is locked and cannot take other firmware.
@@ -107,8 +96,8 @@ The build and flash script is bash (macOS, Linux); on Windows it is untested (WS
 esptool --port /dev/cu.usbserial-XXXX get-security-info
 ```
 
-**2. Back up its flash** (the whole 16 MB, from the repository root). It is the only way back to the original firmware:
-keep a copy somewhere safe.
+**2. Back up its flash** (the whole 16 MB). It is the only way back to the original firmware: keep a copy somewhere
+safe.
 
 ```sh
 mkdir -p backup
@@ -116,18 +105,17 @@ esptool --port /dev/cu.usbserial-XXXX --baud 460800 read-flash 0 0x1000000 backu
 ls -l backup/gaggiuino-screen-backup.bin    # must be exactly 16777216 bytes
 ```
 
-**3. Build, then flash.**
+**3. Flash a release.** Download `brewdeck-<version>-esp32s3.zip` from
+[Releases](https://github.com/pongells/brewdeck/releases) and unzip it. Put the backup in its `backup/` folder (or
+point `GAGGI_BACKUP` at it), then from that folder:
 
 ```sh
-cd firmware
-./build-pio.sh ui            # first run creates include/wifi_config.h: your Wi-Fi and the machine's name or IP (optional)
-./build-pio.sh ui --flash    # build and flash (env PORT=/dev/cu.usbserial-..., GAGGI_BACKUP=path to the backup)
+PORT=/dev/cu.usbserial-XXXX ./flash.sh
 ```
 
-`build-pio.sh --flash` asks the chip again before writing, and never guesses (a wrong choice would leave the screen
-unbootable):
-- **Encrypted** (a Gaggiuino Gen 3 screen): it writes with `--encrypt` and refuses to run without the 16 MB backup
-  (`backup/gaggiuino-screen-backup.bin`, or wherever `GAGGI_BACKUP` points).
+`flash.sh` checks the images against their checksums, asks the chip before writing, and never guesses (a wrong choice
+would leave the screen unbootable):
+- **Encrypted** (a Gaggiuino Gen 3 screen): it writes with `--encrypt` and refuses to run without the 16 MB backup.
 - **Plain** (a Sunton board bought on its own): a plain write. It also wants a backup; `NO_BACKUP=1` flashes without
   one (accepted only for a plain board).
 - **Locked** (secure download mode) or no answer: it stops without writing anything.
@@ -136,8 +124,8 @@ unbootable):
 the decision and the esptool command without writing. If esptool cannot connect, hold BOOT, tap RST, release BOOT. The
 screen restarts by itself after flashing; if the picture looks wrong, unplug and replug USB.
 
-You can also leave `wifi_config.h` as it is: the screen then starts on "No Wi-Fi set up" and you choose the network
-on the screen (it is saved there). The machine's address can be set on the screen too (Menu > Wi-Fi).
+**4. Set it up on the screen.** It starts on "No Wi-Fi set up": choose your network and type the password. It then
+looks for the machine as `gaggiuino.local`; another name or an IP can be set under Menu > Wi-Fi.
 
 **Back to the original firmware**: check the backup's size again (a short file would leave the screen unbootable), then
 write it back as it is, **without** `--encrypt` (a Gen 3 backup already holds the encrypted contents):
@@ -145,6 +133,32 @@ write it back as it is, **without** `--encrypt` (a Gen 3 backup already holds th
 ```sh
 esptool --port /dev/cu.usbserial-XXXX --baud 460800 write-flash 0x0 backup/gaggiuino-screen-backup.bin
 ```
+
+## Building
+
+To build it yourself instead of using a release. The build uses
+[pioarduino](https://github.com/pioarduino/platform-espressif32) (PlatformIO). It recompiles the Arduino core with the
+`custom_sdkconfig` in [`firmware/platformio.ini`](firmware/platformio.ini) (code and data run from PSRAM, cache line
+64 B, an IRAM-safe panel interrupt), which keeps the picture steady while Wi-Fi is busy.
+
+You need [uv](https://docs.astral.sh/uv/) (the script runs PlatformIO through `uvx --python 3.14`; pioarduino does
+not support newer Python yet), git and esptool. The first build downloads the toolchain and recompiles the core
+(several minutes); later builds take about 30 s. If PlatformIO then complains that its own `pioarduino` package is too
+old (`6.2.0.post1` does not satisfy `>=6.2.0`), pin it:
+`uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0`.
+
+Make the backup first (step 2 above, from the repository root), then:
+
+```sh
+cd firmware
+./build-pio.sh ui            # first run creates include/wifi_config.h: your Wi-Fi and the machine's name or IP (optional)
+./build-pio.sh ui --flash    # build, then flash with flash.sh (env PORT=..., GAGGI_BACKUP=path to the backup)
+```
+
+`build-pio.sh --flash` runs the same `flash.sh` as a release, on the build's images. Never flash with
+`pio run -t upload`: it skips all these checks. You can leave `wifi_config.h` as it is and choose the network on the
+screen. A release package is made with `tools/make_release.sh <version>` (CI does it for each `v*` tag; notes from
+[CHANGELOG.md](CHANGELOG.md)).
 
 ## Without hardware
 
@@ -176,7 +190,7 @@ How the parts fit together (board, core, UI, the network tasks, the emulator): [
 | `sim/` | emulator, renderer and recorded machine data |
 | `tests/` | host unit tests |
 | `docs/` | the [user manual](docs/manual.md) and its animations, the [architecture](docs/architecture.md), [writing your own UI](docs/custom-ui.md), the [design system](docs/design-system.md), machine API notes, the WebSocket protocol |
-| `tools/` | protocol listener and extractor, manual recorder, screenshot helper, offline cup picture (`gen_cup.py`), a fake machine from the community profiles (`community_profiles.py`), font edge contrast (`font_contrast.py`) |
+| `tools/` | release packaging (`make_release.sh`), protocol listener and extractor, manual recorder, screenshot helper, offline cup picture (`gen_cup.py`), a fake machine from the community profiles (`community_profiles.py`), font edge contrast (`font_contrast.py`) |
 
 For development, `./build-pio.sh ui-debug` adds a small web server on the screen (`http://brewdeck.local`: screenshots
 for `tools/screenshot.sh`, memory, Wi-Fi details, and remote touch). It has no password and anyone on your network can
