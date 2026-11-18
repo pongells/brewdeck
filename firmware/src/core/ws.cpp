@@ -119,16 +119,21 @@ static uint8_t *g_prof;                             // last d_act_prof (ProfileD
 static size_t g_prof_n;
 static uint8_t *g_cmd;                              // command buffer, PSRAM
 static const size_t PROF_CAP = 4096, CMD_CAP = 4096 + 64;
+// requests come from the UI task, the WS task takes them: name and values are handed over under g_req_mux
+static portMUX_TYPE g_req_mux = portMUX_INITIALIZER_UNLOCKED;
 static volatile uint32_t g_w_req;                   // millis() of the request, 0 = none
 static volatile int g_w_req10;
 static char g_w_name[48];
 static volatile bool g_w_save = true, g_t_save = true;
 
 void ws_set_weight(const char *profile, int weight10, bool save) {
-  snprintf(g_w_name, sizeof g_w_name, "%s", profile);
+  const uint32_t now = stamp_nz(millis());
+  portENTER_CRITICAL(&g_req_mux);
+  strlcpy(g_w_name, profile, sizeof g_w_name);
   g_w_req10 = weight10;
   g_w_save = save;
-  g_w_req = stamp_nz(millis());
+  g_w_req = now;
+  portEXIT_CRITICAL(&g_req_mux);
 }
 
 // the profile just sent becomes our copy until the machine's next d_act_prof: a weight change followed by a
@@ -174,14 +179,21 @@ static void save_later(const char *profile, uint32_t delay_ms) {
   g_save_due = stamp_nz(g_save_set + delay_ms);
 }
 void ws_save_pick(const char *profile) {
-  snprintf(g_pick_name, sizeof g_pick_name, "%s", profile);
-  g_pick_req = stamp_nz(millis());
+  const uint32_t now = stamp_nz(millis());
+  portENTER_CRITICAL(&g_req_mux);
+  strlcpy(g_pick_name, profile, sizeof g_pick_name);
+  g_pick_req = now;
+  portEXIT_CRITICAL(&g_req_mux);
 }
 static void save_step(WiFiClient &c) {
   if (g_pick_req) {                                 // a pick older than 10 s (no session then) is not saved later
+    char pick[sizeof g_pick_name];
+    portENTER_CRITICAL(&g_req_mux);
     const uint32_t r = g_pick_req;
     g_pick_req = 0;
-    if (millis() - r < 10000) save_later(g_pick_name, 1000);
+    memcpy(pick, g_pick_name, sizeof pick);
+    portEXIT_CRITICAL(&g_req_mux);
+    if (millis() - r < 10000) save_later(pick, 1000);
     else Log.println("ws: pick save dropped (request too old)");
   }
   if (!g_save_due || (int32_t)(millis() - g_save_due) < 0) return;
@@ -230,9 +242,15 @@ static void save_step(WiFiClient &c) {
 }
 
 static void weight_step(WiFiClient &c) {
+  if (!g_w_req) return;
+  char want[sizeof g_w_name];
+  portENTER_CRITICAL(&g_req_mux);
   const uint32_t r = g_w_req;
-  if (!r) return;
+  const int req10 = g_w_req10;
+  const bool save = g_w_save;
   g_w_req = 0;
+  memcpy(want, g_w_name, sizeof want);
+  portEXIT_CRITICAL(&g_req_mux);
   if (millis() - r > 3000) { Log.println("ws: weight dropped (request too old)"); return; }
   uint32_t id;
   char name[48];
@@ -241,18 +259,18 @@ static void weight_step(WiFiClient &c) {
     Log.println("ws: weight refused (no active profile from the machine yet)");
     return;
   }
-  if (g_seen_brew || g_seen_mode != PB_MODE_HOME || strcmp(name, g_w_name) != 0) {
+  if (g_seen_brew || g_seen_mode != PB_MODE_HOME || strcmp(name, want) != 0) {
     Log.printf("ws: weight refused (brewing/steam %d, mode %d, profile \"%s\" vs \"%s\")\n", g_seen_brew,
-                  g_seen_mode, name, g_w_name);
+                  g_seen_mode, name, want);
     return;
   }
-  const float w = g_w_req10 / 10.0f;
+  const float w = req10 / 10.0f;
   if (w == w0) return;                              // nothing to change
   const size_t n = g_cmd ? pb_weight_cmd(g_prof, g_prof_n, w, g_cmd, CMD_CAP) : 0;
   if (!n) { Log.println("ws: weight refused (could not build the command)"); return; }
   send_binary(c, g_cmd, n);
   keep_sent(n);
-  if (g_w_save) { chg_mark(name, true); save_later(name, 3000); }
+  if (save) { chg_mark(name, true); save_later(name, 3000); }
   Log.printf("ws: target weight %.1f -> %.1f g sent (profile %u, %u B)\n", w0, w, (unsigned)id, (unsigned)n);
 }
 
@@ -264,16 +282,25 @@ static volatile int g_t_req_deg;
 static char g_t_name[48];
 
 void ws_set_temp(const char *profile, int deg, bool save) {
-  snprintf(g_t_name, sizeof g_t_name, "%s", profile);
+  const uint32_t now = stamp_nz(millis());
+  portENTER_CRITICAL(&g_req_mux);
+  strlcpy(g_t_name, profile, sizeof g_t_name);
   g_t_req_deg = deg;
   g_t_save = save;
-  g_t_req = stamp_nz(millis());
+  g_t_req = now;
+  portEXIT_CRITICAL(&g_req_mux);
 }
 
 static void temp_step(WiFiClient &c) {
+  if (!g_t_req) return;
+  char want[sizeof g_t_name];
+  portENTER_CRITICAL(&g_req_mux);
   const uint32_t r = g_t_req;
-  if (!r) return;
+  const int req_deg = g_t_req_deg;
+  const bool save = g_t_save;
   g_t_req = 0;
+  memcpy(want, g_t_name, sizeof want);
+  portEXIT_CRITICAL(&g_req_mux);
   if (millis() - r > 3000) { Log.println("ws: temperature dropped (request too old)"); return; }
   uint32_t id;
   char name[48];
@@ -283,18 +310,18 @@ static void temp_step(WiFiClient &c) {
     Log.println("ws: temperature refused (no active profile from the machine yet)");
     return;
   }
-  if (g_seen_brew || g_seen_mode != PB_MODE_HOME || strcmp(name, g_t_name) != 0) {
+  if (g_seen_brew || g_seen_mode != PB_MODE_HOME || strcmp(name, want) != 0) {
     Log.printf("ws: temperature refused (brewing/steam %d, mode %d, profile \"%s\" vs \"%s\")\n", g_seen_brew,
-                  g_seen_mode, name, g_t_name);
+                  g_seen_mode, name, want);
     return;
   }
-  const float t = (float)g_t_req_deg;
+  const float t = (float)req_deg;
   if (t == t0) return;
   const size_t n = g_cmd ? pb_temp_cmd(g_prof, g_prof_n, t, g_cmd, CMD_CAP) : 0;
   if (!n) { Log.println("ws: temperature refused (could not build the command / out of range)"); return; }
   send_binary(c, g_cmd, n);
   keep_sent(n);
-  if (g_t_save) { chg_mark(name, false); save_later(name, 3000); }
+  if (save) { chg_mark(name, false); save_later(name, 3000); }
   Log.printf("ws: brew temperature %.1f -> %.0f C sent (profile %u, %u B)\n", t0, t, (unsigned)id, (unsigned)n);
 }
 

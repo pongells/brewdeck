@@ -54,7 +54,7 @@ static void take_network(void) {
   cs_set_why(net_offline_reason(wip, sizeof wip));
   cpy(n->why_ip, sizeof n->why_ip, wip);
   net_addr_info(n->screen_ip, sizeof n->screen_ip, n->machine_where, sizeof n->machine_where);
-  cpy(n->target, sizeof n->target, net_wifi_target());
+  net_wifi_target(n->target, sizeof n->target);
   net_get_machine(n->machine_addr, sizeof n->machine_addr);
   if (WiFi.status() == WL_CONNECTED) {
     cpy(n->ssid, sizeof n->ssid, WiFi.SSID().c_str());

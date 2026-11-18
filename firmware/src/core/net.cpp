@@ -633,7 +633,9 @@ static bool wifi_join_step(void) {
     Preferences p;
     if (p.begin("wifi", false)) { p.putString("ssid", ssid); p.putString("pass", pass); p.remove("nobuiltin"); p.end(); }
     g_no_builtin = false;
+    xSemaphoreTake(g_mtx, portMAX_DELAY);           // g_ssid is read by the core loop (net_wifi_target)
     snprintf(g_ssid, sizeof g_ssid, "%s", ssid);
+    xSemaphoreGive(g_mtx);
     snprintf(g_pass, sizeof g_pass, "%s", pass);
     g_saved_net = true;
     Log.printf("wifi: joined \"%s\" (saved), %d dBm\n", ssid, (int)WiFi.RSSI());
@@ -672,7 +674,14 @@ void net_wifi_retry(void) {
   g_wifi_retry_req = true;
   xSemaphoreGive(g_mtx);
 }
-const char *net_wifi_target(void) { return g_ssid; }
+void net_wifi_target(char *out, size_t n) {
+  if (!n) return;
+  out[0] = 0;
+  if (!g_mtx) return;
+  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  snprintf(out, n, "%s", g_ssid);
+  xSemaphoreGive(g_mtx);
+}
 void net_wifi_scan(void) {
   if (!g_mtx) return;
   xSemaphoreTake(g_mtx, portMAX_DELAY);
@@ -750,7 +759,9 @@ static void task(void *) {
         Preferences p;
         if (p.begin("wifi", false)) { p.remove("ssid"); p.remove("pass"); p.putBool("nobuiltin", true); p.end(); }
         Log.printf("wifi: forgot \"%s\" (saved password deleted, built-in network off)\n", g_ssid);
+        xSemaphoreTake(g_mtx, portMAX_DELAY);
         g_ssid[0] = 0;
+        xSemaphoreGive(g_mtx);
         memset(g_pass, 0, sizeof g_pass);
         g_saved_net = false;
         g_no_builtin = true;
@@ -782,7 +793,9 @@ static void task(void *) {
         millis() - boot > 30000) {
       fell_back = true;
       Log.printf("wifi: saved network not joined, trying the built-in \"%s\"\n", WIFI_SSID);
+      xSemaphoreTake(g_mtx, portMAX_DELAY);
       snprintf(g_ssid, sizeof g_ssid, "%s", WIFI_SSID);
+      xSemaphoreGive(g_mtx);
       snprintf(g_pass, sizeof g_pass, "%s", WIFI_PASS);
       WiFi.disconnect(false);
       WiFi.begin(g_ssid, g_pass);

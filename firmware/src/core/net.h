@@ -48,7 +48,7 @@ void net_get_machine(char *out, size_t cap);
 void net_wifi_retry(void);   // "Try again" on the Wi-Fi failed screen
 void net_roam_check(void);   // debug (GET /roam): look for a stronger AP of the same network now, move if clearly better
 int net_offline_reason(char *ip, size_t cap);   // WHY_* (live.h); ip = the address that did not answer
-const char *net_wifi_target(void);      // network the screen tries to join ("" = none set up)
+void net_wifi_target(char *out, size_t n);   // network the screen tries to join ("" = none set up)
 // For the offline screen: the screen's own IP ("" without Wi-Fi) and the machine's address (IP once found, else the
 // mDNS name it looks for).
 void net_addr_info(char *screen, size_t scap, char *machine, size_t mcap);
