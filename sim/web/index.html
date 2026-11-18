@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brewdeck demo</title>
+<meta name="description" content="Brewdeck, an unofficial Wi-Fi touchscreen for Gaggiuino machines, running in the browser against a fake machine.">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;600&display=swap">
+<style>
+:root {
+  --bg: #0A0A0B; --card: #1A1A1D; --card-pr: #2A2A2F; --line: #26262A; --text: #F2F2F3; --muted: #8E8E96; --faint: #5E5E66;
+  --blue: #7CC4FF; --gold: #F5C04A; --desk: #141416;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 'Inter Tight', system-ui, sans-serif; }
+main { max-width: 880px; margin: 0 auto; padding: 32px 16px 48px; }
+header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+header h1 { margin: 0; font-size: 28px; font-weight: 300; line-height: 1.1; }
+header p { margin: 2px 0 0; color: var(--muted); }
+.logo { width: 48px; height: 48px; flex: none; }
+.device { background: #08080A; border: 1px solid #3C3C42; border-radius: 22px; padding: clamp(10px, 3.5vw, 28px); }
+.glass { position: relative; aspect-ratio: 800 / 480; outline: 1px solid var(--card); }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; image-rendering: auto; cursor: pointer; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-top: 28px; }
+h2 { margin: 0 0 10px; font-size: 16px; font-weight: 600; color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+button { font: inherit; font-size: 15px; font-weight: 600; color: var(--text); background: var(--card); border: 0; border-radius: 12px;
+  min-height: 44px; padding: 0 14px; cursor: pointer; }
+button:hover { background: var(--card-pr); }
+button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+button[aria-pressed="true"] { background: #0F2233; color: var(--blue); }
+.status { margin-top: 16px; color: var(--muted); font-size: 14px; white-space: pre-line; min-height: 3em; }
+.note { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px;
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 32px; }
+.note div { flex: 1 1 360px; max-width: 72ch; }
+.note p { margin: 0 0 8px; }
+.note > a { flex: none; font-weight: 600; text-decoration: none; }
+.note > a:hover { text-decoration: underline; }
+a { color: var(--blue); }
+kbd { font: inherit; font-size: 13px; padding: 1px 6px; border-radius: 6px; background: var(--card); color: var(--text); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img class="logo" src="logo.svg" alt="">
+    <div>
+      <h1>Brewdeck</h1>
+      <p>The screen's real software, running in your browser against a fake machine.</p>
+    </div>
+  </header>
+
+  <div class="device">
+    <div class="glass">
+      <canvas id="screen" width="800" height="480" aria-label="Brewdeck screen. Click or touch it like the touchscreen."></canvas>
+      <div class="loading" id="loading">Loading…</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <section>
+      <h2>On the machine</h2>
+      <div class="row">
+        <button data-action="Shot">Pull a shot</button>
+        <button data-action="Shot > review">Shot, fast forward</button>
+        <button data-action="Steam" id="steam">Steam</button>
+        <button data-action="Steam, fast">Steam, fast forward</button>
+        <button data-action="Pressure release">Pressure release</button>
+        <button data-action="Notification">Send a notice</button>
+      </div>
+    </section>
+    <section>
+      <h2>Change the fake machine</h2>
+      <div class="row">
+        <button data-action="Heat on/off">Heat up from cold</button>
+        <button data-action="Water">Water low / full</button>
+        <button data-action="Scale on/off">Scale on / off</button>
+        <button data-action="Machine on/off">Machine on / off</button>
+        <button data-action="Wi-Fi on/off">Wi-Fi on / off</button>
+      </div>
+    </section>
+    <section>
+      <h2>Jump to</h2>
+      <div class="row">
+        <button data-action="Ready">Ready</button>
+        <button data-action="Idle">Idle clock</button>
+        <button data-action="Shot history">Shot history</button>
+        <button data-action="Splash">Start-up</button>
+      </div>
+    </section>
+  </div>
+  <div class="status" id="status" aria-live="polite"></div>
+
+  <footer class="note">
+    <div>
+      <p>Brewdeck is an unofficial Wi-Fi touchscreen for <a href="https://gaggiuino.github.io/">Gaggiuino</a> machines. It is not
+        made by or affiliated with the Gaggiuino project.</p>
+      <p>This page runs the same interface code as the screen, compiled to WebAssembly. The machine is fake: it replays a
+        recorded shot and a recorded steam session, and answers profile, weight and temperature changes. Nothing leaves your
+        browser.</p>
+    </div>
+    <a href="https://github.com/pongells/brewdeck">Source and build guide</a>
+  </footer>
+</main>
+<script src="brewdeck.js"></script>
+<script>
+(async () => {
+  const cv = document.getElementById('screen'), ctx = cv.getContext('2d');
+  const img = ctx.createImageData(800, 480), px = new Uint32Array(img.data.buffer);
+  const M = await Brewdeck({ print: (t) => console.log(t), printErr: (t) => console.warn(t) });
+  document.getElementById('loading').remove();
+  const fb = M._web_fb() >> 1;                      // uint16 index of the 800x480 RGB565 frame buffer
+  const lut = new Uint32Array(65536);               // RGB565 -> RGBA (little endian: 0xAABBGGRR)
+  for (let v = 0; v < 65536; v++) {
+    const r = (v >> 11) & 31, g = (v >> 5) & 63, b = v & 31;
+    lut[v] = 0xFF000000 | ((b * 527 + 23) >> 6) << 16 | ((g * 259 + 33) >> 6) << 8 | ((r * 527 + 23) >> 6);
+  }
+  const status = document.getElementById('status'), steam = document.getElementById('steam');
+  let last = '';
+  function frame() {
+    if (M._web_frame()) {
+      const src = M.HEAPU16;
+      for (let i = 0; i < 384000; i++) px[i] = lut[src[fb + i]];
+      ctx.putImageData(img, 0, 0);
+      cv.style.filter = 'brightness(' + M._web_backlight() / 100 + ')';
+    }
+    const s = M.UTF8ToString(M._web_status()).replace(/\. Keys:.*$/, '.').replace(/\n/g, ', ');
+    if (s !== last) { status.textContent = s; last = s; }
+    steam.setAttribute('aria-pressed', M._web_steam_on() ? 'true' : 'false');
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // pointer = finger, in panel coordinates
+  const at = (e) => { const r = cv.getBoundingClientRect(); return [Math.round((e.clientX - r.left) * 800 / r.width), Math.round((e.clientY - r.top) * 480 / r.height)]; };
+  let down = false;
+  cv.addEventListener('pointerdown', (e) => { down = true; cv.setPointerCapture(e.pointerId); M._web_touch(...at(e), 1); e.preventDefault(); });
+  cv.addEventListener('pointermove', (e) => { if (down) M._web_touch(...at(e), 1); });
+  const up = (e) => { if (!down) return; down = false; M._web_touch(...at(e), 0); };
+  cv.addEventListener('pointerup', up);
+  cv.addEventListener('pointercancel', up);
+
+  for (const b of document.querySelectorAll('button[data-action]'))
+    b.addEventListener('click', () => M.ccall('web_action', 'number', ['string'], [b.dataset.action]));
+})();
+</script>
+</body>
+</html>

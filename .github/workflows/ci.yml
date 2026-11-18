@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Unit tests (parsers and decoders, ASan + UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: tests/run.sh
+
+  sim:
+    name: Simulator renders and emulator build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
+      - run: pip install pillow
+      - name: Render every screen with the real UI code
+        run: sim/build.sh && sim/render sim/out && python3 sim/topng.py sim/out
+      - name: Build the emulator
+        run: sim/build-emu.sh
+      - name: Build the emulator with the example UI (src/ui_minimal uses only the core API)
+        run: UI=ui_minimal sim/build-emu.sh
+      - name: Keep the renders (look at them to review a UI change)
+        uses: actions/upload-artifact@v7
+        with:
+          name: screen-renders
+          path: sim/out/*.png
+
+  firmware:
+    name: Firmware (release and debug builds, the example UI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2   # v10.3.3 (Node 24)
+      - uses: actions/cache@v6
+        with:
+          path: ~/.platformio
+          key: platformio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+      - name: Build (first run downloads the toolchain and recompiles the core)
+        working-directory: firmware
+        run: |
+          # pioarduino can install a pioarduino package its own version check rejects (6.2.0.post1 vs >=6.2.0)
+          ./build-pio.sh ui || { uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0 && ./build-pio.sh ui; }
+          ./build-pio.sh ui-debug
+          UI=ui_minimal ./build-pio.sh ui   # the example UI: proves a UI builds on the core API alone

@@ -1,0 +1,136 @@
+# Architecture
+
+Brewdeck is a separate touchscreen that talks to a Gaggiuino machine over Wi-Fi, through the machine's network API
+(REST and WebSocket). It is not wired to the machine. The firmware has three layers, so the same core can drive
+another board or another user interface:
+
+- **Board**: the hardware. Panel, touch, backlight, frame buffer, memory. One per screen model.
+- **Core**: Wi-Fi, finding the machine, the network API, settings storage, logging. It is the only part that sends
+  anything to the machine, and it checks every command before sending it.
+- **UI**: the screens. Anything that implements the four `bd_ui_*` functions of
+  [`brewdeck_core.h`](../firmware/src/core/brewdeck_core.h), with any graphics library (Brewdeck's own uses LVGL 9). The core builds without anything from `src/ui/`: a
+  different UI replaces that folder.
+
+```mermaid
+flowchart TB
+  machine["Gaggiuino machine<br/>REST /api/... and WebSocket /ws"]
+
+  subgraph core["Core (firmware/src/core)"]
+    direction TB
+    ws["ws.cpp + pb.cpp<br/>WebSocket, protobuf<br/>(ws task, CPU 0)"]
+    net["net.cpp<br/>Wi-Fi, mDNS, REST<br/>(net task, CPU 0)"]
+    loop["core.cpp: bd_core_loop<br/>(UI task, CPU 1)<br/>takes the data, sends commands"]
+    state["core_state.cpp<br/>machine state, events,<br/>command checks and answers"]
+    api["brewdeck_core.h<br/>bd_machine_state, bd_select_profile, ...<br/>bd_ui_init / tick / event"]
+    store["settings (NVS)"]
+    ws -->|"live data (net_ws.h)"| net
+    net -->|"net_get*, under a mutex"| loop
+    loop --> state
+    state --> api
+    loop --- store
+  end
+
+  subgraph ui["UI (firmware/src/ui: Brewdeck's own)"]
+    direction TB
+    bridge["ui_bridge.cpp<br/>bd_ui_* : state and events to the screens"]
+    screens["ui.cpp + screens/*.cpp<br/>LVGL 9 objects and drawing"]
+    lvgl["LVGL 9<br/>draws one 40-line strip at a time"]
+    bridge --> screens --> lvgl
+  end
+
+  subgraph board["Board (firmware/src/board)"]
+    direction TB
+    disp["board_s3.cpp<br/>bd_display_flush, bd_touch_read,<br/>backlight, bd_alloc"]
+    drv["src/shared<br/>RGB panel + GT911 touch drivers"]
+    disp --> drv
+  end
+
+  panel["800 x 480 panel<br/>frame buffer in PSRAM"]
+
+  machine <-->|"GET status, profiles, shots<br/>POST profile-select"| net
+  machine <-->|"live data in<br/>weight, temp, flush, tare, save out"| ws
+  api -->|"bd_ui_tick, bd_ui_event"| bridge
+  screens -->|"commands: select profile, stop weight,<br/>brew temp, flush, tare"| api
+  loop -->|"profile select"| net
+  loop -->|"the WebSocket commands"| ws
+  lvgl -->|"finished rectangles"| disp
+  disp -->|"touch"| lvgl
+  drv --> panel
+```
+
+## Who runs where
+
+| Task | CPU | What |
+|---|---|---|
+| Arduino loop (UI task) | 1 | `bd_core_loop`: takes the network tasks' data, then calls `bd_ui_tick` / `bd_ui_event`. All UI code and every `bd_*` call from the UI run here, so the UI needs no locking. |
+| `net` | 0 | Wi-Fi (join, roam, rejoin), mDNS, REST requests |
+| `ws` | 0 | the WebSocket session: live data in, the allowed commands out |
+| `shot` | 0 | debug builds only: screenshots and remote touch over HTTP |
+
+The network tasks hand data to the UI task through a mutex. Big buffers (shot traces, chart data, the frame buffer)
+are in PSRAM; internal RAM is kept for Wi-Fi and the draw strip.
+
+## Commands
+
+The UI never talks to the machine directly. A command (`bd_select_profile`, `bd_set_stop_weight`,
+`bd_set_brew_temp`, `bd_flush_mode`, `bd_tare`) returns at once: either refused with a reason (offline, busy, out of
+range, busy) or queued. The core sends it only while the machine is online and idle, checks again just before
+sending, and the machine's answer comes back later as a `BD_EV_COMMAND` event: done once the machine reports the
+change, or not taken when it did not within a few seconds. Nothing else can be sent: no pump, valve, heater,
+steam, descale or delete commands exist in the API. The full list is in the README, "What Brewdeck sends to the
+machine".
+
+## Without hardware
+
+The emulator and the web demo swap the bottom two layers and keep the whole UI; the render harness drives Brewdeck's
+screens directly:
+
+```mermaid
+flowchart LR
+  ui["Brewdeck UI<br/>(ui_bridge.cpp, ui.cpp, screens/)"]
+  subgraph dev["On the screen"]
+    c1["core.cpp + net / ws"] --- b1["board_s3.cpp"]
+  end
+  subgraph emu["sim/emu (SDL window) and sim/web (browser)"]
+    c2["fake core in emu.cpp<br/>recorded machine data from sim/data"] --- b2["SDL window / browser page"]
+  end
+  subgraph render["sim/render (harness.cpp)"]
+    c3["null_core.cpp<br/>(every command: offline)"] --- b3["images"]
+  end
+  ui --- dev
+  ui --- emu
+  screensonly["ui.cpp + screens/<br/>(no ui_bridge.cpp)"] --- render
+```
+
+The device and the emulator / web demo share `core_state.cpp`, so the fake core keeps its state, checks commands and
+answers them the same way the device does. The render harness feeds the screens recorded data itself, through
+`ui.cpp`'s entry points, and has no core state.
+
+## What Brewdeck's UI uses from the core
+
+Only the API (`brewdeck_core.h` and the LVGL 9 adapter `bd_lvgl9.h`) and two plain data headers: `live.h` (the
+machine state, profile and shot structs its screens are written around; `ui_bridge.cpp` fills them from the API) and
+`preview.h` (the profile preview and the planned rest of a shot). It never calls the network, WebSocket or board code
+directly, and takes its memory with `bd_alloc` (only the debug-build `/bench` timing uses ESP-IDF's timer).
+
+## Writing another UI
+
+The guide is [Writing your own UI](custom-ui.md); the API (version 1) is
+[`brewdeck_core.h`](../firmware/src/core/brewdeck_core.h). A UI is a folder under `firmware/src/` that implements
+`bd_ui_init`, `bd_ui_tick`, `bd_ui_event` and `bd_ui_wake` and declares itself in `BD_UI` (name, version, API
+version). Start from the example,
+[`firmware/src/ui_minimal`](../firmware/src/ui_minimal/minimal.cpp): one LVGL 9 screen with the live values, the
+profile list (a tap selects a profile) and the running shot, in about 150 lines.
+
+| | Brewdeck's UI | Another UI folder |
+|---|---|---|
+| Firmware | `./build-pio.sh ui [--flash]` | `UI=ui_minimal ./build-pio.sh ui [--flash]` |
+| Emulator | `sim/build-emu.sh && sim/emu` | `UI=ui_minimal sim/build-emu.sh && sim/emu-ui_minimal` |
+
+The emulator's "Go to screen" buttons only work with Brewdeck's UI; the fake machine (shot, steam, offline, the
+profile and weight commands) works with any. LVGL's configuration is shared (`firmware/include/lv_conf.h`); fonts a
+UI does not use are dropped from its firmware. CI builds the example both ways, so a change to the core that breaks a
+UI on the API alone shows up there.
+
+Brewdeck is not made by or affiliated with the Gaggiuino project, and neither is a UI built on this core: please say
+so in yours.

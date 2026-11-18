@@ -1,0 +1,121 @@
+#pragma once
+// Live machine data (REST /api/system/status, overlaid with fresher WebSocket values in net_get()).
+#include <stdbool.h>
+#include <stdint.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+enum { LINK_CONNECTING = 0, LINK_NO_MACHINE = 1, LINK_ONLINE = 2 };
+// why the link is down (offline screen text): from the Wi-Fi disconnect reason, the name lookup and the REST replies
+enum { WHY_NONE = 0, WHY_WIFI_NO_AP, WHY_WIFI_AUTH, WHY_WIFI_OTHER, WHY_NAME_UNKNOWN, WHY_NO_REPLY };
+// scale type from the machine's scale settings (pb_scale_cfg): unknown until d_settings arrived, or both kinds on
+enum { SCALE_UNKNOWN = 0, SCALE_BT = 1, SCALE_HW = 2, SCALE_PREDICTIVE = 3 };
+
+typedef struct {
+  float temperature;      // boiler, deg C
+  float target;           // the boiler's current target (REST targetTemperature)
+  float pressure;         // bar
+  float weight;           // scale, g
+  int   water_level;      // percent
+  int   warmup_remaining; // seconds
+  // machine's readiness (REST readinessState / WS dashboardReadinessState; names from the web UI bundle):
+  // 0 WAITING, 1 WARMING ("WARMING UP" + countdown), 2 HEATING ("Waiting for temperature"), 3 READY, 4 STANDBY,
+  // 5 STEAMING, 6 FLUSHING, 7 MAINTENANCE; -1 = not reported (then the screen's temperature rule is used)
+  int   readiness;
+  bool  brew_active;
+  bool  steam_active;
+  bool  hot_water_active;
+  bool  scales_present;
+  int   scale_type;       // SCALE_*
+  int   steam_set;        // steam set point in deg C (d_settings boiler.steamSetPoint), 0 = not known
+  float act_weight;       // target weight of the machine's ACTIVE profile (d_act_prof), 0 = not known yet
+  float act_temp;         // its brew temperature (waterTemperature), 0 = not known / heater off
+  char  act_profile[48];  // its name (raw)
+  char  profile[48];
+  char  machine[24];
+  char  mode[20];         // HOME, BREW_AUTO, STEAM, FLUSH, DESCALE ...
+  char  core_ver[16];     // machine's core firmware (REST coreVersion, e.g. "c929939"), "" = not known
+  char  core_type[28];    // its board (REST coreType, e.g. "STM32U585-PCB-PCA")
+  char  front_ver[28];    // its built-in screen ("Embedded UI", d_settings versions.frontVersion), "" = not known
+  char  static_ver[28];   // its web UI (d_settings versions.staticVersion)
+} LiveData;
+
+// Wi-Fi networks found by a scan (menu > Wi-Fi), strongest first; join states (passed on as BD_EV_WIFI_JOIN)
+#define MAX_NETS 16
+typedef struct { char ssid[33]; int8_t rssi; bool lock; } WifiNet;
+enum { WIFI_JOIN_IDLE = 0, WIFI_JOIN_BUSY, WIFI_JOIN_OK, WIFI_JOIN_FAILED };
+
+// Saved profiles (GET /api/profiles/all, details from GET /api/profile/<id>).
+#define MAX_PROFILES 24
+typedef struct {
+  int   id;
+  char  name[48];         // as the machine reports it, e.g. "Leva 9 SINGLE v0.9 (community)"
+  bool  selected;         // the machine's active profile
+  bool  detail;           // phases/weight/temp below are filled in
+  int   phases;
+  float weight;           // global stop weight, g (0 = none)
+  float temp;             // water temperature, deg C
+} ProfileInfo;
+
+typedef struct {
+  int count;
+  ProfileInfo p[MAX_PROFILES];
+} ProfileList;
+
+// The active profile's phases (for the preview graph and the target weight). Skipped phases are left out.
+enum { PHASE_PRESSURE = 0, PHASE_FLOW = 1 };
+enum { CURVE_INSTANT = 0, CURVE_LINEAR, CURVE_EASE_IN, CURVE_EASE_OUT, CURVE_EASE_IN_OUT };
+#define MAX_PHASES 24
+typedef struct {
+  uint8_t  type;          // PHASE_PRESSURE (target is bar) or PHASE_FLOW (target is ml/s)
+  uint8_t  curve;         // CURVE_*
+  bool     has_start;     // false: starts from where the previous phase ended
+  float    start, end;    // target transition
+  uint32_t ramp_ms;       // transition time (0 = instant)
+  float    restriction;   // flow limit on a pressure phase / pressure limit on a flow phase (0 = none)
+  uint32_t stop_ms;       // stop conditions, 0 = not set
+  float    stop_p_above, stop_p_below, stop_water, stop_weight;
+} PhaseShape;
+
+typedef struct {
+  int        id;          // profile id, 0 = nothing loaded yet
+  int        n;
+  PhaseShape ph[MAX_PHASES];
+  float      weight;      // global stop weight, g (0 = none)
+  float      temp;        // water temperature, deg C
+} ProfileShape;
+
+// One point of a shot: x10 integers as the machine sends them (time in 0.1 s, bar, ml/s, g, deg C), phase 0-based.
+// Live points (WebSocket d_shot_snap) and stored shots (GET /api/shots/<id>) use the same type.
+typedef struct { uint16_t t, p, f, w, temp, tp, tf; uint8_t ph; } ShotPoint;
+#define SHOT_MAX 720            // points kept per shot (~100 s at ~7/s); longer shots are thinned
+typedef struct {
+  int       id;                 // machine's shot id, 0 = none
+  int       dur10;              // duration, 0.1 s
+  uint32_t  ts;                 // when it was pulled (Unix time, UTC; small = machine clock not set, a Gaggiuino quirk)
+  char      profile[48];        // profile name as stored with the shot (ASCII only)
+  int       n;
+  ShotPoint pt[SHOT_MAX];       // ~11.5 KB: keep these in PSRAM on the device
+} ShotTrace;
+
+#ifdef __cplusplus
+}
+#endif
+
+// ---- shot data from the WebSocket (decoded by pb.cpp; C++ linkage, outside the extern "C" above) ----
+#include <stddef.h>
+typedef struct {                // ShotSnapshotDto  (action d_shot_snap, ~7/s while a shot runs). All x10 integers.
+  uint32_t time10;              // timeInShot, 0.1 s
+  uint32_t pressure10, pump_flow10, weight_flow10, temperature10, weight10, water10;
+  uint32_t target_temp10, target_flow10, target_pressure10;
+  uint32_t phase;               // 0-based phase index
+} WsShot;
+
+// ShotHistoryIndexDto (action d_shot_hist_index, on connect and after each shot): the newest 50 shots, newest first.
+// name_hash: compare with shot_name_hash of a profile name; name: printable ASCII only, cut at 39 chars (shot history
+// list); ts: Unix time of the shot (small = machine clock not set, a Gaggiuino quirk). ~2.8 KB: keep copies in PSRAM.
+#define WS_SHOT_INDEX_MAX 50
+typedef struct { uint32_t id, name_hash, dur10, ts; char name[40]; } WsShotRec;
+typedef struct { int n; WsShotRec r[WS_SHOT_INDEX_MAX]; } WsShotIndex;
+uint32_t shot_name_hash(const char *s, size_t n);   // FNV-1a over the printable ASCII bytes (stops at NUL)

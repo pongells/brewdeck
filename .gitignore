@@ -1,0 +1,33 @@
+firmware/include/wifi_config.h
+sim/lvgl/
+sim/obj/
+sim/render
+sim/emu
+sim/obj-emu/
+sim/web/obj/
+sim/web/dist/
+sim/out/
+firmware/.pio/
+*.bin
+*.raw
+# pioarduino hybrid-compile output (regenerated from platformio.ini)
+firmware/.dummy/
+firmware/managed_components/
+firmware/sdkconfig.defaults
+firmware/sdkconfig.*
+firmware/dependencies.lock
+.idea/
+# recorded WebSocket frames for host tests (no d_settings, see tools/ws_listen.py --raw)
+!sim/data/*.bin
+
+# macOS
+.DS_Store
+sim/emu-*
+backup/
+node_modules/
+__pycache__/
+*.pyc
+.vscode/
+# local output of tools/extract_proto.py (Gaggiuino's schema, not for this repo)
+*.proto
+ws_schema*.json

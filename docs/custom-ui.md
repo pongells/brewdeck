@@ -1,0 +1,119 @@
+# Writing your own UI
+
+Brewdeck's firmware is split into a **core** (Wi-Fi, finding the machine, its REST and WebSocket APIs, settings, and
+every command sent to the machine), a **board** layer (panel, touch, backlight) and a **UI**. You can replace the UI
+with your own and keep everything else: the core does the networking and the safety checks, your UI only draws and
+reacts to touches. How the parts fit together: [architecture](architecture.md).
+
+The API is one header, [`firmware/src/core/brewdeck_core.h`](../firmware/src/core/brewdeck_core.h) (version 1). This
+page is the tour; the header is the reference.
+
+## Start from the example
+
+[`firmware/src/ui_minimal/minimal.cpp`](../firmware/src/ui_minimal/minimal.cpp) is a complete UI in about 150 lines
+of LVGL 9: the link state, the machine's live values, the active profile, the running shot, and the profile list
+where a tap selects a profile. It is under the MIT license, so you can copy it as the start of yours.
+
+1. Copy the folder: `cp -r firmware/src/ui_minimal firmware/src/myui`.
+2. In `BD_UI`, give it its own name (at most 15 characters: it is also the namespace of its saved settings).
+3. Try it in the emulator: `UI=myui sim/build-emu.sh && sim/emu-myui`.
+4. Build the firmware: `UI=myui ./build-pio.sh ui` in `firmware/`. Add `--flash` to flash it: the script asks the
+   board whether its flash is encrypted and writes accordingly, and wants a backup first (README, "Building";
+   `DRY_RUN=1` shows what it would do).
+
+Brewdeck's own UI (`firmware/src/ui`) is the large example: every screen, the settings, the shot review.
+
+## What a UI implements
+
+```c
+extern "C" const bd_ui_desc BD_UI = {"myui", "1.0", 1};   // name, your version, the API version you wrote it for
+void bd_ui_init(void);                 // once at start: set up the display and build your screens
+void bd_ui_tick(uint32_t now_ms);      // every loop pass (~5 ms): look at what changed, draw
+void bd_ui_event(const bd_event *e);   // something happened: a shot point, a notice, a command's answer, ...
+void bd_ui_wake(void);                 // the core wants the screen on (a shot, steam, a flush, a notice)
+```
+
+## The rules
+
+- **One task.** The core calls your four functions on one task, and you call `bd_*` only from inside them (LVGL's
+  callbacks run there too). No locks needed.
+- **Keep `bd_ui_tick` short.** The core handles the machine's data between two ticks; a tick that takes 100 ms delays
+  everything by 100 ms. Brewdeck's full-screen redraws take 50-100 ms; most ticks take less than one.
+- **Pointers are borrowed.** What `bd_machine_state()`, `bd_profile_list()` and the events hand you is valid until the
+  next tick, or until `bd_ui_event` returns. Copy what you keep.
+- **Commands never block.** `bd_select_profile` and the others return at once, `BD_OK` (queued) or the reason they
+  were refused (`BD_ERR_OFFLINE`, `BD_ERR_BUSY`, ...). The machine's answer comes later as `BD_EV_COMMAND`.
+- **Only safe commands exist.** Select a profile, set the stop weight or brew temperature, flush, tare, and read
+  stored shots. There is no pump, valve, heater, steam, descale or delete in the API, and the core sends a command
+  only while the machine is online and idle, checking again just before it goes out. The core accepts a stop weight of
+  0-200 g (0 = none) and a brew temperature of 1-105 °C; Brewdeck's own UI narrows the stop weight to 5-80 g.
+- **Ignore what you do not know.** Later 1.x versions may add events, enum values and fields: skip unknown ones.
+- **Say it is unofficial.** Brewdeck is not made by or affiliated with the Gaggiuino project, and neither is a UI
+  built on its core: please say so in yours (a start screen, an About page, or a line like the example's).
+
+## Reading the machine
+
+| Call | What | Changes when |
+|---|---|---|
+| `bd_machine_state()` | link, live values (temperature, pressure, weight, water), readiness, mode, scale, the active profile as it runs, versions | `bd_seq_machine()` |
+| `bd_profile_list()` | up to 24 profiles (the first 24 the machine reports; more are left out): name, active, stop weight, brew temperature, last used | `bd_seq_profiles()` |
+| `bd_active_shape()` | the active profile's phases | `bd_seq_shape()` |
+| `bd_profile_preview()` | those phases as polylines for a box of your size (pressure, flow, and their limits) | (computed on call) |
+| `bd_shot_history()` | the machine's newest 50 stored shots | `bd_seq_history()` |
+| `bd_live_shot()` | the running (or last) shot as recorded on this screen | `BD_EV_SHOT_*` events |
+| `bd_network_state()` | the screen's Wi-Fi, its address, the machine's address | `bd_seq_network()` |
+| `bd_core()`, `bd_local_time()` | core version, uptime, free memory, restart reason; the time (after NTP) | |
+
+The `bd_seq_*` counters change whenever their data does: keep the last value you drew and redraw only when it moved.
+Live values are meaningful only while `link == BD_LINK_ONLINE`.
+
+## Events
+
+| Event | When |
+|---|---|
+| `BD_EV_SHOT_START`, `BD_EV_SHOT_POINT`, `BD_EV_SHOT_END` | a shot begins, each new point (~7 per second), it ends |
+| `BD_EV_NOTICE` | a machine notification (the core drops the repeated noise; the firmware-update notice is marked `update`) |
+| `BD_EV_PRESSURE_RELEASE` | the machine counts down to releasing pressure ("water is coming"): light the screen up |
+| `BD_EV_COMMAND` | the machine's answer to a command: done (it reports the change) or not taken (it did not within 5 s; 7 s for weight / temperature) |
+| `BD_EV_SHOT_LOADED` | a stored shot asked for with `bd_load_previous_shot` / `bd_load_stored_shot` arrived |
+| `BD_EV_WIFI_SCAN`, `BD_EV_WIFI_JOIN` | answers to `bd_wifi_scan` / `bd_wifi_join` |
+
+## The screen
+
+- **With LVGL 9:** include [`bd_lvgl9.h`](../firmware/src/core/bd_lvgl9.h) in one file, call `bd_lvgl9_setup()` in
+  `bd_ui_init` and `bd_lvgl9_tick(now)` in `bd_ui_tick`. LVGL's configuration is shared,
+  [`firmware/include/lv_conf.h`](../firmware/include/lv_conf.h): enable what you need there (widgets, fonts). Fonts
+  and widgets a UI does not use are left out of its firmware.
+- **Without a graphics library:** draw RGB565 pixels into your own buffer and hand finished rectangles to
+  `bd_display_flush(x1, y1, x2, y2, px)`; read touches with `bd_touch_read(&x, &y)`. `bd_display()` gives the size
+  (800 x 480, landscape) and how many rows of a strip fit in fast memory.
+- **Brightness:** `bd_set_backlight(0..100)`. Dimming and turning the screen off when idle are up to your UI;
+  `bd_ui_wake` tells you when the core wants it on.
+
+## Memory, settings, logs
+
+- **Memory:** `bd_alloc(n, BD_MEM_PSRAM)` for anything big (charts, shot copies, images). Internal RAM is scarce: Wi-Fi
+  needs it, so keep only small, hot things there.
+- **Settings:** `bd_store_get_int` / `bd_store_set_int` and the `_blob` pair keep values in flash, in your UI's own
+  namespace (keys at most 15 characters). Other UIs' settings and the core's (Wi-Fi, the machine address) are separate.
+- **Logs:** `bd_log("...")` writes to the serial log with the time in front. Debug builds also have a small web server
+  (screenshots, memory); `bd_debug_route("/mypath", fn)` adds one page of your own to it.
+
+## Testing
+
+- **Emulator:** `UI=myui sim/build-emu.sh && sim/emu-myui` runs your UI in a window against a fake machine with
+  recorded data. Keys: `S` plays a real shot, `M` a real steam session, `O` takes the machine offline, `N` the Wi-Fi,
+  `H` heating, `B` the scale, `L` the water. The panel's "Fake machine" buttons work with any UI; its "Go to screen"
+  buttons are Brewdeck's own. For scripts, it reads commands on stdin (`tap x y`, `key s`, `wait ms`, `save f.raw`: the
+  list is under "stdin commands" in `sim/emu.cpp`).
+- **Firmware:** `UI=myui ./build-pio.sh ui` builds it; CI builds the example UI on every change, so a change to the
+  core that breaks a UI shows up there.
+- **On the screen:** a debug build (`./build-pio.sh ui-debug`) serves `http://brewdeck.local/screen.bmp`, a
+  screenshot of what the panel shows (`tools/screenshot.sh`). It also takes remote touches (`/touch?x=&y=`): it has no password, so
+  anyone on your network can press the screen; use debug builds only on a network you trust.
+
+## License
+
+The core, and the rest of Brewdeck, is under the [PolyForm Noncommercial License 1.0.0](../LICENSE): free for any
+noncommercial use, not for selling or commercial products. The example UI is MIT. Your own UI's code is yours to
+license as you like, but a firmware built with the core stays under the core's noncommercial terms.
