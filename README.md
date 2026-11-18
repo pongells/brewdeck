@@ -67,7 +67,14 @@ It never sends brewing, steam, pump, valve, heater, descaling or calibration com
 > screen also runs the machine's Wi-Fi, web UI and network API, which Brewdeck itself needs. Use a spare screen.
 
 - **Screen**: a Sunton ESP32-8048S043-style 4.3" 800x480 RGB panel with an ESP32-S3 (16 MB flash, 8 MB PSRAM) and
-  GT911 capacitive touch, powered over USB-C. Pins and timings are in [`firmware/include/board.h`](firmware/include/board.h).
+  GT911 capacitive touch, powered over USB-C. Pins and timings are in [`firmware/src/board/s3/board.h`](firmware/src/board/s3/board.h).
+- **Experimental**: the Guition JC4880P443 (ESP32-P4, 4.3" 480x800 MIPI-DSI shown in landscape, Wi-Fi through its
+  ESP32-C6), a retail board with no flash encryption: `./build-pio.sh ui-p4 --flash`. It runs Brewdeck's screens live
+  from the machine; a full shot on it has not been tested yet. On the network it is `brewdeck-p4` (the S3 screen is
+  `brewdeck`). These boards ship with old firmware on their Wi-Fi chip (an ESP32-C6): if the first Wi-Fi join drops
+  at every start, update it once with `./build-pio.sh p4-c6-update --flash` (it uses the network saved on the screen;
+  progress in the serial log), then flash `ui-p4` again. Pins in
+  [`firmware/src/board/p4/board.h`](firmware/src/board/p4/board.h).
 - **Machine**: a Gaggiuino machine with its Wi-Fi web UI, on the same 2.4 GHz network as the screen. Tested with one
   machine (Gaggiuino core 8aaf6f0 on an STM32U585 board, release c929939); a Gaggiuino update can change the protocol.
   Brewdeck keeps one of the machine's three WebSocket connections open and shows up to 24 profiles.
@@ -183,10 +190,9 @@ How the parts fit together (board, core, UI, the network tasks, the emulator): [
 | Path | What |
 |---|---|
 | `firmware/src/core/` | the core: `brewdeck_core.h` (the API a UI is built on), `core.cpp` (setup, loop, commands, settings), `core_state.cpp` (machine state, events), the network and machine API (`net.cpp`, `ws.cpp`, `pb.cpp`, `parse.cpp`), profile previews (`preview.cpp`), the debug web server (`shot.cpp`) |
-| `firmware/src/board/` | the board layer: display, touch, backlight and memory for the Sunton ESP32-S3 panel |
+| `firmware/src/board/` | the board layer: `common/` (start-up, GT911 touch, memory: shared by both boards), `s3/` (the Sunton ESP32-S3 RGB panel), `p4/` (the Guition ESP32-P4 DSI panel); each board folder has its `board.h` (pins) |
 | `firmware/src/ui_minimal/` | an example UI on the core API alone, to start your own from ([writing your own UI](docs/custom-ui.md)) |
 | `firmware/src/ui/` | Brewdeck's UI: `ui_bridge.cpp` (the core's `bd_ui_*` entry points), screens (`screens/`, one file per screen; `ui.cpp` starts them and takes the live data; `ui_int.h` is what they share; design tokens in `theme.h`) |
-| `firmware/src/shared/` | panel and touch drivers |
 | `sim/` | emulator, renderer and recorded machine data |
 | `tests/` | host unit tests |
 | `docs/` | the [user manual](docs/manual.md) and its animations, the [architecture](docs/architecture.md), [writing your own UI](docs/custom-ui.md), the [design system](docs/design-system.md), machine API notes, the WebSocket protocol |

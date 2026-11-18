@@ -38,14 +38,15 @@ flowchart TB
     bridge --> screens --> lvgl
   end
 
-  subgraph board["Board (firmware/src/board)"]
+  subgraph board["Board (firmware/src/board: common/ + one of s3/, p4/)"]
     direction TB
-    disp["board_s3.cpp<br/>bd_display_flush, bd_touch_read,<br/>backlight, bd_alloc"]
-    drv["src/shared<br/>RGB panel + GT911 touch drivers"]
+    disp["s3/board_s3.cpp or p4/board_p4.cpp<br/>bd_display_flush (P4: turned to landscape)"]
+    common["common/<br/>bd_touch_read (GT911), bd_alloc, start-up"]
+    drv["s3/panel.cpp or p4/panel.cpp<br/>RGB or DSI panel, backlight"]
     disp --> drv
   end
 
-  panel["800 x 480 panel<br/>frame buffer in PSRAM"]
+  panel["S3: 800 x 480 RGB panel / P4: 480 x 800 DSI panel<br/>frame buffer in PSRAM"]
 
   machine <-->|"GET status, profiles, shots<br/>POST profile-select"| net
   machine <-->|"live data in<br/>weight, temp, flush, tare, save out"| ws
@@ -54,7 +55,7 @@ flowchart TB
   loop -->|"profile select"| net
   loop -->|"the WebSocket commands"| ws
   lvgl -->|"finished rectangles"| disp
-  disp -->|"touch"| lvgl
+  common -->|"touch"| lvgl
   drv --> panel
 ```
 
@@ -63,7 +64,7 @@ flowchart TB
 | Task | CPU | What |
 |---|---|---|
 | Arduino loop (UI task) | 1 | `bd_core_loop`: takes the network tasks' data, then calls `bd_ui_tick` / `bd_ui_event`. All UI code and every `bd_*` call from the UI run here, so the UI needs no locking. |
-| `net` | 0 | Wi-Fi (join, roam, rejoin), mDNS, REST requests |
+| `net` | 0 | Wi-Fi (join, roam, rejoin, the link status the UI shows), mDNS, REST requests. Only this task asks Wi-Fi anything: on the ESP32-P4 every Wi-Fi query is a request to its ESP32-C6 and can block. |
 | `ws` | 0 | the WebSocket session: live data in, the allowed commands out |
 | `shot` | 0 | debug builds only: screenshots and remote touch over HTTP |
 
@@ -89,7 +90,7 @@ screens directly:
 flowchart LR
   ui["Brewdeck UI<br/>(ui_bridge.cpp, ui.cpp, screens/)"]
   subgraph dev["On the screen"]
-    c1["core.cpp + net / ws"] --- b1["board_s3.cpp"]
+    c1["core.cpp + net / ws"] --- b1["src/board"]
   end
   subgraph emu["sim/emu (SDL window) and sim/web (browser)"]
     c2["fake core in emu.cpp<br/>recorded machine data from sim/data"] --- b2["SDL window / browser page"]

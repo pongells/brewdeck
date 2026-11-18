@@ -13,7 +13,7 @@
 #include "brewdeck_core.h"
 #include "core_internal.h"
 #include "core_state.h"
-#include "../board/board_internal.h"
+#include "../board/common/board_internal.h"
 #include "tlog.h"
 #include "net.h"
 #include "ws.h"
@@ -56,16 +56,7 @@ static void take_network(void) {
   net_addr_info(n->screen_ip, sizeof n->screen_ip, n->machine_where, sizeof n->machine_where);
   net_wifi_target(n->target, sizeof n->target);
   net_get_machine(n->machine_addr, sizeof n->machine_addr);
-  if (WiFi.status() == WL_CONNECTED) {
-    cpy(n->ssid, sizeof n->ssid, WiFi.SSID().c_str());
-    n->rssi = (int8_t)WiFi.RSSI();
-    n->channel = WiFi.channel();
-    cpy(n->ap, sizeof n->ap, WiFi.BSSIDstr().c_str());
-  } else {
-    n->ssid[0] = n->ap[0] = 0;
-    n->rssi = 0;
-    n->channel = 0;
-  }
+  net_wifi_info(n->ssid, sizeof n->ssid, &n->rssi, &n->channel, n->ap, sizeof n->ap);   // read by the network task
   cs_network_done();
 }
 
@@ -190,7 +181,7 @@ static bd_reset reset_of(esp_reset_reason_t r) {
 }
 
 void bd_core_setup(void) {
-  Serial.begin(115200);
+  board_serial_begin();   // the board's log port (src/board/<board>)
   delay(200);
   const esp_reset_reason_t r = esp_reset_reason();
   cs_core_info(__DATE__ " " __TIME__, reset_of(r));

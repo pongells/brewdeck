@@ -1,10 +1,10 @@
 #pragma once
-// Board definition for the 4.3" 800x480 ESP32-S3 RGB panel (Sunton ESP32-8048S043-style).
-// Pins taken from public documentation and confirmed by the first-light test.
+// Sunton ESP32-S3 4.3" 800x480 RGB panel (ESP32-8048S043-style; also the Gaggiuino Gen 3 screen) with GT911 touch.
+// Pins from public documentation, confirmed by the first-light test.
 #include <Arduino.h>
 #include <Arduino_GFX_Library.h>
 
-#define SCREEN_W 800
+#define SCREEN_W 800   // what the UI draws
 #define SCREEN_H 480
 
 // Pixel clock. Default 12 MHz; platformio.ini sets 16 MHz (stable there with the bounce buffer and its sdkconfig).
@@ -29,4 +29,4 @@
 extern Arduino_RGB_Display *gfx;
 void board_init();
 void board_backlight(int pct);          // 0-100 %; PWM on PIN_BL (100 = fully on, as after board_init)
-void board_backlight_hz(uint32_t hz);   // PWM frequency for dimming (debug, see board.cpp)
+void board_backlight_hz(uint32_t hz);   // PWM frequency for dimming (debug, see panel.cpp)

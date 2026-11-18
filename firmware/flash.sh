@@ -9,7 +9,8 @@
 #      FLASH_ENC=encrypted|plain|auto (what you expect; checked against the chip)  NO_BACKUP=1 (plain boards only)
 #      DRY_RUN=1 (show the flash decision and command, write nothing)
 # It asks the chip whether its flash is encrypted and writes accordingly (encrypted: Gaggiuino Gen 3 screen, backup
-# required; plain: a Sunton board bought on its own), refuses a locked chip, and never guesses.
+# required; plain: a Sunton board bought on its own, or the Guition ESP32-P4 board), refuses a locked chip, refuses
+# images built for another chip (S3 / P4, read from bootloader.bin), and never guesses.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMG="$(cd "${1:-$HERE}" && pwd)"
@@ -23,6 +24,13 @@ if [[ -f "$IMG/SHA256SUMS" ]]; then
   echo "Checksums OK."
 fi
 BACKUP="${GAGGI_BACKUP:-$IMG/backup/gaggiuino-screen-backup.bin}"
+# which chip the images are for (chip id in the bootloader's image header, bytes 12-13) and where its bootloader goes
+IMG_CHIP="$(od -An -tu1 -j12 -N2 "$IMG/bootloader.bin" | awk 'NF {print $1 + 256 * $2; exit}')"
+case "$IMG_CHIP" in
+  9) IMG_NAME=ESP32-S3; BOOT_AT=0x0 ;;
+  18) IMG_NAME=ESP32-P4; BOOT_AT=0x2000 ;;
+  *) echo "bootloader.bin is for chip id $IMG_CHIP, not an ESP32-S3 (9) or ESP32-P4 (18). Refusing to flash."; exit 1 ;;
+esac
 
 # esptool: one on PATH (e.g. brew install esptool, the latest) first, else PlatformIO's bundled copy
 if command -v esptool >/dev/null; then ESP=(esptool)
@@ -42,6 +50,10 @@ PORTARG=(); [[ -n "${PORT:-}" ]] && PORTARG=(--port "$PORT")
 # the only way back. A Sunton board bought on its own has it off: it needs a plain write (an encrypted one would not
 # boot). The firmware never turns encryption on, so a plain board stays plain.
 INFO="$("${ESP[@]}" ${PORTARG[@]+"${PORTARG[@]}"} $SI 2>&1)" || { echo "$INFO" | tail -5; echo "Could not read the chip's security info. Refusing to flash."; exit 1; }
+CHIP="$(echo "$INFO" | sed -n 's/^Chip ID: *\([0-9]*\).*/\1/p' | head -1)"
+if [[ "$CHIP" != "$IMG_CHIP" ]]; then
+  echo "These images are for the $IMG_NAME (chip id $IMG_CHIP), the connected chip says chip id ${CHIP:-unknown}. Refusing to flash."; exit 1
+fi
 ENC="$(echo "$INFO" | sed -n 's/^Flash Encryption: *\([A-Za-z]*\).*/\1/p' | head -1)"
 FLAGS="$(echo "$INFO" | sed -n 's/^Flags: *\(0x[0-9a-fA-F]*\).*/\1/p' | head -1)"
 CRYPT="$(echo "$INFO" | sed -n 's/^SPI Boot Crypt Count[^:]*: *\(0x[0-9a-fA-F]*\).*/\1/p' | head -1)"
@@ -57,7 +69,7 @@ fi
 if [[ -n "${FLASH_ENC:-}" && "${FLASH_ENC}" != auto && "${FLASH_ENC}" != "$MODE_ENC" ]]; then
   echo "FLASH_ENC=$FLASH_ENC, but this chip's flash encryption is $ENC ($MODE_ENC write needed). Refusing to flash."; exit 1
 fi
-echo "Flash encryption: $ENC${CRYPT:+ (SPI_BOOT_CRYPT_CNT $CRYPT)} -> $MODE_ENC write"
+echo "$IMG_NAME, flash encryption: $ENC${CRYPT:+ (SPI_BOOT_CRYPT_CNT $CRYPT)} -> $MODE_ENC write"
 HAVE_BACKUP=0; [[ -f "$BACKUP" && $(wc -c < "$BACKUP") -eq 16777216 ]] && HAVE_BACKUP=1
 if [[ $HAVE_BACKUP == 0 ]]; then
   if [[ $MODE_ENC == encrypted ]]; then
@@ -71,7 +83,7 @@ if [[ $HAVE_BACKUP == 0 ]]; then
 fi
 ENCARG=(); [[ $MODE_ENC == encrypted ]] && ENCARG=(--encrypt)
 CMD=("${ESP[@]}" ${PORTARG[@]+"${PORTARG[@]}"} --baud 460800 $W ${ENCARG[@]+"${ENCARG[@]}"} $FM dio $FF 80m $FS 16MB
-     0x0 "$IMG/bootloader.bin" 0x8000 "$IMG/partitions.bin" 0xe000 "$IMG/boot_app0.bin" 0x10000 "$IMG/firmware.bin")
+     $BOOT_AT "$IMG/bootloader.bin" 0x8000 "$IMG/partitions.bin" 0xe000 "$IMG/boot_app0.bin" 0x10000 "$IMG/firmware.bin")
 if [[ "${DRY_RUN:-0}" == 1 ]]; then echo "DRY_RUN=1, would run: ${CMD[*]}"; exit 0; fi
 "${CMD[@]}"
 echo "Flashed ($MODE_ENC write). The screen restarts by itself; if the picture looks wrong, unplug and replug USB."

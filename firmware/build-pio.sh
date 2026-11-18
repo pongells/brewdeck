@@ -3,6 +3,8 @@
 #   ./build-pio.sh ui            build only
 #   ./build-pio.sh ui --flash    build, then flash (encrypted or plain, as the chip needs; needs a 16 MB backup)
 #   ./build-pio.sh ui-debug ...  the same plus the debug web server (screenshots for tools/screenshot.sh, /heap)
+#   ./build-pio.sh ui-p4 ...     the Guition ESP32-P4 board (ui-p4-debug: with the debug web server)
+#   ./build-pio.sh p4-c6-update --flash   P4 board: update its Wi-Fi chip's firmware (src/c6update), then flash ui-p4
 #   UI=ui_minimal ./build-pio.sh ui   another UI folder under src/ (default: ui, Brewdeck's own)
 # Env: PORT=/dev/cu.usbserial-XXXX (default: esptool auto-detect)  GAGGI_BACKUP=path to the 16 MB backup
 #      FLASH_ENC=encrypted|plain|auto (what you expect; checked against the chip)  NO_BACKUP=1 (plain boards only)
@@ -38,4 +40,9 @@ BOOT="$(find "$HOME/.platformio/packages" -path "*framework-arduinoespressif32*/
 cp "$BOOT" "$BP/boot_app0.bin"
 [[ $FLASH == 1 ]] || exit 0
 # the same flash script a release ships: asks the chip, needs the backup, never guesses
-GAGGI_BACKUP="${GAGGI_BACKUP:-$HERE/../backup/gaggiuino-screen-backup.bin}" exec "$HERE/flash.sh" "$BP"
+# each board has its own backup of its original flash
+case "$TARGET" in
+  ui-p4*|p4-*) DEF_BACKUP="$HERE/../backup/p4-guition-original.bin" ;;
+  *) DEF_BACKUP="$HERE/../backup/gaggiuino-screen-backup.bin" ;;
+esac
+GAGGI_BACKUP="${GAGGI_BACKUP:-$DEF_BACKUP}" exec "$HERE/flash.sh" "$BP"

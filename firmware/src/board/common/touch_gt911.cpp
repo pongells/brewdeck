@@ -33,11 +33,13 @@ void touch_cfg(int *xmax, int *ymax) { *xmax = g_xmax; *ymax = g_ymax; }
 
 bool touch_begin() {
   Wire.begin(PIN_TOUCH_SDA, PIN_TOUCH_SCL, 400000);
-  pinMode(PIN_TOUCH_RST, OUTPUT);
-  digitalWrite(PIN_TOUCH_RST, LOW);
-  delay(10);
-  digitalWrite(PIN_TOUCH_RST, HIGH);
-  delay(80);
+  if (PIN_TOUCH_RST >= 0) {
+    pinMode(PIN_TOUCH_RST, OUTPUT);
+    digitalWrite(PIN_TOUCH_RST, LOW);
+    delay(10);
+    digitalWrite(PIN_TOUCH_RST, HIGH);
+    delay(80);
+  }
 
   const uint8_t candidates[2] = {0x5D, 0x14};
   for (int i = 0; i < 2; i++) {

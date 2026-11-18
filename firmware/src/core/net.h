@@ -52,3 +52,6 @@ void net_wifi_target(char *out, size_t n);   // network the screen tries to join
 // For the offline screen: the screen's own IP ("" without Wi-Fi) and the machine's address (IP once found, else the
 // mDNS name it looks for).
 void net_addr_info(char *screen, size_t scap, char *machine, size_t mcap);
+// The joined network as the network task last read it (about once a second; on the ESP32-P4 every Wi-Fi query is a
+// request to the C6 over SDIO, which can block, so the UI task never asks Wi-Fi itself). False when not connected.
+bool net_wifi_info(char *ssid, size_t scap, int8_t *rssi, int *channel, char *ap, size_t acap);

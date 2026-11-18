@@ -1,5 +1,6 @@
 // Debug web server (see shot.h), only in debug builds (env ui-debug, -DBREWDECK_DEBUG_HTTP: no
-// open port in release builds). Screenshot server: reads the RGB panel's frame buffer in PSRAM, i.e. exactly what is on the glass.
+// open port in release builds). Screenshot server: reads the panel's frame buffer in PSRAM (board_screen_rows), i.e.
+// exactly what is on the glass.
 // While a download runs (~1-3 s) the extra PSRAM reads may disturb the picture briefly: debug use only.
 #include <Arduino.h>
 #ifdef BREWDECK_DEBUG_HTTP
@@ -8,11 +9,10 @@
 #include <string.h>
 #include <esp_heap_caps.h>
 #include <esp_flash.h>
-#include "soc/spi_mem_reg.h"
 #include "board.h"
 #include "net.h"
 #include "shot.h"
-#include "../board/board_internal.h"
+#include "../board/common/board_internal.h"
 
 static WiFiServer g_srv(80);
 // the UI's own debug route (bd_debug_route)
@@ -29,7 +29,7 @@ static bool route_match(const char *line) {      // "GET <path> " or "GET <path>
 static void put16(uint8_t *p, uint16_t v) { p[0] = v; p[1] = v >> 8; }
 static void put32(uint8_t *p, uint32_t v) { for (int i = 0; i < 4; i++) p[i] = v >> (8 * i); }
 
-static void send_bmp(WiFiClient &c, const uint16_t *fb) {
+static void send_bmp(WiFiClient &c) {
   const uint32_t row = SCREEN_W * 2, img = row * SCREEN_H, off = 14 + 40 + 12;
   uint8_t h[off];
   memset(h, 0, sizeof h);
@@ -47,10 +47,12 @@ static void send_bmp(WiFiClient &c, const uint16_t *fb) {
   c.printf("HTTP/1.0 200 OK\r\nContent-Type: image/bmp\r\nContent-Length: %u\r\nCache-Control: no-store\r\n"
            "Connection: close\r\n\r\n", (unsigned)(off + img));
   c.write(h, sizeof h);
-  // straight from the frame buffer in PSRAM (lwIP copies into its own buffers): no internal-RAM staging buffer
+  // from the board's frame buffer in PSRAM (S3: straight from it; lwIP copies into its own buffers): no internal-RAM
+  // staging buffer
   const size_t CH = SCREEN_W * 2 * 8;               // 8 rows per write
   for (int y = 0; y < SCREEN_H; y += 8) {
-    const uint8_t *chunk = (const uint8_t *)(fb + (size_t)y * SCREEN_W);
+    const uint8_t *chunk = (const uint8_t *)board_screen_rows(y, 8);
+    if (!chunk) return;
     size_t sent = 0;
     uint32_t t0 = millis();
     while (sent < CH && c.connected() && millis() - t0 < 5000) {
@@ -64,7 +66,8 @@ static void send_bmp(WiFiClient &c, const uint16_t *fb) {
 static void task(void *) {
   while (WiFi.status() != WL_CONNECTED) delay(500);
   g_srv.begin();
-  Log.printf("screenshots: http://brewdeck.local/screen.bmp (http://%s/screen.bmp)\n", WiFi.localIP().toString().c_str());
+  Log.printf("screenshots: http://%s.local/screen.bmp (http://%s/screen.bmp)\n", board_hostname(),
+             WiFi.localIP().toString().c_str());
   for (;;) {
     WiFiClient c = g_srv.available();
     if (!c) { delay(50); continue; }
@@ -78,10 +81,9 @@ static void task(void *) {
       size_t m = c.readBytesUntil('\n', hb, sizeof hb - 1);
       if (m <= 1) break;
     }
-    uint16_t *fb = gfx ? gfx->getFramebuffer() : NULL;
-    if (strncmp(line, "GET /screen.bmp ", 16) == 0 && fb) {
+    if (strncmp(line, "GET /screen.bmp ", 16) == 0 && board_screen_rows(0, 1)) {
       uint32_t t0 = millis();
-      send_bmp(c, fb);
+      send_bmp(c);
       mem_watch("screenshot");
       Log.printf("screenshot sent in %u ms\n", (unsigned)(millis() - t0));
     } else if (strncmp(line, "GET /heap ", 10) == 0) {   // memory check (debug)
@@ -93,9 +95,8 @@ static void task(void *) {
                (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), (int)WiFi.RSSI(), (int)WiFi.channel(),
                WiFi.BSSIDstr().c_str());
     } else if (strncmp(line, "GET /flash ", 11) == 0) {   // flash read mode + raw read speed (debug)
-      const uint32_t ctrl = REG_READ(SPI_MEM_CTRL_REG(0));
-      const char *mode = ctrl & SPI_MEM_FREAD_QIO ? "QIO" : ctrl & SPI_MEM_FREAD_QUAD ? "QOUT" :
-                         ctrl & SPI_MEM_FREAD_DIO ? "DIO" : ctrl & SPI_MEM_FREAD_DUAL ? "DOUT" : "single";
+      uint32_t ctrl = 0;
+      const char *mode = board_flash_mode(&ctrl);   // chip-specific registers: the board layer reads them
       static uint8_t *buf;
       if (!buf) buf = (uint8_t *)heap_caps_malloc(4096, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
       const uint32_t N = 1024 * 1024, t0 = micros();

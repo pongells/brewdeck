@@ -1,3 +1,5 @@
+// Sunton ESP32-S3 panel: Arduino_GFX's RGB driver (frame buffer in PSRAM, bounce buffers) and the backlight. Used by
+// board_s3.cpp and the touch test.
 #include "board.h"
 
 static Arduino_ESP32RGBPanel *bus = new Arduino_ESP32RGBPanel(

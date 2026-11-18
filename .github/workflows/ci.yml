@@ -55,3 +55,22 @@ jobs:
           ./build-pio.sh ui || { uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0 && ./build-pio.sh ui; }
           ./build-pio.sh ui-debug
           UI=ui_minimal ./build-pio.sh ui   # the example UI: proves a UI builds on the core API alone
+
+  firmware-p4:
+    # separate job and cache: the two boards need differently compiled Arduino libraries, and pioarduino keeps one copy
+    name: Firmware, ESP32-P4 board (release and debug builds, the example UI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2   # v10.3.3 (Node 24)
+      - uses: actions/cache@v6
+        with:
+          path: ~/.platformio
+          key: platformio-p4-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+      - name: Build
+        working-directory: firmware
+        run: |
+          ./build-pio.sh ui-p4 || { uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0 && ./build-pio.sh ui-p4; }
+          ./build-pio.sh ui-p4-debug
+          UI=ui_minimal ./build-pio.sh ui-p4
+          ./build-pio.sh p4-c6-update

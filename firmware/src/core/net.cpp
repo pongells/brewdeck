@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include "wifi_config.h"
 #include "net.h"
+#include "../board/common/board_internal.h"
 #include "net_ws.h"
 #include "parse.h"
 #include <Preferences.h>
@@ -33,6 +34,7 @@ static uint32_t g_select_ms = 0;      // when it was asked for: dropped after 5 
 static bool g_force_list = false;     // re-read the profile list on the next cycle (after a select)
 static volatile int g_redetail_id = 0; // a profile saved from this screen: re-read its stored values (net_profile_saved)
 static SemaphoreHandle_t g_mtx;
+static void wifi_info_step(bool now = false);   // the network task reads the link status for the UI (net_wifi_info)
 static TaskHandle_t g_task = NULL;
 static IPAddress g_ip;                // machine address for the WebSocket task
 static bool g_have_ip = false;
@@ -107,6 +109,8 @@ static char g_join_ssid[33], g_join_pass[65];
 static int g_join_state = WIFI_JOIN_IDLE;
 static uint32_t g_join_seq = 0, g_join_seen = 0;
 static volatile uint8_t g_disc_reason = 0;
+static volatile uint32_t g_disc_ms = 0;   // when the last disconnect event came (stamp_nz), for the quick first retries
+static bool g_ever_joined = false;        // joined at least once since boot
 static int g_why = WHY_NONE;                       // offline reason (WHY_*), under g_mtx
 static char g_why_ip[16] = "";                     // address that did not answer (WHY_NO_REPLY)
 static void set_why(int why, IPAddress ip);
@@ -525,6 +529,22 @@ static void roam_step(bool idle) {
   const uint32_t now = millis();
   if (WiFi.status() != WL_CONNECTED) {
     if (!g_down_ms) g_down_ms = stamp_nz(now);
+    // the first join after boot dropped: try again after 1 s, up to 3 times, instead of waiting 15 s. Seen on the
+    // ESP32-P4 board while its Wi-Fi chip (ESP32-C6) ran older ESP-Hosted firmware than the host side (2.3.2 vs
+    // 2.12.13): the first join dropped every boot (reason 8, ~3 s in), the next one worked. Updating the C6 fixed it;
+    // this stays for boards that still have the old firmware.
+    static uint8_t quick = 0;
+    if (!g_ever_joined && g_disc_ms && now - g_disc_ms > 1000 && quick < 3 && g_ssid[0]) {
+      quick++;
+      g_disc_ms = 0;
+      Log.printf("wifi: first join dropped (reason %u), trying again now (%u of 3)\n", (unsigned)g_disc_reason,
+                 (unsigned)quick);
+      WiFi.disconnect(false);
+      delay(100);
+      WiFi.begin(g_ssid, g_pass);
+      g_down_ms = stamp_nz(now);
+      return;
+    }
     // down for 15 s: join again ourselves, every 15 s. The Arduino core's auto-reconnect skips some reasons: reason 8
     // (ASSOC_LEAVE, sent by access points being re-provisioned) left the screen offline for good.
     if (now - g_down_ms > 15000 && g_ssid[0]) {
@@ -540,6 +560,7 @@ static void roam_step(bool idle) {
     return;
   }
   if (g_down_ms || !g_join_ms) {                    // (re)joined
+    g_ever_joined = true;
     g_down_ms = 0;
     g_join_ms = stamp_nz(now);
     log_ap("joined");
@@ -618,6 +639,7 @@ static bool wifi_join_step(void) {
   Log.printf("wifi: joining \"%s\" from the menu\n", ssid);
   WiFi.disconnect(false);
   delay(200);
+  wifi_info_step(true);                              // the UI shows the old network as gone at once
   g_disc_reason = 0;
   WiFi.begin(ssid, pass);
   const uint32_t t0 = millis();
@@ -626,6 +648,7 @@ static bool wifi_join_step(void) {
     if (WiFi.status() == WL_CONNECTED) { ok = true; break; }
     const uint8_t r = g_disc_reason;               // 15 4-way handshake timeout, 202 auth fail, 204 handshake timeout
     if (millis() - t0 > 4000 && (r == 15 || r == 202 || r == 204)) break;
+    wifi_info_step();                                // this loop holds the network task for up to 20 s
     delay(200);
   }
   g_down_ms = 0;                                     // the 15 s rejoin timer starts again from here
@@ -646,6 +669,7 @@ static bool wifi_join_step(void) {
     if (g_ssid[0]) WiFi.begin(g_ssid, g_pass);
   }
   memset(pass, 0, sizeof pass);
+  wifi_info_step(true);
   join_publish(ok ? WIFI_JOIN_OK : WIFI_JOIN_FAILED);
   return true;
 }
@@ -732,6 +756,7 @@ static void task(void *) {
   uint32_t boot = millis();
   bool fell_back = false;
   for (;;) {
+    wifi_info_step();
     wifi_scan_step();
     if (wifi_join_step()) { have_ip = false; fails = 0; continue; }
     {
@@ -809,7 +834,7 @@ static void task(void *) {
     }
     if (!have_ip) {
       static bool mdns_up = false;
-      if (!mdns_up) mdns_up = MDNS.begin("brewdeck");
+      if (!mdns_up) mdns_up = MDNS.begin(board_hostname());
       have_ip = resolve(&ip);
       if (!have_ip && (uint32_t)g_last_ip != 0) {
         Log.printf("net: mDNS no answer, keeping %s\n", g_last_ip.toString().c_str());
@@ -878,7 +903,7 @@ void net_begin(void) {
   // that crashes the panel's bounce-buffer ISR ("Cache disabled but cached memory region accessed").
   // persistent(false) stops WiFi.begin writing NVS (a flash write while the panel interrupt reads PSRAM crashed it).
   WiFi.persistent(false);
-  WiFi.setHostname("brewdeck");
+  WiFi.setHostname(board_hostname());   // one name per board kind: both may be on one network
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);   // no modem sleep: its beacon wake-ups add bursts of flash/PSRAM traffic that disturb the panel
   // local time for the idle screen's clock (NTP from the internet, nothing to/from the machine). Time zone: set
@@ -893,6 +918,7 @@ void net_begin(void) {
   WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
   WiFi.onEvent([](WiFiEvent_t, WiFiEventInfo_t info) {   // debug: why the link dropped
     g_disc_reason = info.wifi_sta_disconnected.reason;
+    g_disc_ms = stamp_nz(millis());
     Log.printf("wifi: disconnected, reason %u\n", (unsigned)info.wifi_sta_disconnected.reason);
   }, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
   xTaskCreatePinnedToCore(task, "net", 6144, NULL, 1, &g_task, 0);   // measured peak ~2.6 KB (GET /tasks)
@@ -904,9 +930,59 @@ static char g_front_ver[28], g_static_ver[28];   // pb_versions: kept across rec
 static uint32_t g_steam_set = 0;   // steam set point (pb_steam_set), 0 = not known yet
 static WsScaleCfg g_scfg;   // the 3 scale flags only (see pb_scale_cfg; set by the WS task); kept across reconnects
 
+// the joined network, read by the network task (wifi_info_step), handed to the UI task under g_mtx
+static struct { bool up; char ssid[33]; int8_t rssi; int channel; char ap[18]; char ip[16]; } g_winfo;
+static void wifi_info_step(bool now) {   // now: read at once (a join started or ended), else at most once a second
+  static uint32_t last = 0;
+  if (!now && last && millis() - last < 1000) return;
+  last = stamp_nz(millis());
+  const uint32_t t0 = millis();
+  bool up = WiFi.status() == WL_CONNECTED;
+  char ssid[33] = "", ap[18] = "", ip[16] = "";
+  int8_t rssi = 0;
+  int ch = 0;
+  if (up) {
+    snprintf(ssid, sizeof ssid, "%s", WiFi.SSID().c_str());
+    rssi = (int8_t)WiFi.RSSI();
+    ch = WiFi.channel();
+    snprintf(ap, sizeof ap, "%s", WiFi.BSSIDstr().c_str());
+    snprintf(ip, sizeof ip, "%s", WiFi.localIP().toString().c_str());
+  }
+  const uint32_t took = millis() - t0;
+  static uint32_t last_log = 0;
+  if (took > 200 && (!last_log || millis() - last_log > 30000)) {
+    last_log = stamp_nz(millis());
+    Log.printf("wifi: reading the link status took %u ms\n", (unsigned)took);
+  }
+  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  g_winfo.up = up;
+  memcpy(g_winfo.ssid, ssid, sizeof ssid);
+  g_winfo.rssi = rssi;
+  g_winfo.channel = ch;
+  memcpy(g_winfo.ap, ap, sizeof ap);
+  memcpy(g_winfo.ip, ip, sizeof ip);
+  xSemaphoreGive(g_mtx);
+}
+bool net_wifi_info(char *ssid, size_t scap, int8_t *rssi, int *channel, char *ap, size_t acap) {
+  if (!g_mtx) { if (scap) ssid[0] = 0; if (acap) ap[0] = 0; *rssi = 0; *channel = 0; return false; }
+  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  const bool up = g_winfo.up;
+  snprintf(ssid, scap, "%s", up ? g_winfo.ssid : "");
+  snprintf(ap, acap, "%s", up ? g_winfo.ap : "");
+  *rssi = up ? g_winfo.rssi : 0;
+  *channel = up ? g_winfo.channel : 0;
+  xSemaphoreGive(g_mtx);
+  return up;
+}
+
 void net_addr_info(char *screen, size_t scap, char *machine, size_t mcap) {
-  if (WiFi.status() == WL_CONNECTED) snprintf(screen, scap, "%s", WiFi.localIP().toString().c_str());
-  else snprintf(screen, scap, "%s", "");
+  if (g_mtx) {
+    xSemaphoreTake(g_mtx, portMAX_DELAY);
+    snprintf(screen, scap, "%s", g_winfo.up ? g_winfo.ip : "");
+    xSemaphoreGive(g_mtx);
+  } else {
+    snprintf(screen, scap, "%s", "");
+  }
   IPAddress ip;
   if (net_machine_ip(&ip)) snprintf(machine, mcap, "%s", ip.toString().c_str());
   else snprintf(machine, mcap, "%s", g_mhost);
