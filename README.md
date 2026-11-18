@@ -186,7 +186,7 @@ leave it out.
 ## Contributing
 
 Pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md), especially the safety rules for anything that
-talks to the machine.
+talks to the machine. Security problems: please report them privately, see [SECURITY.md](SECURITY.md).
 
 ## License
 

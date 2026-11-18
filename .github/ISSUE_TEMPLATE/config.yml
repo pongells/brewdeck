@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: A problem with the machine itself or its web UI
+    url: https://github.com/Zer0-bit/gaggiuino
+    about: Brewdeck is not an official Gaggiuino project. Machine, firmware and web UI problems belong to the Gaggiuino project.
+  - name: A security problem
+    url: https://github.com/pongells/brewdeck/security/advisories/new
+    about: Please report it privately, not as an issue.
+  - name: Questions and ideas
+    url: https://github.com/pongells/brewdeck/discussions
+    about: Ask or share in Discussions.

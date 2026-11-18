@@ -1,0 +1,24 @@
+name: Feature request
+description: An idea for the screen, the core API or the tools.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Brewdeck sends only a few commands to the machine (see the README). A feature that needs a new machine command
+        is discussed here first, before any code.
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What you would like to do on the screen, and why.
+    validations:
+      required: true
+  - type: dropdown
+    id: command
+    attributes:
+      label: Does it need a new command to the machine?
+      options:
+        - "No, it only shows things"
+        - "Yes"
+        - "Not sure"

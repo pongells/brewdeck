@@ -1,0 +1,48 @@
+name: Bug report
+description: Something on the Brewdeck screen, emulator or build does not work as described.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Brewdeck is an unofficial screen, not part of Gaggiuino: please do not report Brewdeck problems to the Gaggiuino team.
+        Never paste your Wi-Fi password, `wifi_config.h` or a flash backup.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you saw. A photo or screenshot helps.
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - On the screen (hardware)
+        - Emulator or web demo
+        - Building or flashing
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: screen
+    attributes:
+      label: Screen
+      description: E.g. Gaggiuino Gen 3 screen, Sunton ESP32-8048S043 bought on its own.
+  - type: input
+    id: version
+    attributes:
+      label: Brewdeck version
+      description: Menu > About shows the build date; or the commit you built.
+  - type: input
+    id: machine
+    attributes:
+      label: Machine firmware
+      description: Menu > About shows the machine's firmware, screen and web UI versions.
+  - type: textarea
+    id: log
+    attributes:
+      label: Serial log
+      description: The lines around the problem (115200 baud). Remove IP addresses or network names you do not want to share.
+      render: text
