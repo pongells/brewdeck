@@ -16,7 +16,7 @@
   --bg: #0A0A0B; --surface: #131315; --raised: #1C1C1F; --raised-hi: #26262A; --line: #222226;
   --text: #F2F2F3; --muted: #8E8E96; --faint: #5E5E66;
   --gold: #F5C04A; --gold-hi: #FFD36B; --gold-ink: #1A1405; --blue: #7CC4FF; --blue-bg: #0F2233;
-  --green: #4ADE80; --warn: #FFA94D; --warn-bg: #33200F;
+  --green: #4ADE80; --warn: #FFA94D;
   --font: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   color-scheme: dark;
@@ -78,20 +78,23 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
 
 /* rail */
 .rail { display: flex; flex-direction: column; gap: 22px; position: sticky; top: 20px; }
-@media (max-width: 560px) { .top nav a:not(.gh) { display: none; } }
 .group { display: flex; flex-direction: column; gap: 8px; }
 .group h2 { margin: 0 0 2px; font-size: 14px; font-weight: 500; color: var(--muted); }
 .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 button { font: 500 15px/1.2 var(--font); color: var(--text); background: var(--raised); border: 0; border-radius: 14px;
   min-height: 46px; padding: 0 16px; cursor: pointer; text-align: left; }
 button:hover { background: var(--raised-hi); }
-button:focus-visible, .sw:focus-visible, .top .src:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+button:focus-visible, .sw:focus-visible, a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 button[aria-pressed="true"] { background: var(--blue-bg); color: var(--blue); }
+button:active:not(:disabled) { transform: scale(0.97); }
+button:disabled { opacity: 0.4; cursor: default; }
+button:disabled:hover { background: var(--raised); }
+.shot:disabled:hover { background: var(--gold); }
+.sw:disabled:hover { background: none; }
 .shot { display: flex; flex-direction: column; gap: 2px; justify-content: center; min-height: 72px; padding: 12px 18px;
   background: var(--gold); color: var(--gold-ink); font-size: 18px; font-weight: 600; }
 .shot:hover { background: var(--gold-hi); }
 .shot span { font-size: 14px; font-weight: 400; opacity: 0.75; }
-.shot[aria-pressed="true"] { background: var(--gold); color: var(--gold-ink); }
 
 /* explanation */
 .explain { margin-top: 88px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; }
@@ -109,7 +112,7 @@ code { font-family: var(--mono); font-size: 0.84em; color: var(--text); backgrou
   background: var(--bg); border: 2px solid var(--c, var(--faint)); }
 .layers b { display: block; font-size: 17px; font-weight: 600; }
 .layers span { color: var(--muted); font-size: 15px; }
-.layers .via { padding-bottom: 14px; color: var(--faint); font-size: 14px; }
+.layers .via { padding-bottom: 14px; color: var(--muted); font-size: 14px; }
 .layers .via::before { display: none; }
 
 .ways { margin-top: 22px; display: flex; flex-direction: column; gap: 26px; }
@@ -118,17 +121,19 @@ code { font-family: var(--mono); font-size: 0.84em; color: var(--text); backgrou
 .way ol { margin: 10px 0 0; padding-left: 20px; color: var(--muted); font-size: 15px; display: flex; flex-direction: column; gap: 5px; }
 .way a { display: inline-block; margin-top: 10px; font-weight: 500; }
 
-footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--faint); font-size: 14px;
+footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px;
   display: flex; flex-direction: column; gap: 6px; }
 footer p { margin: 0; max-width: 80ch; }
 
 @media (max-width: 1000px) {
+  /* one column: the device, then the things to try, then the fake machine (the shot button stays near the screen) */
   .stage { grid-template-columns: 1fr; }
+  .stage > .left { display: contents; }
+  .device { order: 1; } .rail { order: 2; } .machine { order: 3; margin-top: 0; }
   .rail { position: static; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 16px; }
   .explain { grid-template-columns: 1fr; gap: 48px; margin-top: 64px; }
 }
 @media (max-width: 560px) {
-  .top p { display: none; }
   .rail { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -154,14 +159,15 @@ footer p { margin: 0; max-width: 80ch; }
       flushing. <b>Nothing on the machine is rewired or reflashed.</b></p>
   </section>
 
-  <p class="try"><i></i>The real screen software, running here against a fake machine. Click the screen like a touchscreen.</p>
+  <p class="try"><i></i>The real screen software, running here against a fake machine. Click or tap the screen like a touchscreen.</p>
 
   <div class="stage">
-    <div>
+    <div class="left">
       <div class="device">
         <div class="glass">
-          <canvas id="screen" width="800" height="480" aria-label="Brewdeck screen. Click or touch it like the touchscreen."></canvas>
+          <canvas id="screen" width="800" height="480" role="img" aria-label="Brewdeck screen. Click or touch it like the touchscreen."></canvas>
           <div class="loading" id="loading">Loading…</div>
+          <noscript><div class="loading">The demo needs JavaScript.</div></noscript>
         </div>
       </div>
       <div class="machine">
@@ -185,7 +191,7 @@ footer p { margin: 0; max-width: 80ch; }
         <h2>Steam</h2>
         <div class="row">
           <button data-action="Steam" id="steam" aria-pressed="false">Steam</button>
-          <button data-action="Steam, fast">Steam at 10×</button>
+          <button data-action="Steam, fast" id="steam10" aria-pressed="false">Steam at 10×</button>
         </div>
       </div>
       <div class="group">
@@ -235,12 +241,12 @@ footer p { margin: 0; max-width: 80ch; }
       <div class="ways">
         <div class="way">
           <h4>Write your own interface</h4>
-          <p>A UI implements four functions (<code>bd_ui_init</code>, <code>tick</code>, <code>event</code>,
-            <code>wake</code>) and calls the rest of the core API.</p>
+          <p>A UI names itself in <code>BD_UI</code>, implements four functions (<code>bd_ui_init</code>,
+            <code>tick</code>, <code>event</code>, <code>wake</code>) and calls the rest of the core API.</p>
           <ol>
             <li>Copy <code>firmware/src/ui_minimal</code>, a 150-line example under the MIT license.</li>
-            <li>Try it against the fake machine: <code>UI=myui sim/build-emu.sh</code></li>
-            <li>Build the firmware: <code>UI=myui ./build.sh ui</code></li>
+            <li>Try it against the fake machine: <code>UI=myui sim/build-emu.sh &amp;&amp; sim/emu-myui</code></li>
+            <li>Build the firmware, in <code>firmware/</code>: <code>UI=myui ./build.sh ui</code></li>
           </ol>
           <a href="https://github.com/pongells/brewdeck/blob/main/docs/custom-ui.md">Read the custom UI guide</a>
         </div>
@@ -258,7 +264,8 @@ footer p { margin: 0; max-width: 80ch; }
   <footer>
     <p>Brewdeck is an unofficial Wi-Fi touchscreen for <a href="https://gaggiuino.github.io/">Gaggiuino</a> machines. It is not
       made by or affiliated with the Gaggiuino project.</p>
-    <p>This page runs the screen's interface code compiled to WebAssembly. Nothing leaves your browser.</p>
+    <p>This page runs the screen's interface code compiled to WebAssembly, against a fake machine. It never connects to a
+      coffee machine.</p>
   </footer>
 </main>
 <script src="brewdeck.js"></script>
@@ -266,7 +273,14 @@ footer p { margin: 0; max-width: 80ch; }
 (async () => {
   const cv = document.getElementById('screen'), ctx = cv.getContext('2d');
   const img = ctx.createImageData(800, 480), px = new Uint32Array(img.data.buffer);
-  const M = await Brewdeck({ print: (t) => console.log(t), printErr: (t) => console.warn(t) });
+  let M;
+  try {
+    M = await Brewdeck({ print: (t) => console.log(t), printErr: (t) => console.warn(t) });
+  } catch (err) {
+    console.error(err);
+    document.getElementById('loading').textContent = 'The demo could not load. Reload the page to try again.';
+    return;
+  }
   document.getElementById('loading').remove();
   const fb = M._web_fb() >> 1;                      // uint16 index of the 800x480 RGB565 frame buffer
   const lut = new Uint32Array(65536);               // RGB565 -> RGBA (little endian: 0xAABBGGRR)
@@ -295,7 +309,9 @@ footer p { margin: 0; max-width: 80ch; }
     setSw('wifi', wifi, wifi ? 'on' : 'off');
   }
 
-  const steam = document.getElementById('steam');
+  const steam = document.getElementById('steam'), steam10 = document.getElementById('steam10');
+  const btns = [...document.querySelectorAll('button[data-action]')];
+  let splash = null;
   let last = '';
   function frame() {
     if (M._web_frame()) {
@@ -306,7 +322,11 @@ footer p { margin: 0; max-width: 80ch; }
     }
     const s = M.UTF8ToString(M._web_status());
     if (s !== last) { showState(s); last = s; }
-    steam.setAttribute('aria-pressed', M._web_steam_on() ? 'true' : 'false');
+    const sp = M._web_steam_speed();
+    steam.setAttribute('aria-pressed', sp === 1 ? 'true' : 'false');
+    steam10.setAttribute('aria-pressed', sp === 10 ? 'true' : 'false');
+    const sh = !!M._web_splash();                  // the start-up splash covers the screen: nothing to press meanwhile
+    if (sh !== splash) { splash = sh; for (const b of btns) b.disabled = sh; }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -320,7 +340,7 @@ footer p { margin: 0; max-width: 80ch; }
   cv.addEventListener('pointerup', up);
   cv.addEventListener('pointercancel', up);
 
-  for (const b of document.querySelectorAll('button[data-action]'))
+  for (const b of btns)
     b.addEventListener('click', () => M.ccall('web_action', 'number', ['string'], [b.dataset.action]));
 })();
 </script>

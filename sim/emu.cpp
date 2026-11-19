@@ -36,6 +36,7 @@ EMU_WEAK void ui_test_profiles(int, int) {}
 EMU_WEAK void ui_test_idle(void) {}
 EMU_WEAK void ui_test_screen_off(void) {}
 EMU_WEAK void ui_test_splash_end(void) {}
+EMU_WEAK bool ui_test_splash_shown(void) { return false; }
 EMU_WEAK void ui_test_home(void) {}
 EMU_WEAK void ui_test_wifi_password(const char *) {}
 EMU_WEAK void ui_test_menu(int) {}
@@ -542,19 +543,37 @@ static void a_ready(void) {
 static void a_heating(void) { a_ready(); set_heating(true); }
 static void a_shot(void) { a_ready(); g_speed = 1; start_shot(); }
 static void a_review(void) { a_ready(); g_speed = 10; start_shot(); }
+#ifdef EMU_WEB
+static void a_idle(void) { go_home(); ui_test_idle(); }   // the demo page: the fake machine stays as its switches say
+#else
 static void a_idle(void) { a_ready(); ui_test_idle(); }
+#endif
 static void a_screen_off(void) { a_ready(); ui_test_screen_off(); }
 static void a_profiles(void) { go_home(); ui_test_profiles(1, 0); }
 static void a_weight(void) { go_home(); ui_test_open_editor(); }
 static void a_temp(void) { go_home(); ui_test_open_temp_editor(); }
-static void a_steam(void) {
-  go_home();
-  steam_set(!g_m.steam_active);
+// a shot that is playing stops (as when the brew switch goes off)
+static void stop_shot(void) {
+  if (!g_shot_on) return;
+  g_shot_on = false; g_m.brew_active = false; g_m.pressure = 0; g_speed = 1;
+  printf("shot stopped\n");
 }
-static void a_steam_fast(void) {
+// what the machine itself does needs it on and reachable: switched back on (the switches show it)
+static void machine_up(void) { g_offline = g_nowifi = g_no_cfg = g_wifi_auth = false; }
+// the steam session playing: 0 none, else its speed (1, or 10 for "Steam, fast")
+static int steam_speed(void) { return g_st.on ? g_st.speed : g_m.steam_active ? 1 : 0; }
+// each steam button plays at its own speed: pressed again it stops, pressed while the other one plays it starts over
+// at its speed; steam replaces a shot
+static void a_steam_go(int speed) {
   go_home();
-  steam_set(!g_m.steam_active, 10);
+  const int cur = steam_speed();
+  if (cur == speed) { steam_set(false); return; }
+  if (cur) steam_set(false);
+  machine_up(); stop_shot(); g_heating = false;
+  steam_set(true, speed);
 }
+static void a_steam(void) { a_steam_go(1); }
+static void a_steam_fast(void) { a_steam_go(10); }
 static void a_menu(void) { go_home(); ui_test_menu(-1); }
 static void a_display(void) { go_home(); ui_test_menu(0); }
 static void a_scale_pg(void) { go_home(); ui_test_menu(1); }
@@ -576,12 +595,21 @@ static void t_scale_type(void) {   // Bluetooth -> wired -> predictive -> Blueto
   g_m.scale_type = t == BD_SCALE_BT ? BD_SCALE_WIRED : t == BD_SCALE_WIRED ? BD_SCALE_PREDICTIVE : BD_SCALE_BT;
 }
 static void t_water(void) { g_m.water_level = g_m.water_level > 20 ? 12 : 100; }
-static void t_machine(void) { g_offline = !g_offline; }
+static void steam_stop(void) { if (g_m.steam_active || g_st.on) steam_set(false); }
+static lv_timer_t *g_release_t = NULL;     // the pressure-release sequence (t_release): one at a time
+static void t_machine(void) {                // off: whatever it was doing stops
+  g_offline = !g_offline;
+  if (g_offline) { stop_shot(); steam_stop(); if (g_release_t) { lv_timer_delete(g_release_t); g_release_t = NULL; } }
+}
 static void t_wifi(void) { g_nowifi = !g_nowifi; }
-static void t_heating(void) { set_heating(!g_heating); }
+static void t_heating(void) {                // a cold boiler: no shot or steam going on
+  if (!g_heating) { stop_shot(); steam_stop(); }
+  set_heating(!g_heating);
+}
 static void t_resid(void) { g_m.pressure = g_m.pressure > 0.5f ? 0 : 1.4f; printf("machine: idle pressure %.1f bar\n", g_m.pressure); }   // pressure left in the system
 static void t_notif(void) {   // as the machine sends it (d_notif): the update notice (INFO, the longest real text)
   static int k = 0;            // and test notices of the other types; the pressure release has its own button
+  machine_up();
   static const int T[4] = {NOTIF_INFO, NOTIF_WARN, NOTIF_SUCCESS, NOTIF_ERROR};
   static const char *const KIND[4] = {"", "warning", "success", "error"};
   static char test[48];
@@ -594,16 +622,18 @@ static void t_notif(void) {   // as the machine sends it (d_notif): the update n
 
 // the machine's power-on / after-flush sequence: INFO "Dropping beats in: 3 / 2 / 1"
 // ~1 s apart, then INFO "Releasing pressure!"
-static void t_release(void) {
+static void t_release(void) {               // pressed again, it starts over
   static int step = 0;
   step = 0;
-  lv_timer_t *t = lv_timer_create([](lv_timer_t *tm) {
+  machine_up();
+  if (g_release_t) lv_timer_delete(g_release_t);
+  g_release_t = lv_timer_create([](lv_timer_t *tm) {
     static const char *const M[4] = {"Dropping beats in: 3", "Dropping beats in: 2", "Dropping beats in: 1", "Releasing pressure!"};
     printf("machine -> notification \"%s\"\n", M[step]);
     cs_notice(NOTIF_INFO, M[step]);
-    if (++step == 4) lv_timer_delete(tm);
+    if (++step == 4) { lv_timer_delete(tm); g_release_t = NULL; }
   }, 1000, NULL);
-  lv_timer_ready(t);
+  lv_timer_ready(g_release_t);
 }
 // ---- fake core (brewdeck_core.h): commands go to the fake machine above; the state is in core_state.cpp --------
 // a save changes the stored profile (GET /api/profile/<id>, the list's details): as the machine does
@@ -777,6 +807,7 @@ static void panel_status(void) {
   if (g_status && strcmp(lv_label_get_text(g_status), b)) lv_label_set_text(g_status, b);
 }
 static bool run_named(const char *name) {
+  if (ui_test_splash_shown()) return false;   // as on the device: the splash covers the screen until it goes or a tap
   for (const Action &a : SCREENS) if (!strcasecmp(a.name, name)) { a.fn(); return true; }
   for (const Action &a : MACHINE) if (!strcasecmp(a.name, name)) { a.fn(); return true; }
   return false;

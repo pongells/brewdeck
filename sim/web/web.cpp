@@ -29,7 +29,8 @@ EMSCRIPTEN_KEEPALIVE void web_touch(int x, int y, int down) {
 EMSCRIPTEN_KEEPALIVE int web_action(const char *name) { return run_named(name); }
 EMSCRIPTEN_KEEPALIVE const char *web_status(void) { return g_status_txt; }
 EMSCRIPTEN_KEEPALIVE int web_shot_playing(void) { return g_shot_on; }
-EMSCRIPTEN_KEEPALIVE int web_steam_on(void) { return g_m.steam_active || g_st.on; }
+EMSCRIPTEN_KEEPALIVE int web_steam_speed(void) { return steam_speed(); }   // 0 none, 1, 10
+EMSCRIPTEN_KEEPALIVE int web_splash(void) { return ui_test_splash_shown(); }
 }
 
 int main(void) {

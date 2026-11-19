@@ -182,6 +182,7 @@ static void splash_end(void) { if (g_splash) { lv_obj_delete(g_splash); g_splash
 static void on_splash_timer(lv_timer_t *t) { (void)t; splash_end(); }   // runs once (repeat count 1)
 static void on_splash_tap(lv_event_t *e) { (void)e; splash_end(); }
 void ui_test_splash_end(void) { splash_end(); }   // emulator: start without the splash (scripted runs)
+bool ui_test_splash_shown(void) { return g_splash != NULL; }
 void ui_splash(void) {
   if (g_splash) return;
   g_splash = box(lv_layer_top(), 0, 0, 800, 480, COL_BG, 0);

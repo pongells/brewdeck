@@ -22,10 +22,11 @@ DATA=()
 for f in profiles_all.json ws_demo_shot.bin ws_steam.bin "$SIM"/data/profile_*.json "$SIM"/data/shot_*.json; do
   f="$(basename "$f")"; DATA+=(--preload-file "$SIM/data/$f@/data/$f")
 done
-em++ "$OBJ"/*.o "$OBJ"/lvgl/*.o -o "$DIST/brewdeck.js" -O2 "${DATA[@]}" \
+# linked from inside dist/: the loader then names its data file "brewdeck.data", not this machine's full path
+(cd "$DIST" && em++ "$OBJ"/*.o "$OBJ"/lvgl/*.o -o brewdeck.js -O2 "${DATA[@]}" \
   -sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=0 -sMODULARIZE=1 -sEXPORT_NAME=Brewdeck \
-  -sEXPORTED_FUNCTIONS=_main,_web_frame,_web_fb,_web_backlight,_web_touch,_web_action,_web_status,_web_shot_playing,_web_steam_on \
-  -sEXPORTED_RUNTIME_METHODS=ccall,UTF8ToString,HEAPU16
+  -sEXPORTED_FUNCTIONS=_main,_web_frame,_web_fb,_web_backlight,_web_touch,_web_action,_web_status,_web_shot_playing,_web_steam_speed,_web_splash \
+  -sEXPORTED_RUNTIME_METHODS=ccall,UTF8ToString,HEAPU16)
 cp "$WEB/index.html" "$DIST/index.html"
 cp "$SIM/../docs/images/logo.svg" "$DIST/logo.svg"
 ls -la "$DIST" | awk 'NR>1 {print $5, $9}'
