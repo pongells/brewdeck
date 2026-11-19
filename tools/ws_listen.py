@@ -7,7 +7,10 @@ Usage: python3 -I tools/ws_listen.py <machine-ip> <schema.json> [seconds=30] [--
 --raw saves every frame as <u32 little-endian length><WebSocketMessageDto bytes> for host tests and playback;
 d_settings frames are NEVER saved (they carry MQTT credentials and API tokens).
 --times t.txt writes one line per frame saved with --raw: <unix time> <action> (to line frames up with a clock).
-schema.json comes from: python3 -I tools/extract_proto.py <bundle.js> <out.proto> <schema.json>
+schema.json describes the messages to decode, written from Gaggiuino's WebSocket docs
+(https://gaggiuino.github.io/rest-api/websocket.md): {"messages": {"<Message>": [{"no": 1, "name": "action",
+"kind": "scalar", "type": "string"}, ...]}, "enums": {}, "actions": {}}. For --raw recordings the envelope
+(WebSocketMessageDto) alone is enough.
 Standard library only.
 """
 import base64, json, os, socket, struct, sys, time

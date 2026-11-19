@@ -30,7 +30,7 @@ node_modules/
 __pycache__/
 *.pyc
 .vscode/
-# local output of tools/extract_proto.py (Gaggiuino's schema, not for this repo)
+# local protocol notes (Gaggiuino's schema): not for this repo
 *.proto
 ws_schema*.json
 firmware/include/wifi_config.h.local

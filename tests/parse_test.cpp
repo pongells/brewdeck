@@ -11,8 +11,8 @@ int main(int, char **argv) {
   const int n = parse_profile_list(list, &l);
   printf("list: %d\n", n);
   for (int i = 0; i < n; i++) printf("  id=%d sel=%d name='%s'\n", l.p[i].id, l.p[i].selected, l.p[i].name);
-  CHECK(n == 10);
-  CHECK(l.p[7].id == 8 && l.p[7].selected);
+  CHECK(n == 9);
+  CHECK(l.p[6].id == 8 && l.p[6].selected);
   CHECK(!l.p[0].selected);
   CHECK(strcmp(l.p[0].name, "IUIUIU Classic") == 0);
 

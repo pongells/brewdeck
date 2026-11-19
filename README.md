@@ -201,7 +201,7 @@ How the parts fit together (board, core, UI, the network tasks, the emulator): [
 | `sim/` | emulator, renderer and recorded machine data |
 | `tests/` | host unit tests |
 | `docs/` | the [user manual](docs/manual.md) and its animations, [development](docs/development.md), the [architecture](docs/architecture.md), [writing your own UI](docs/custom-ui.md), the [design system](docs/design-system.md), [machine API notes](docs/gaggiuino-api.md), the [WebSocket protocol](docs/ws/README.md) |
-| `tools/` | release packaging (`make-release.sh`), protocol listener and extractor, manual recorder, screenshot and screen recorder helpers, offline cup picture (`gen_cup.py`), a fake machine from the community profiles (`community_profiles.py`), font edge contrast (`font_contrast.py`) |
+| `tools/` | release packaging (`make-release.sh`), protocol listener, manual recorder, screenshot and screen recorder helpers, offline cup picture (`gen_cup.py`), a fake machine from the community profiles (`community_profiles.py`), font edge contrast (`font_contrast.py`) |
 
 Debug builds (`ui-debug`) add a small web server for screenshots, a screen recorder and remote touch; it has no
 password, so use them only on a network you trust ([development](docs/development.md#debug-web-server)).
@@ -242,8 +242,11 @@ Brewdeck contains no Gaggiuino code: it talks to the machine through Gaggiuino's
 fields it reads that those pages do not list are described in [docs/ws/README.md](docs/ws/README.md).
 
 Not covered by Brewdeck's license:
-- The recorded machine data in `sim/data/` (test fixtures) includes Gaggiuino profiles, among them community profiles,
-  which belong to their authors and the Gaggiuino project ([CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)).
+- The recorded machine data in `sim/data/` (test fixtures, and the web demo's fake machine) includes Gaggiuino
+  profiles as a machine reports them: built-in ones (as in Gaggiuino's published default profiles) and community ones
+  (from [Gaggiuino's community library](https://github.com/Zer0-bit/gaggiuino/tree/community/profiles)). They belong to
+  their authors and the Gaggiuino project ([CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)) and are
+  here only as test and demo data; they will be replaced if the Gaggiuino project asks.
 - The fonts in `firmware/src/ui/fonts/` are generated from [Inter Tight](https://github.com/rsms/inter-tight) and stay under
   the SIL Open Font License 1.1 ([OFL.txt](firmware/src/ui/fonts/OFL.txt)).
 - Libraries fetched at build time (LVGL, Arduino_GFX, the Arduino core, ESP-IDF) keep their own licenses. Release images

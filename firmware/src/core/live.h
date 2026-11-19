@@ -13,7 +13,7 @@ typedef struct {
   float weight;           // scale, g
   int   water_level;      // percent
   int   warmup_remaining; // seconds
-  // machine's readiness (REST readinessState / WS dashboardReadinessState; names from the web UI bundle):
+  // machine's readiness (REST readinessState / WS dashboardReadinessState; names as the machine's web UI shows them):
   // 0 WAITING, 1 WARMING ("WARMING UP" + countdown), 2 HEATING ("Waiting for temperature"), 3 READY, 4 STANDBY,
   // 5 STEAMING, 6 FLUSHING, 7 MAINTENANCE; -1 = not reported (then the screen's temperature rule is used)
   int   readiness;

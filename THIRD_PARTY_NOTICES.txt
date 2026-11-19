@@ -15,8 +15,9 @@ ESP-IDF 5.5 (Espressif)           Apache-2.0, and the licenses    chip support, 
   (github.com/espressif/esp-idf)  of its own components           other ESP-IDF components (firmware)
 ESP-Hosted (Espressif)            Apache-2.0                      Wi-Fi through the ESP32-C6 (ESP32-P4 firmware)
 Inter Tight (rsms/inter-tight)    SIL Open Font License 1.1       the screen's typeface (firmware, web demo)
-Gaggiuino profiles and shots      CC BY-NC 4.0, their authors     the fake machine's data (web demo only;
-  (gaggiuino.github.io)           and the Gaggiuino project       https://creativecommons.org/licenses/by-nc/4.0/)
+Gaggiuino profiles                CC BY-NC 4.0, their authors     the fake machine's data (web demo only;
+  (built-in defaults and the      and the Gaggiuino project       https://creativecommons.org/licenses/by-nc/4.0/)
+  community library, github.com/Zer0-bit/gaggiuino)
 
 ESP-IDF includes third-party components under their own licenses (among them FreeRTOS: MIT; lwIP: BSD-3-Clause;
 Mbed TLS: Apache-2.0; newlib: BSD-style). Their list and notices: the "Copyrights and Licenses" page of the ESP-IDF

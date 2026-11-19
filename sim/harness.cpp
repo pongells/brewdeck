@@ -115,16 +115,16 @@ int main(int argc, char **argv) {
   {
     // profile picker with a real machine's list; details missing for one row to show "Loading..."
     static const struct { int id; const char *name; int ph; float w, t; } P[] = {
-      {1, "IUIUIU Classic", 4, 36, 93}, {2, "Zer0", 0, 0, 0}, {3, "Londinium", 3, 36, 92}, {4, "Adaptive", 5, 40, 93},
+      {1, "IUIUIU Classic", 4, 36, 93}, {3, "Londinium", 0, 0, 0}, {4, "Adaptive", 5, 40, 93},
       {5, "Filter 2.1", 6, 0, 93}, {6, "Blooming espresso", 4, 40, 92}, {7, "LMD Single v1.1 (community)", 6, 38, 91},
       {8, "Leva 9 SINGLE v0.9 (community)", 19, 21, 90}, {9, "[UT] Tube Fill (community)", 1, 0, 90},
       {10, "[UT] Test OPV (community)", 2, 0, 90}};
     static bd_profiles L; memset(&L, 0, sizeof L);
-    L.count = 10;
-    for (int i = 0; i < 10; i++) {
+    L.count = 9;
+    for (int i = 0; i < 9; i++) {
       bd_profile *p = &L.p[i];
       p->id = P[i].id; strcpy(p->name, P[i].name); p->active = P[i].id == 8;
-      p->detail = P[i].id != 2; p->phases = P[i].ph; p->stop_weight = P[i].w; p->brew_temp = P[i].t;
+      p->detail = P[i].id != 3; p->phases = P[i].ph; p->stop_weight = P[i].w; p->brew_temp = P[i].t;
     }
     bd_machine d; memset(&d, 0, sizeof d); d.readiness = BD_RD_UNKNOWN;
     d.temperature = 90.1f; d.target_temp = 90; d.water_level = 18;

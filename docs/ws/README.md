@@ -8,8 +8,7 @@ Brewdeck's own findings: rates, quirks and what the machine actually sends.
 
 ## Fields Brewdeck uses that the docs do not list
 
-Found in the machine's own web UI (its compiled protobuf metadata; `tools/extract_proto.py` rebuilds the whole schema
-from it on your own machine). Field numbers as decoded by `firmware/src/core/pb.cpp`:
+Field numbers as decoded by `firmware/src/core/pb.cpp` (they match what the machine's own web UI reads):
 
 | Message | Field | Used for |
 |---|---|---|
@@ -18,9 +17,8 @@ from it on your own machine). Field numbers as decoded by `firmware/src/core/pb.
 | `ShotHistoryIndexDto` (`d_shot_hist_index`) | `records = 1`: `{ uint32 id = 1; string profileName = 2; uint32 timestamp = 3; uint32 duration = 4; }`, newest first | shot history, previous shot |
 | `GaggiaSettingsDto` (`d_settings`) | only `scales = 4` (`forcePredictive = 1`, `hwScalesEnabled = 2`, `btScalesEnabled = 5`), `boiler = 1` (`steamSetPoint = 1`), `versions = 7` (`frontVersion = 2`, `staticVersion = 3`); nothing else is read | scale icon, steam screen, About |
 
-The web UI bundle was `index-BaW141oT.js` on firmware `6ea560e` and release `c929939` (Vite names it by a hash of its
-content, so an unchanged name means an unchanged protocol). After a Gaggiuino update, re-read the docs and re-check
-these fields (`tools/extract_proto.py`, usage in its header).
+Checked on firmware `6ea560e`, release `c929939`. After a Gaggiuino update, re-read the docs and re-check these fields
+against a recording of what the machine sends (`tools/ws_listen.py --raw`) and the host tests.
 
 ## Protocol
 
