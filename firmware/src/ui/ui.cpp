@@ -63,26 +63,9 @@ void ui_command_answer(int cmd, int answer) {
   }
 }
 
-// Called on every machine-state change (several times a second); only widgets whose value changed are touched.
-void ui_set_live(const bd_machine *d) {
-  const int link = d->link;
-  char b[64];
-  // a boiler reading that is not a number in 0..400 (a sensor fault) is shown as 0: the big digits font has no "-" or
-  // "nan", and NaN * 10 into int16 (steam chart) is undefined
-  bd_machine safe;
-  if (!(d->temperature >= 0.0f && d->temperature < 400.0f)) {
-    safe = *d;
-    safe.temperature = 0.0f;
-    d = &safe;
-  }
-  g_live_brew = link == BD_LINK_ONLINE && d->brewing;   // the idle clock wakes for a shot
-  static bool pv_msg_shown = false;                // the preview's "loading" line, once, until a profile arrives
-  if (!g_shape_loaded && !pv_msg_shown) {
-    pv_msg_shown = true;
-    lv_obj_set_hidden(g_pv_msg, false);
-  }
-  g_menu_live = *d;
-  g_menu_link = link;
+// ---- live machine state -------------------------------------------------------------------------------------------
+// the link: the offline screen's timers; offline, everything that needs the machine is off. false = offline
+static bool live_link(int link) {
   g_off_active = true;
   if (link != g_off_link) {                         // offline screen: remember when the link was lost
     if (link != BD_LINK_ONLINE && g_off_link == BD_LINK_ONLINE) { g_off_since = lv_tick_get(); g_upd_shown = false; }
@@ -101,12 +84,19 @@ void ui_set_live(const bd_machine *d) {
     // Commands are refused (g_can_*), and again by the core.
     // Nothing runs that we know of: a busy flag left from steam / flush would keep the screen lit all night.
     g_idle_busy = false;
-    return;
+    return false;
   }
+  return true;
+}
+
+// the heating state: the machine's readiness, held at Heating until Ready is steady
+typedef struct { int rd; bool cooling, heating_now, heating; int hold_rd; } LiveHeat;
+static LiveHeat live_heat(const bd_machine *d) {
   // Ready / Warming up / Heating / Standby / Waiting from the machine's readiness (the names of its web UI);
   // the temperature rule only when it is not reported. "Cooling" (boiler > target + 3, after steam) stays the
   // screen's own: the machine has no such state.
-  const int rd = d->readiness;
+  LiveHeat h;
+  const int rd = h.rd = d->readiness;
   const bool rd_ok = rd >= 0 && rd <= 7;
   const bool cooling = d->target_temp > 0 && d->temperature > d->target_temp + TEMP_MARGIN && rd != 1;
   const bool heating_now = rd_ok ? (rd == 1 || rd == 2) && !cooling
@@ -134,74 +124,94 @@ void ui_set_live(const bd_machine *d) {
       bd_log("ui: ready steady for %u s, showing Ready", (unsigned)(READY_HOLD_MS / 1000));
     }
   }
-  const bool heating = heating_now || s_hold;
+  h.cooling = cooling;
+  h.heating_now = heating_now;
+  h.heating = heating_now || s_hold;
+  h.hold_rd = s_hold_rd;
+  return h;
+}
+
+// what the machine is busy with ("Brewing", "Steam", ...; "Ready" and busy = false when idle)
+static const char *live_activity(const bd_machine *d, bool *busy) {
   const char *state = "Ready";
-  bool busy = true;
+  *busy = true;
   if (d->brewing) state = "Brewing";
   else if (d->steaming || strcmp(d->mode, "STEAM") == 0) state = "Steam";
   else if (d->hot_water) state = "Hot water";
   else if (strncmp(d->mode, "FLUSH", 5) == 0) state = "Flush";
   else if (strcmp(d->mode, "DESCALE") == 0) state = "Descale";
-  else busy = false;
-  st_update(d, (d->steaming || strcmp(d->mode, "STEAM") == 0) && !d->brewing);
-  g_can_select = !busy && strcmp(d->mode, "HOME") == 0;
-  {   // flush button: the machine's mode
-    const int fm = !strcmp(d->mode, "FLUSH") ? BD_FLUSH_ON : !strcmp(d->mode, "FLUSH_AUTO") ? BD_FLUSH_TIMED
-                 : !strcmp(d->mode, "HOME") ? BD_FLUSH_OFF : FL_UNKNOWN;
-    g_fl_mode = fm;
-    g_fl_idle = fm == BD_FLUSH_OFF && !busy;
-    if (g_fl_want == fm) g_fl_want = FL_UNKNOWN;          // reported: follow the machine again
-    fl_show();
-  }
+  else *busy = false;
+  return state;
+}
+
+// the flush button follows the machine's mode; flush mode without water running does not count as busy
+static void live_flush(const bd_machine *d, bool busy) {
+  const int fm = !strcmp(d->mode, "FLUSH") ? BD_FLUSH_ON : !strcmp(d->mode, "FLUSH_AUTO") ? BD_FLUSH_TIMED
+               : !strcmp(d->mode, "HOME") ? BD_FLUSH_OFF : FL_UNKNOWN;
+  g_fl_mode = fm;
+  g_fl_idle = fm == BD_FLUSH_OFF && !busy;
+  if (g_fl_want == fm) g_fl_want = FL_UNKNOWN;          // reported: follow the machine again
+  fl_show();
   // flush mode left on with no water running does not keep the screen awake (only a running pump counts)
   g_idle_busy = busy && !(strncmp(d->mode, "FLUSH", 5) == 0 && !d->brewing && d->pressure < FLUSH_WATER_BAR);
   // a shot / steam / flush counts as activity: "Dim after" starts again when it ends, so the screen does not go
   // straight to the idle clock after steaming without a touch
   if (busy) lv_display_trigger_activity(NULL);
-  // residual pressure (the next shot would not start from nominal pressure): idle in HOME and the pill reads above
-  // PRESS_ON -> the pressure pill turns orange and the idle clock shows the pressure, until it reads PRESS_ON or less
-  // for PRESS_OFF_MS (the machine releases it itself, after "Dropping beats"). Idle is ~0.1-0.6 bar, after steam
-  // 1.7-2.9; the core logs the idle pressure range every minute.
-  {
-    const bool idle_home = !busy && !strcmp(d->mode, "HOME");
-    const bool was = g_press_warn;
-    if (!idle_home) g_press_warn = false;
-    else {
-      // compare what the pill shows (one decimal): orange exactly when it reads 0.9 bar or more
-      static uint32_t s_low_since = 0;
-      const bool above = (int)(d->pressure * 10.0f + 0.5f) > (int)(PRESS_ON * 10.0f + 0.5f);
-      if (above) { g_press_warn = true; s_low_since = 0; }
-      else if (g_press_warn) {
-        if (!s_low_since) s_low_since = stamp_nz(lv_tick_get());
-        else if (lv_tick_elaps(s_low_since) >= PRESS_OFF_MS) { g_press_warn = false; s_low_since = 0; }
-      }
+}
+
+// residual pressure (the next shot would not start from nominal pressure): idle in HOME and the pill reads above
+// PRESS_ON -> the pressure pill turns orange and the idle clock shows the pressure, until it reads PRESS_ON or less
+// for PRESS_OFF_MS (the machine releases it itself, after "Dropping beats"). Idle is ~0.1-0.6 bar, after steam
+// 1.7-2.9; the core logs the idle pressure range every minute.
+static void live_pressure(const bd_machine *d, bool busy) {
+  char b[32];
+  const bool idle_home = !busy && !strcmp(d->mode, "HOME");
+  const bool was = g_press_warn;
+  if (!idle_home) g_press_warn = false;
+  else {
+    // compare what the pill shows (one decimal): orange exactly when it reads 0.9 bar or more
+    static uint32_t s_low_since = 0;
+    const bool above = (int)(d->pressure * 10.0f + 0.5f) > (int)(PRESS_ON * 10.0f + 0.5f);
+    if (above) { g_press_warn = true; s_low_since = 0; }
+    else if (g_press_warn) {
+      if (!s_low_since) s_low_since = stamp_nz(lv_tick_get());
+      else if (lv_tick_elaps(s_low_since) >= PRESS_OFF_MS) { g_press_warn = false; s_low_since = 0; }
     }
-    if (g_press_warn != was) bd_log("ui: pressure warning %s (%.2f bar)", g_press_warn ? "on" : "off", d->pressure);
-    g_press_val = d->pressure;
-    // the pressure pill: orange while the warning is on, else grey with the blue gauge (pressure colour)
-    snprintf(b, sizeof b, "%.1f bar", d->pressure < 0 ? 0.0f : d->pressure);
-    set_text(g_pr_lbl, b);
-    set_bg(g_pr_pill, COL_WARN_BG);
-    foot_pill(g_pr_pill, g_press_warn, 12, 14);
-    for (int i = 0; i < 2; i++) set_line_c(g_pr_ic[i], g_press_warn ? COL_WARN : COL_PRESS);
-    set_tc(g_pr_name, g_press_warn ? COL_WARN_TX : COL_MUTED);
-    set_tc(g_pr_lbl, g_press_warn ? COL_WARN_TX : COL_TEXT);
   }
-  g_idle_word = heating ? 1 : cooling ? 2 : 0;
+  if (g_press_warn != was) bd_log("ui: pressure warning %s (%.2f bar)", g_press_warn ? "on" : "off", d->pressure);
+  g_press_val = d->pressure;
+  // the pressure pill: orange while the warning is on, else grey with the blue gauge (pressure colour)
+  snprintf(b, sizeof b, "%.1f bar", d->pressure < 0 ? 0.0f : d->pressure);
+  set_text(g_pr_lbl, b);
+  set_bg(g_pr_pill, COL_WARN_BG);
+  foot_pill(g_pr_pill, g_press_warn, 12, 14);
+  for (int i = 0; i < 2; i++) set_line_c(g_pr_ic[i], g_press_warn ? COL_WARN : COL_PRESS);
+  set_tc(g_pr_name, g_press_warn ? COL_WARN_TX : COL_MUTED);
+  set_tc(g_pr_lbl, g_press_warn ? COL_WARN_TX : COL_TEXT);
+}
+
+// the state pill, the idle clock's state word and temperature, the Tare button
+static void live_state(const bd_machine *d, const LiveHeat *h, bool busy, const char *state) {
+  g_idle_word = h->heating ? 1 : h->cooling ? 2 : 0;
   g_idle_state = g_press_warn ? 3 : g_idle_word;
   snprintf(g_idle_temp, sizeof g_idle_temp, "%.1f", d->temperature);
   g_can_tare = g_can_select && d->scale_present;
   set_tc(g_tare_lbl, g_can_tare ? COL_TEXT : COL_OUTLINE);
   if (busy) set_pill(COL_BLUE_BG, COL_BLUE, COL_BLUE, state);
-  else if (heating)
+  else if (h->heating)
     set_pill(lv_color_hex(0x2A2210), COL_GOLD, COL_GOLD,
-             (heating_now ? rd : s_hold_rd) == 1 ? "Warming up" : "Heating");
-  else if (rd == 4) set_pill(COL_CARD, COL_MUTED, COL_PALE_TX, "Standby");
-  else if (rd == 0) set_pill(COL_CARD, COL_MUTED, COL_PALE_TX, "Waiting");
-  else if (rd == 7) set_pill(COL_BLUE_BG, COL_BLUE, COL_BLUE, "Maintenance");
-  else if (cooling) set_pill(COL_CARD, COL_BLUE, COL_PALE_TX, "Cooling");   // after steam
+             (h->heating_now ? h->rd : h->hold_rd) == 1 ? "Warming up" : "Heating");
+  else if (h->rd == 4) set_pill(COL_CARD, COL_MUTED, COL_PALE_TX, "Standby");
+  else if (h->rd == 0) set_pill(COL_CARD, COL_MUTED, COL_PALE_TX, "Waiting");
+  else if (h->rd == 7) set_pill(COL_BLUE_BG, COL_BLUE, COL_BLUE, "Maintenance");
+  else if (h->cooling) set_pill(COL_CARD, COL_BLUE, COL_PALE_TX, "Cooling");   // after steam
   else set_pill(COL_PILL_BG, COL_GREEN, COL_PILL_TX, "Ready");
 
+}
+
+// the big temperature and the water pill
+static void live_temp_water(const bd_machine *d) {
+  char b[32];
   // temperature (the state is the pill's job)
   if (d->temperature >= 99.95f) snprintf(b, sizeof b, "%.0f", d->temperature);
   else snprintf(b, sizeof b, "%.1f", d->temperature);
@@ -224,6 +234,10 @@ void ui_set_live(const bd_machine *d) {
   snprintf(b, sizeof b, "%d%%", lvl);
   set_text(g_tank_pct, b);
 
+}
+
+// the active profile's name, brew temperature and stop weight; the Profiles page and a waiting restore
+static void live_profile(const bd_machine *d) {
   // profile (shown without the "(community)" suffix, as in the design) + scale
   if (g_pend_id) {
     if (strcmp(d->profile_name, g_pend_name) == 0) g_pend_id = 0;          // confirmed by the machine
@@ -267,6 +281,10 @@ void ui_set_live(const bd_machine *d) {
       bd_log("ui: restore dropped (profile not active)");
     }
   }
+}
+
+static void live_scale(const bd_machine *d) {
+  char b[32];
   // scale pill: predictive (no scale used, the weight is only estimated during a shot) / connected / not connected.
   // With no scale connected the machine keeps reporting the last reading, so the weight is hidden.
   const bool pred = d->scale_type == BD_SCALE_PREDICTIVE;
@@ -289,6 +307,39 @@ void ui_set_live(const bd_machine *d) {
     snprintf(b, sizeof b, "%.1f g", d->weight);
     set_text(g_scale_lbl, b);
   }
+}
+
+// Called on every machine-state change (several times a second); only widgets whose value changed are touched.
+void ui_set_live(const bd_machine *d) {
+  const int link = d->link;
+  // a boiler reading that is not a number in 0..400 (a sensor fault) is shown as 0: the big digits font has no "-" or
+  // "nan", and NaN * 10 into int16 (steam chart) is undefined
+  bd_machine safe;
+  if (!(d->temperature >= 0.0f && d->temperature < 400.0f)) {
+    safe = *d;
+    safe.temperature = 0.0f;
+    d = &safe;
+  }
+  g_live_brew = link == BD_LINK_ONLINE && d->brewing;   // the idle clock wakes for a shot
+  static bool pv_msg_shown = false;                // the preview's "loading" line, once, until a profile arrives
+  if (!g_shape_loaded && !pv_msg_shown) {
+    pv_msg_shown = true;
+    lv_obj_set_hidden(g_pv_msg, false);
+  }
+  g_menu_live = *d;
+  g_menu_link = link;
+  if (!live_link(link)) return;
+  const LiveHeat h = live_heat(d);
+  bool busy;
+  const char *state = live_activity(d, &busy);
+  st_update(d, (d->steaming || strcmp(d->mode, "STEAM") == 0) && !d->brewing);
+  g_can_select = !busy && strcmp(d->mode, "HOME") == 0;
+  live_flush(d, busy);
+  live_pressure(d, busy);
+  live_state(d, &h, busy, state);
+  live_temp_water(d);
+  live_profile(d);
+  live_scale(d);
 }
 
 // ---- test hooks -----------------------------------------------------------------------------------------------------

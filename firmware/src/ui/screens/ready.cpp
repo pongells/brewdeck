@@ -438,7 +438,21 @@ void stepper_part(lv_obj_t *o) {
   lv_obj_set_style_bg_opa(o, LV_OPA_COVER, LV_STATE_PRESSED);
 }
 
-void build_ready(lv_obj_t *scr) {
+// a - or + button of a stepper (the card behind it: stepper_card); held, it repeats
+static void stepper_btn(lv_obj_t *scr, int x, bool plus, lv_event_cb_t cb) {
+  lv_obj_t *b = box(scr, x, 304, 64, 64, COL_CARD, RAD_CTRL);
+  make_button(b, COL_CARD_PR);
+  stepper_part(b);
+  lv_obj_t *ic = flex(b, LV_FLEX_FLOW_ROW, 0);
+  lv_obj_center(ic);
+  if (plus) icon_plus(ic, COL_TEXT);
+  else icon_minus(ic, COL_TEXT);
+  lv_obj_add_event_cb(b, cb, LV_EVENT_SHORT_CLICKED, NULL);
+  lv_obj_add_event_cb(b, cb, LV_EVENT_LONG_PRESSED_REPEAT, NULL);
+}
+
+// ---- Ready: building it ---------------------------------------------------------------------------------------------
+static void ready_header(lv_obj_t *scr) {
   // header, left: state pill, then the active profile's name
   lv_obj_t *hl = flex(scr, LV_FLEX_FLOW_ROW, 14);
   lv_obj_set_pos(hl, 24, 24);
@@ -481,8 +495,10 @@ void build_ready(lv_obj_t *scr) {
   g_prof_lbl = pl;
   lv_obj_set_flex_grow(pl, 1);
   one_line(pl, 0);
+}
 
-  // left: boiler temperature
+// left: boiler temperature
+static void ready_temperature(lv_obj_t *scr) {
   lv_obj_t *tcol = flex(scr, LV_FLEX_FLOW_COLUMN, 0);
   lv_obj_set_pos(tcol, 24, 96);
   lv_obj_set_size(tcol, 328, 160);
@@ -497,27 +513,15 @@ void build_ready(lv_obj_t *scr) {
   lv_obj_t *deg = label(trow, "\xC2\xB0", F_VALUE, COL_MUTED);
   lv_obj_set_style_pad_top(deg, 2, 0);
   lv_obj_set_style_translate_x(deg, -7, 0);
+}
 
-  // left, bottom: brew temperature, -/+ like the stop weight
+// left, bottom: brew temperature, -/+ like the stop weight
+static void ready_brew_temp(lv_obj_t *scr) {
   lv_obj_t *tt = g_tt_lbl = label(scr, "Brew temp", F_TEXT, COL_MUTED);
   lv_obj_set_pos(tt, 24, 275);
   stepper_card(scr, 24, 328);
-  lv_obj_t *tminus = box(scr, 24, 304, 64, 64, COL_CARD, RAD_CTRL);
-  make_button(tminus, COL_CARD_PR);
-  stepper_part(tminus);
-  lv_obj_t *tmi = flex(tminus, LV_FLEX_FLOW_ROW, 0);
-  lv_obj_center(tmi);
-  icon_minus(tmi, COL_TEXT);
-  lv_obj_add_event_cb(tminus, on_t_minus, LV_EVENT_SHORT_CLICKED, NULL);
-  lv_obj_add_event_cb(tminus, on_t_minus, LV_EVENT_LONG_PRESSED_REPEAT, NULL);
-  lv_obj_t *tplus = box(scr, 288, 304, 64, 64, COL_CARD, RAD_CTRL);
-  make_button(tplus, COL_CARD_PR);
-  stepper_part(tplus);
-  lv_obj_t *tpi = flex(tplus, LV_FLEX_FLOW_ROW, 0);
-  lv_obj_center(tpi);
-  icon_plus(tpi, COL_TEXT);
-  lv_obj_add_event_cb(tplus, on_t_plus, LV_EVENT_SHORT_CLICKED, NULL);
-  lv_obj_add_event_cb(tplus, on_t_plus, LV_EVENT_LONG_PRESSED_REPEAT, NULL);
+  stepper_btn(scr, 24, false, on_t_minus);
+  stepper_btn(scr, 288, true, on_t_plus);
   lv_obj_t *tvb = box(scr, 96, 304, 184, 64, COL_BG, RAD_CTRL);   // value (tap to type), like the weight's
   lv_obj_set_style_bg_opa(tvb, LV_OPA_TRANSP, 0);
   make_button(tvb, COL_CARD_PR);
@@ -528,29 +532,16 @@ void build_ready(lv_obj_t *scr) {
   g_tset_lbl = label(tval, "90", F_VALUE, COL_TEXT);
   lv_obj_set_style_pad_bottom(label(tval, "\xC2\xB0" "C", F_ROW, COL_MUTED), base_pad(F_VALUE, F_ROW), 0);
   lv_obj_add_event_cb(tvb, on_open_temp_editor, LV_EVENT_CLICKED, NULL);
+}
 
-  // right: stop weight
+// right, bottom: stop weight
+static void ready_stop_weight(lv_obj_t *scr) {
   lv_obj_t *tw = g_tw_lbl = label(scr, "Stop weight", F_TEXT, COL_MUTED);
   lv_obj_set_pos(tw, 433, 275);   // weight at the bottom, preview above
 
   stepper_card(scr, 433, 343);
-  lv_obj_t *minus = box(scr, 433, 304, 64, 64, COL_CARD, RAD_CTRL);
-  make_button(minus, COL_CARD_PR);
-  stepper_part(minus);
-  lv_obj_t *mi = flex(minus, LV_FLEX_FLOW_ROW, 0);
-  lv_obj_center(mi);
-  icon_minus(mi, COL_TEXT);
-  lv_obj_add_event_cb(minus, on_minus, LV_EVENT_SHORT_CLICKED, NULL);
-  lv_obj_add_event_cb(minus, on_minus, LV_EVENT_LONG_PRESSED_REPEAT, NULL);
-
-  lv_obj_t *plus = box(scr, 712, 304, 64, 64, COL_CARD, RAD_CTRL);
-  make_button(plus, COL_CARD_PR);
-  stepper_part(plus);
-  lv_obj_t *pi = flex(plus, LV_FLEX_FLOW_ROW, 0);
-  lv_obj_center(pi);
-  icon_plus(pi, COL_TEXT);
-  lv_obj_add_event_cb(plus, on_plus, LV_EVENT_SHORT_CLICKED, NULL);
-  lv_obj_add_event_cb(plus, on_plus, LV_EVENT_LONG_PRESSED_REPEAT, NULL);
+  stepper_btn(scr, 433, false, on_minus);
+  stepper_btn(scr, 712, true, on_plus);
 
   // value (tap to type)
   lv_obj_t *val = box(scr, 505, 304, 199, 64, COL_BG, RAD_CTRL);
@@ -565,8 +556,10 @@ void build_ready(lv_obj_t *scr) {
   g_value_unit = unit;
   lv_obj_set_style_pad_bottom(unit, base_pad(F_VALUE, F_ROW), 0);
   lv_obj_add_event_cb(val, on_open_editor, LV_EVENT_CLICKED, NULL);
+}
 
-  // profile preview, with a colour key (for every chart): what blue and gold mean
+// right, top: profile preview, with a colour key (for every chart): what blue and gold mean
+static void ready_preview(lv_obj_t *scr) {
   lv_obj_t *key = flex(scr, LV_FLEX_FLOW_ROW, 8);
   lv_obj_set_flex_align(key, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_pos(key, 433, 96);
@@ -585,12 +578,11 @@ void build_ready(lv_obj_t *scr) {
   lv_obj_center(g_pv_msg);
   lv_obj_set_hidden(g_pv_msg, true);
   box(scr, 433, 124 + PV_H, PV_W, 1, COL_LINE, 0);
+}
 
-  // footer
-  lv_obj_t *fl = flex(scr, LV_FLEX_FLOW_ROW, 22);
-  lv_obj_set_pos(fl, 24, 406);
-  lv_obj_set_height(fl, 48);
-  // footer, left: [pressure] [scale] [water] (plain unless orange, foot_pill) ... [Flush]
+// footer, left to right: [pressure] [scale] [water] (plain unless orange, foot_pill; put in that order with
+// lv_obj_move_to_index), [Flush] on the right
+static void footer_water(lv_obj_t *fl) {
   lv_obj_t *tank = flex(fl, LV_FLEX_FLOW_ROW, 8);
   g_tank = tank;
   lv_obj_set_height(tank, 40);
@@ -603,7 +595,9 @@ void build_ready(lv_obj_t *scr) {
   g_tank_lbl = label(tank, "Refill", F_TEXT, COL_WARN_TX);
   lv_obj_t *pct = label(tank, "18%", F_TEXT_B, COL_WARN_TX);
   g_tank_pct = pct;
+}
 
+static void footer_scale(lv_obj_t *fl) {
   // scale pill, styled like the water pill: [type icon] Scale 101.9 g / orange "No scale" / "Predictive" (type and
   // presence from the core)
   lv_obj_t *sc = flex(fl, LV_FLEX_FLOW_ROW, 8);
@@ -633,28 +627,32 @@ void build_ready(lv_obj_t *scr) {
   g_scale_name = label(sc, "No scale", F_TEXT, COL_OUTLINE);
   g_scale_lbl = label(sc, "0.0 g", F_TEXT_B, COL_TEXT);
   lv_obj_set_hidden(g_scale_lbl, true);
+}
+
+static void footer_pressure(lv_obj_t *fl) {
   // pressure pill: always the current pressure, styled like the scale pill; orange like "Refill" while idle in HOME
   // with residual pressure (g_press_warn)
-  {
-    lv_obj_t *pp = g_pr_pill = flex(fl, LV_FLEX_FLOW_ROW, 8);
-    lv_obj_set_height(pp, 40);
-    lv_obj_set_style_pad_left(pp, 12, 0);
-    lv_obj_set_style_pad_right(pp, 14, 0);
-    lv_obj_set_style_bg_color(pp, COL_CARD, 0);
-    lv_obj_set_style_bg_opa(pp, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(pp, RAD_PILL, 0);
-    static const lv_point_t ARC[] = {{1, 15}, {2, 11}, {5, 8}, {9, 7}, {13, 8}, {16, 11}, {17, 15}};
-    static const lv_point_t NEEDLE[] = {{9, 15}, {13, 10}};
-    lv_obj_t *slot = lv_obj_create(pp);
-    lv_obj_remove_style_all(slot);
-    lv_obj_set_size(slot, 18, 20);
-    g_pr_ic[0] = line(slot, ARC, 7, 2, COL_OUTLINE);
-    g_pr_ic[1] = line(slot, NEEDLE, 2, 2, COL_OUTLINE);
-    for (int i = 0; i < 2; i++) lv_obj_set_style_line_rounded(g_pr_ic[i], true, 0);
-    g_pr_name = label(pp, "Pressure", F_TEXT, COL_OUTLINE);
-    g_pr_lbl = label(pp, "- bar", F_TEXT_B, COL_OUTLINE);
-    lv_obj_move_to_index(pp, 0);                  // pressure first, then scale, water
-  }
+  lv_obj_t *pp = g_pr_pill = flex(fl, LV_FLEX_FLOW_ROW, 8);
+  lv_obj_set_height(pp, 40);
+  lv_obj_set_style_pad_left(pp, 12, 0);
+  lv_obj_set_style_pad_right(pp, 14, 0);
+  lv_obj_set_style_bg_color(pp, COL_CARD, 0);
+  lv_obj_set_style_bg_opa(pp, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(pp, RAD_PILL, 0);
+  static const lv_point_t ARC[] = {{1, 15}, {2, 11}, {5, 8}, {9, 7}, {13, 8}, {16, 11}, {17, 15}};
+  static const lv_point_t NEEDLE[] = {{9, 15}, {13, 10}};
+  lv_obj_t *slot = lv_obj_create(pp);
+  lv_obj_remove_style_all(slot);
+  lv_obj_set_size(slot, 18, 20);
+  g_pr_ic[0] = line(slot, ARC, 7, 2, COL_OUTLINE);
+  g_pr_ic[1] = line(slot, NEEDLE, 2, 2, COL_OUTLINE);
+  for (int i = 0; i < 2; i++) lv_obj_set_style_line_rounded(g_pr_ic[i], true, 0);
+  g_pr_name = label(pp, "Pressure", F_TEXT, COL_OUTLINE);
+  g_pr_lbl = label(pp, "- bar", F_TEXT_B, COL_OUTLINE);
+  lv_obj_move_to_index(pp, 0);                  // pressure first, then scale, water
+}
+
+static void footer_tare(lv_obj_t *fl) {
   lv_obj_t *tare = flex(fl, LV_FLEX_FLOW_ROW, 0);
   lv_obj_set_height(tare, 48);
   lv_obj_set_style_pad_left(tare, 18, 0);
@@ -667,8 +665,10 @@ void build_ready(lv_obj_t *scr) {
   lv_obj_add_event_cb(tare, on_tare, LV_EVENT_CLICKED, NULL);
   // hidden: the machine tares by itself at brew start, and the scale has its own button (on_tare still works)
   lv_obj_set_hidden(tare, true);
+}
 
-  // flush: [drop] Flush, a rounded button; a fill behind the content shows the long press
+// flush: [drop] Flush, a rounded button; a fill behind the content shows the long press
+static void footer_flush(lv_obj_t *scr) {
   lv_obj_t *fb = flex(scr, LV_FLEX_FLOW_ROW, 10);
   lv_obj_set_height(fb, 48);
   lv_obj_set_style_pad_left(fb, 12, 0);
@@ -694,6 +694,22 @@ void build_ready(lv_obj_t *scr) {
   lv_timer_create(on_fl_timer, 250, NULL);
   fl_show();
   lv_obj_align(fb, LV_ALIGN_TOP_RIGHT, -24, 406);
+}
+
+void build_ready(lv_obj_t *scr) {
+  ready_header(scr);
+  ready_temperature(scr);
+  ready_brew_temp(scr);
+  ready_stop_weight(scr);
+  ready_preview(scr);
+  lv_obj_t *fl = flex(scr, LV_FLEX_FLOW_ROW, 22);
+  lv_obj_set_pos(fl, 24, 406);
+  lv_obj_set_height(fl, 48);
+  footer_water(fl);
+  footer_scale(fl);
+  footer_pressure(fl);
+  footer_tare(fl);
+  footer_flush(scr);
 }
 
 // ---- building the keypad --------------------------------------------------------------------------------------------
