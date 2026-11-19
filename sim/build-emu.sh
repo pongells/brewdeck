@@ -8,9 +8,10 @@ HERE="$PWD"; P="$HERE/../firmware"
 UI="${UI:-ui}"; UI="${UI%/}"; UD="$P/src/$UI"
 [[ -d "$UD" ]] || { echo "no UI folder $UD"; exit 1; }
 SDL_CFLAGS="$(sdl2-config --cflags)"; SDL_LIBS="$(sdl2-config --libs)"
-FLAGS="-O1 -DSIM_DIR=\"$HERE\" -DLV_SIM_HOST -DLV_CONF_INCLUDE_SIMPLE -I$P/include -I$HERE/lvgl -I$UD -I$P/src/core -w"
+LV_FLAGS="-O1 -DSIM_DIR=\"$HERE\" -DLV_SIM_HOST -DLV_CONF_INCLUDE_SIMPLE -I$P/include -I$HERE/lvgl -I$P/src/core -w"
+FLAGS="$LV_FLAGS -I$UD"
 EO="$HERE/obj-emu"; UO="$EO/ui-$UI"; mkdir -p "$EO" "$UO"
-./lvgl.sh "$EO" gcc $FLAGS
+./lvgl.sh "$EO" gcc $LV_FLAGS   # without the UI folder: switching UIs keeps the LVGL objects
 rm -f "$EO"/*.o "$UO"/*.o
 # every C / C++ file of the UI folder (Brewdeck's: ui.cpp, screens/, ui_bridge.cpp, fonts/)
 (cd "$UD" && find . -name '*.cpp' -o -name '*.c') | while read -r f; do

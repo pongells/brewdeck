@@ -29,6 +29,7 @@ static int g_br_step = 1, g_br_skip = 0, g_br_tmax = 30, g_br_lastx = -1;
 int g_br_state = BR_HIDDEN;
 bool g_live_brew = false;
 static bool g_br_new = false;                    // a shot started: its first point opens a fresh brewing screen
+static bool g_br_prev_asked = false;             // the previous shot was asked for this shot (once per shot)
 static uint32_t g_br_done_ms = 0;
 static bd_shot_point g_br_cur;
 lv_obj_t *g_brew;
@@ -264,6 +265,7 @@ static void br_start(void) {
   g_br_tmax = 30;
   g_br_lastx = -1;
   g_br_new = false;
+  g_br_prev_asked = false;
   g_br_state = BR_BREWING;
   g_rv_hist = false;
   g_rv_prev_state = RV_PREV_NONE;
@@ -285,7 +287,10 @@ static void br_done(void) {
   g_br_state = BR_DONE;
   g_br_done_ms = lv_tick_get();
   br_pill(true);
-  // look up the previous shot of this profile now, so it is there when the review opens
+  // look up the previous shot of this profile now, so it is there when the review opens; once per shot: after a
+  // late point the newest stored shot is this one, and a second lookup would compare the shot with itself
+  if (g_br_prev_asked) return;
+  g_br_prev_asked = true;
   if (g_cur_profile[0] && bd_load_previous_shot(g_cur_profile, (int)g_br_cur.t) == BD_OK)
     g_rv_prev_state = RV_PREV_LOADING;
 }
@@ -430,6 +435,7 @@ static void on_rv_scrub(lv_event_t *e) {
 
 void ui_set_prev(int state, const bd_shot *t) {
   if (g_rv_hist) return;                          // a late answer for the last shot while a stored one is shown
+  if (!g_rv_prev) return;
   if (state == RV_PREV_READY && t) memcpy(g_rv_prev, t, sizeof *t);
   if (g_br_state == BR_HIDDEN) return;                    // a late answer after the review was closed
   g_rv_prev_state = state;
@@ -443,7 +449,7 @@ void ui_set_prev(int state, const bd_shot *t) {
 // opens the review on a stored shot (shot history); the menu stays below it, so Close shows the list again
 void rv_open_stored(const bd_shot *s, const bd_profile_shape *sh, const bd_shot *prev, int prev_state) {
   const int n = s->n < BD_SHOT_MAX ? s->n : BD_SHOT_MAX;
-  if (n < 3) return;
+  if (!g_br || n < 3) return;
   memcpy(g_br, s->pt, sizeof(bd_shot_point) * n);
   g_br_n = n;
   memset(&g_br_cur, 0, sizeof g_br_cur);
@@ -476,11 +482,13 @@ static void on_brew_timer(lv_timer_t *t) {
   }
 }
 
-void ui_shot_start(void) { g_br_new = true; }
+void ui_shot_start(void) { if (g_br) g_br_new = true; }
 void ui_shot_end(void) { if (g_br_state == BR_BREWING) br_done(); }
 
 void ui_shot(const bd_shot_point *s) {
-  if (g_br_new || g_br_state == BR_HIDDEN || g_br_state == BR_REVIEW) br_start();
+  if (!g_br) return;                               // no PSRAM: no brewing screen
+  if (g_br_new) br_start();
+  else if (g_br_state == BR_HIDDEN || g_br_state == BR_REVIEW) return;   // a point with no shot start: a stray resend
   else if (g_br_state == BR_DONE) {                // a late point of the same shot: it goes on
     g_br_state = BR_BREWING;
     br_pill(false);
@@ -532,9 +540,14 @@ void build_brew(lv_obj_t *scr) {
   g_br = (bd_shot_point *)bd_alloc(sizeof(bd_shot_point) * BD_SHOT_MAX, BD_MEM_PSRAM);
   g_rv_prev = (bd_shot *)bd_alloc(sizeof(bd_shot), BD_MEM_PSRAM);
   g_rv_shape = (bd_profile_shape *)bd_alloc(sizeof(bd_profile_shape), BD_MEM_PSRAM);
-  if (!g_br || !g_rv_prev || !g_rv_shape) { bd_log("ui: no PSRAM for the brewing screen\n"); abort(); }
-  memset(g_rv_prev, 0, sizeof *g_rv_prev);
-  memset(g_rv_shape, 0, sizeof *g_rv_shape);
+  if (g_br && g_rv_prev && g_rv_shape) {
+    memset(g_rv_prev, 0, sizeof *g_rv_prev);
+    memset(g_rv_shape, 0, sizeof *g_rv_shape);
+  } else {                                         // the screen is built but never shown (ui_shot, rv_open_stored)
+    bd_log("ui: no PSRAM for the brewing screen: shots are not shown");
+    bd_free(g_br); bd_free(g_rv_prev); bd_free(g_rv_shape);
+    g_br = NULL; g_rv_prev = NULL; g_rv_shape = NULL;
+  }
   g_brew = box(scr, 0, 0, 800, 480, COL_BG, 0);
   lv_obj_set_clickable(g_brew, true);
   lv_obj_add_event_cb(g_brew, on_brew_tap, LV_EVENT_CLICKED, NULL);

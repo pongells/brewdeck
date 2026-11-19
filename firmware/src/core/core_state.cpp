@@ -49,7 +49,13 @@ const char *cs_profile_name(int id) {
 // the machine stopped brewing with no new point (the last points come just after the flag drops), or when no new
 // point came for 3 s (cs_tick).
 static const uint32_t SHOT_QUIET_MS = 300, SHOT_NO_DATA_MS = 3000;
+// a point after the end carries the shot on only this soon after it (a late point, a gap); later it is a stray
+// resend of the finished shot (dropped) unless it starts near 0 s (a new shot)
+static const uint32_t SHOT_RESUME_MS = 3000;
+static const uint16_t SHOT_NEW_T10 = 20;
 static bool g_shot_on = false;
+static uint32_t g_now = 0;                       // the last cs_tick's time (this file has no clock of its own)
+static uint32_t g_shot_end_ms = 0;               // when the last shot ended (stamp_nz), 0 before any
 static bool g_shot_brewed = false;                // the machine reported brewing during this shot
 static uint32_t g_shot_rx = 0;                    // points received (the stored shot stops growing at BD_SHOT_MAX)
 static uint32_t g_shot_seen_rx = 0, g_shot_seen_t = 0;
@@ -75,6 +81,7 @@ static void shot_begin(void) {
 }
 static void shot_end(void) {
   g_shot_on = false;
+  g_shot_end_ms = stamp_nz(g_now);
   shot_event(BD_EV_SHOT_END);
 }
 
@@ -178,8 +185,10 @@ void cs_shot_point(const WsShot *s) {
   const bool back = g_live && g_live->n && p.t + 5 < g_live->pt[g_live->n - 1].t;   // time went back: a new shot
   if (g_shot_on && back) { shot_end(); shot_begin(); }
   else if (!g_shot_on) {
-    if (g_live && g_live->n && !back) g_shot_on = true;   // more of the shot that looked ended (a late point, a gap):
-    else shot_begin();                                    // carry on with it rather than starting over
+    const bool more = g_live && g_live->n && !back;
+    if (more && g_shot_end_ms && g_now - g_shot_end_ms <= SHOT_RESUME_MS) g_shot_on = true;   // carry on with it
+    else if (more && p.t > SHOT_NEW_T10) return;          // a stray point of the finished shot: not a shot
+    else shot_begin();
   }
   g_shot_rx++;
   if (g_live) {                     // the live shot as recorded on this screen
@@ -354,6 +363,7 @@ static void watch_n(bool *on, bool done, uint32_t *t, uint32_t now, uint32_t lim
   else if (now - *t > limit) { *on = false; cs_answer(cmd, BD_ANSWER_NOT_TAKEN); }
 }
 void cs_tick(uint32_t now) {
+  g_now = now;
   watch(&g_w_sel.on, g_w_sel.want, g_m.profile_name, &g_w_sel.t, now, BD_CMD_SELECT);
   watch(&g_w_fl.on, g_w_fl.want, g_m.mode, &g_w_fl.t, now, BD_CMD_FLUSH);
   watch_n(&g_w_wt.on, (int)lroundf(g_m.running.stop_weight * 10.0f) == g_w_wt.want, &g_w_wt.t, now, ANSWER_PROFILE_MS,

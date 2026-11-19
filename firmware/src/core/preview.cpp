@@ -217,8 +217,8 @@ float preview_build(const bd_profile_shape *sh, int w, int h, PvSeries out[PV_SE
 
 // the core API's preview (brewdeck_core.h): the same geometry, for a box of the UI's size
 static_assert(sizeof(bd_preview_series) == sizeof(PvSeries) && sizeof(bd_point) == sizeof(PvPt) &&
-              BD_PV_SERIES == PV_SERIES && BD_PV_FLOW == PV_F_TARGET && BD_PV_PRESSURE_LIMIT == PV_P_LIMIT &&
-              sizeof(bd_profile_shape) == sizeof(bd_profile_shape), "preview layout");
+              BD_PV_SERIES == PV_SERIES && BD_PV_FLOW == PV_F_TARGET && BD_PV_PRESSURE_LIMIT == PV_P_LIMIT,
+              "preview layout");
 bool bd_profile_preview(const bd_profile_shape *s, int w, int h, bd_preview *out) {
   out->secs = preview_build(s, w, h, (PvSeries *)out->s);
   return out->secs > 0;

@@ -85,6 +85,20 @@ int main(void) {
   CHECK(bd_live_shot()->n == 101);
   printf("late point: start %d end %d kept %d\n", n_start, n_end, bd_live_shot()->n);
 
+  // 2b. after the END: a point of the finished shot more than 3 s later is a stray resend (no event at all); one
+  // near 0 s is a new shot; a point within 3 s of an END carries that shot on (no START)
+  reset_counts();
+  point(102);
+  CHECK(n_start == 0 && n_point == 0 && bd_live_shot()->n == 101);
+  for (uint32_t t = 1; t <= 50; t++) point(t);      // brewing off all along: END 3 s after the last point
+  for (int i = 0; i < 22; i++) cs_tick(now += 150);
+  CHECK(n_start == 1 && n_end == 1);
+  point(51);
+  CHECK(n_start == 1 && n_point == 51 && bd_live_shot()->n == 51);
+  for (int i = 0; i < 30; i++) cs_tick(now += 150);
+  CHECK(n_end == 2);
+  printf("after the end: start %d end %d points %d\n", n_start, n_end, n_point);
+
   // 3. a shot longer than the 720 stored points keeps running (points still coming): no END, no wipe
   reset_counts();
   d = live(true); cs_take_live(&d, BD_LINK_ONLINE);

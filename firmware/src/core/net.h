@@ -56,5 +56,6 @@ void net_addr_info(char *screen, size_t scap, char *machine, size_t mcap);
 // The joined network as the network task last read it (about once a second; on the ESP32-P4 every Wi-Fi query is a
 // request to the C6 over SDIO, which can block, so the UI task never asks Wi-Fi itself). False when not connected.
 bool net_wifi_info(char *ssid, size_t scap, int8_t *rssi, int *channel, char *ap, size_t acap);
-// joined or not, and the signal (any task; the network task's last reading, at most 1 s old)
+// joined or not, and the signal (any task; the network task's last reading: refreshed every pass, so usually within
+// 1 s, but a few seconds old while that task waits on a slow request)
 bool net_wifi_up(int8_t *rssi);
