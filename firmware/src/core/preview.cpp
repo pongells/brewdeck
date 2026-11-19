@@ -22,7 +22,7 @@ float preview_phase_secs(const PhaseShape *p) {
     // expected pump flow: the flow target on a flow phase; on a pressure phase the restriction is only a ceiling
     // (measured 2026-11-04: 1.0 ml/s under a 1.5 limit), so 0.7 x the limit (capped at 2), else a typical 1.5 ml/s
     float f = p->type == PHASE_FLOW ? fmax2(p->end, 0.3f)
-                                    : (p->restriction > 0 ? 0.7f * fmin2(p->restriction, 2.0f) : 1.5f);
+                                    : (p->limit > 0 ? 0.7f * fmin2(p->limit, 2.0f) : 1.5f);
     c = fmin2(c, p->stop_water / f);
   }
   if (p->stop_p_above > 0) c = fmin2(c, fmax2(ramp, 3.0f + 0.5f * p->stop_p_above));   // puck fill / pressure build
@@ -38,8 +38,8 @@ static float ease(uint8_t curve, float u);
 // reaches 4 bar or more (Leva 9 recording: 21 g from ~11 s to 23 s), 0.8 x the flow target on a flow phase that
 // is not only a fill under a low pressure limit.
 float preview_plan_rate(const PhaseShape *p) {
-  if (p->type == PHASE_PRESSURE) return p->end >= 4.0f ? (p->restriction > 0 ? fmin2(1.5f, p->restriction) : 1.5f) : 0;
-  if (p->restriction > 0 && p->restriction < 3.0f) return 0;   // fill / bloom under a low pressure limit
+  if (p->type == PHASE_PRESSURE) return p->end >= 4.0f ? (p->limit > 0 ? fmin2(1.5f, p->limit) : 1.5f) : 0;
+  if (p->limit > 0 && p->limit < 3.0f) return 0;   // fill / bloom under a low pressure limit
   return 0.8f * fmin2(p->end, 3.0f);
 }
 
@@ -48,7 +48,7 @@ int preview_plan(const ProfileShape *sh, int ph, float spent, int t0_10, int tp0
   if (!sh || ph < 0 || ph >= sh->n || cap < 2) return 0;
   int n = 0;
   float w = w0;
-  const float wstop = sh->weight;
+  const float wstop = sh->stop_weight;
   if (wstop > 0 && w0 >= wstop) return 0;            // the shot already reached the stop weight
   float t = 0;                                       // seconds after the stop
   float prev[2] = {tp0 / 10.0f, tf0 / 10.0f};        // last target per quantity (0 pressure, 1 flow)
@@ -73,7 +73,7 @@ int preview_plan(const ProfileShape *sh, int ph, float spent, int t0_10, int tp0
     // the stopped phase without a start value continues from the target at the stop; others as in the preview
     const float s0 = p->has_start && i != ph ? p->start : prev[q];
     const float u0 = i == ph && !p->has_start ? from : 0;   // ramp progress already behind (current phase)
-    const float other = p->restriction > 0 ? p->restriction : 0;
+    const float other = p->limit > 0 ? p->limit : 0;
     int steps = (int)((d - from) / 0.5f);
     if (steps < 1) steps = 1;
     const float rate = preview_plan_rate(p);
@@ -194,11 +194,11 @@ float preview_build(const ProfileShape *sh, int w, int h, PvSeries out[PV_SERIES
       } else {
         gap(tt);
         tt->has_prev = false;
-        if (p->restriction > 0) {                    // the other quantity is only limited: draw the limit
+        if (p->limit > 0) {                    // the other quantity is only limited: draw the limit
           if (tl->open && tl->has_prev) put(tl, xa, ypx(tl->prev, ybase, yk));
-          put(tl, xa, ypx(p->restriction, ybase, yk));
-          put(tl, xb, ypx(p->restriction, ybase, yk));
-          tl->prev = p->restriction;
+          put(tl, xa, ypx(p->limit, ybase, yk));
+          put(tl, xb, ypx(p->limit, ybase, yk));
+          tl->prev = p->limit;
           tl->has_prev = true;
         } else {
           gap(tl);
@@ -220,6 +220,6 @@ static_assert(sizeof(bd_preview_series) == sizeof(PvSeries) && sizeof(bd_point) 
               BD_PV_SERIES == PV_SERIES && BD_PV_FLOW == PV_F_TARGET && BD_PV_PRESSURE_LIMIT == PV_P_LIMIT &&
               sizeof(bd_profile_shape) == sizeof(ProfileShape), "preview layout");
 bool bd_profile_preview(const bd_profile_shape *s, int w, int h, bd_preview *out) {
-  out->secs = preview_build((const ProfileShape *)s, w, h, (PvSeries *)out->s);
+  out->secs = preview_build(s, w, h, (PvSeries *)out->s);
   return out->secs > 0;
 }

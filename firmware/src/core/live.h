@@ -2,6 +2,7 @@
 // Live machine data (REST /api/system/status, overlaid with fresher WebSocket values in net_get()).
 #include <stdbool.h>
 #include <stdint.h>
+#include "brewdeck_core.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -42,8 +43,8 @@ typedef struct {
 } LiveData;
 
 // Wi-Fi networks found by a scan (menu > Wi-Fi), strongest first; join states (passed on as BD_EV_WIFI_JOIN)
-#define MAX_NETS 16
-typedef struct { char ssid[33]; int8_t rssi; bool lock; } WifiNet;
+#define MAX_NETS BD_MAX_NETS
+typedef bd_wifi_net WifiNet;
 enum { WIFI_JOIN_IDLE = 0, WIFI_JOIN_BUSY, WIFI_JOIN_OK, WIFI_JOIN_FAILED };
 
 // Saved profiles (GET /api/profiles/all, details from GET /api/profile/<id>).
@@ -63,41 +64,17 @@ typedef struct {
   ProfileInfo p[MAX_PROFILES];
 } ProfileList;
 
-// The active profile's phases (for the preview graph and the target weight). Skipped phases are left out.
-enum { PHASE_PRESSURE = 0, PHASE_FLOW = 1 };
-enum { CURVE_INSTANT = 0, CURVE_LINEAR, CURVE_EASE_IN, CURVE_EASE_OUT, CURVE_EASE_IN_OUT };
-#define MAX_PHASES 24
-typedef struct {
-  uint8_t  type;          // PHASE_PRESSURE (target is bar) or PHASE_FLOW (target is ml/s)
-  uint8_t  curve;         // CURVE_*
-  bool     has_start;     // false: starts from where the previous phase ended
-  float    start, end;    // target transition
-  uint32_t ramp_ms;       // transition time (0 = instant)
-  float    restriction;   // flow limit on a pressure phase / pressure limit on a flow phase (0 = none)
-  uint32_t stop_ms;       // stop conditions, 0 = not set
-  float    stop_p_above, stop_p_below, stop_water, stop_weight;
-} PhaseShape;
-
-typedef struct {
-  int        id;          // profile id, 0 = nothing loaded yet
-  int        n;
-  PhaseShape ph[MAX_PHASES];
-  float      weight;      // global stop weight, g (0 = none)
-  float      temp;        // water temperature, deg C
-} ProfileShape;
-
-// One point of a shot: x10 integers as the machine sends them (time in 0.1 s, bar, ml/s, g, deg C), phase 0-based.
-// Live points (WebSocket d_shot_snap) and stored shots (GET /api/shots/<id>) use the same type.
-typedef struct { uint16_t t, p, f, w, temp, tp, tf; uint8_t ph; } ShotPoint;
-#define SHOT_MAX 720            // points kept per shot (~100 s at ~7/s); longer shots are thinned
-typedef struct {
-  int       id;                 // machine's shot id, 0 = none
-  int       dur10;              // duration, 0.1 s
-  uint32_t  ts;                 // when it was pulled (Unix time, UTC; small = machine clock not set, a Gaggiuino quirk)
-  char      profile[48];        // profile name as stored with the shot (ASCII only)
-  int       n;
-  ShotPoint pt[SHOT_MAX];       // ~11.5 KB: keep these in PSRAM on the device
-} ShotTrace;
+// The API's types (brewdeck_core.h), under the names the network code and Brewdeck's screens use: one definition.
+// A profile's phases (preview graph, stop weight; skipped phases left out), one point of a shot, a whole shot (live
+// points from the WebSocket d_shot_snap and stored shots from GET /api/shots/<id> alike; ~11.5 KB: PSRAM on the device).
+enum { PHASE_PRESSURE = BD_PHASE_PRESSURE, PHASE_FLOW = BD_PHASE_FLOW };
+enum { CURVE_INSTANT = BD_CURVE_INSTANT, CURVE_LINEAR, CURVE_EASE_IN, CURVE_EASE_OUT, CURVE_EASE_IN_OUT };
+#define MAX_PHASES BD_MAX_PHASES
+#define SHOT_MAX BD_SHOT_MAX    // points kept per shot (~100 s at ~7/s); longer shots are thinned
+typedef bd_phase PhaseShape;
+typedef bd_profile_shape ProfileShape;   // id 0 = nothing loaded yet
+typedef bd_shot_point ShotPoint;
+typedef bd_shot ShotTrace;
 
 #ifdef __cplusplus
 }

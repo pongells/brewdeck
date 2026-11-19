@@ -7,12 +7,7 @@
 #include <time.h>
 #include "net.h"
 
-// stored shots and profile shapes are handed over without copying: same layout as the network code's types
-static_assert(sizeof(ShotPoint) == sizeof(bd_shot_point), "shot point layout");
-static_assert(sizeof(ShotTrace) == sizeof(bd_shot) && offsetof(ShotTrace, pt) == offsetof(bd_shot, pt), "shot layout");
-static_assert(sizeof(ProfileShape) == sizeof(bd_profile_shape) && offsetof(ProfileShape, ph) == offsetof(bd_profile_shape, ph) &&
-              sizeof(PhaseShape) == sizeof(bd_phase), "profile shape layout");
-static_assert(sizeof(WifiNet) == sizeof(bd_wifi_net), "wifi net layout");
+// stored shots, profile shapes and Wi-Fi networks are the API's own types (live.h): handed over without copying
 static_assert(LINK_ONLINE == (int)BD_LINK_ONLINE && WHY_NO_REPLY == (int)BD_WHY_NO_REPLY &&
               SCALE_PREDICTIVE == (int)BD_SCALE_PREDICTIVE && PREV_FAILED == (int)BD_LOAD_FAILED &&
               WIFI_JOIN_FAILED == (int)BD_JOIN_FAILED, "enum values");
@@ -234,7 +229,7 @@ void cs_prev_loaded(int state, const ShotTrace *t) {
   memset(&e, 0, sizeof e);
   e.type = BD_EV_SHOT_LOADED;
   e.u.loaded.state = (bd_load)state;
-  e.u.loaded.shot = (const bd_shot *)t;
+  e.u.loaded.shot = t;
   bd_ui_event(&e);
 }
 void cs_hist_loaded(int state, const ShotTrace *s, const ProfileShape *sh, const ShotTrace *prev, int prev_state) {
@@ -242,16 +237,16 @@ void cs_hist_loaded(int state, const ShotTrace *s, const ProfileShape *sh, const
   e.type = BD_EV_SHOT_LOADED;
   e.u.loaded.history = true;
   e.u.loaded.state = (bd_load)state;
-  e.u.loaded.shot = (const bd_shot *)s;
-  e.u.loaded.shape = (const bd_profile_shape *)sh;
-  e.u.loaded.previous = (const bd_shot *)prev;
+  e.u.loaded.shot = s;
+  e.u.loaded.shape = sh;
+  e.u.loaded.previous = prev;
   e.u.loaded.previous_state = (bd_load)prev_state;
   bd_ui_event(&e);
 }
 void cs_wifi_scan(const WifiNet *n, int count, bool scanning) {
   bd_event e;
   e.type = BD_EV_WIFI_SCAN;
-  e.u.scan.nets = (const bd_wifi_net *)n;
+  e.u.scan.nets = n;
   e.u.scan.n = count;
   e.u.scan.scanning = scanning;
   bd_ui_event(&e);
@@ -280,6 +275,52 @@ bd_result cs_check_flush(bd_flush mode) {
   if (g_m.link != BD_LINK_ONLINE) return BD_ERR_OFFLINE;
   if (mode == BD_FLUSH_OFF) return !strncmp(g_m.mode, "FLUSH", 5) || idle_home() ? BD_OK : BD_ERR_BUSY;
   return idle_home() ? BD_OK : BD_ERR_BUSY;
+}
+
+// ---- commands: the whole rule set of each, shared by the device core (core.cpp) and the emulator's fake core ------
+// BD_OK = allowed: the answer is now watched and the caller sends it; anything else = refused, nothing to send
+bd_result cs_cmd_select(int id, const char **name) {
+  const bd_result r = cs_check_idle();
+  if (r != BD_OK) return r;
+  const char *n = cs_profile_name(id);
+  if (!n) return BD_ERR_UNKNOWN_ID;
+  if (cs_select_pending()) return BD_ERR_PENDING;
+  cs_watch_select(n);
+  *name = n;
+  return BD_OK;
+}
+bd_result cs_cmd_weight(int profile_id, float grams, int *w10, const char **name) {
+  bd_result r = cs_check_idle();
+  if (r != BD_OK) return r;
+  if (!(grams >= 0.0f && grams <= CS_WEIGHT_MAX)) return BD_ERR_RANGE;   // 0 = no stop weight
+  if ((r = cs_check_active(profile_id)) != BD_OK) return r;
+  *w10 = (int)(grams * 10.0f + 0.5f);
+  *name = cs_profile_name(profile_id);
+  cs_watch_weight(*w10);
+  return BD_OK;
+}
+bd_result cs_cmd_temp(int profile_id, int deg, const char **name) {
+  bd_result r = cs_check_idle();
+  if (r != BD_OK) return r;
+  if (deg < CS_TEMP_MIN || deg > CS_TEMP_MAX) return BD_ERR_RANGE;   // 0 = heater off: never
+  if ((r = cs_check_active(profile_id)) != BD_OK) return r;
+  *name = cs_profile_name(profile_id);
+  cs_watch_temp(deg);
+  return BD_OK;
+}
+bd_result cs_cmd_flush(bd_flush mode, int *pb_mode) {
+  const bd_result r = cs_check_flush(mode);
+  if (r != BD_OK) return r;
+  *pb_mode = mode == BD_FLUSH_ON ? PB_MODE_FLUSH : mode == BD_FLUSH_TIMED ? PB_MODE_FLUSH_AUTO : PB_MODE_HOME;
+  cs_watch_flush(mode == BD_FLUSH_ON ? "FLUSH" : mode == BD_FLUSH_TIMED ? "FLUSH_AUTO" : "HOME");
+  return BD_OK;
+}
+bd_result cs_cmd_tare(void) {
+  const bd_result r = cs_check_idle();
+  if (r != BD_OK) return r;
+  if (!g_m.scale_present) return BD_ERR_NO_SCALE;
+  cs_watch_tare();
+  return BD_OK;
 }
 
 // ---- command answers ----------------------------------------------------------------------------------------------

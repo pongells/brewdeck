@@ -457,8 +457,8 @@ void rv_open_stored(const ShotTrace *s, const ProfileShape *sh, const ShotTrace 
   g_br_cur.weight10 = s->pt[n - 1].w;
   g_br_cur.time10 = s->dur10 > 0 ? (uint32_t)s->dur10 : s->pt[n - 1].t;
   *g_rv_shape = *sh;
-  g_rv_tw10 = sh->weight > 0 ? (int)(sh->weight * 10 + 0.5f) : 0;
-  g_rv_tset = sh->temp > 0 ? (int)(sh->temp + 0.5f) : -1;
+  g_rv_tw10 = sh->stop_weight > 0 ? (int)(sh->stop_weight * 10 + 0.5f) : 0;
+  g_rv_tset = sh->brew_temp > 0 ? (int)(sh->brew_temp + 0.5f) : -1;
   if (prev_state == RV_PREV_READY) memcpy(g_rv_prev, prev, sizeof *prev);
   g_rv_prev_state = prev_state;
   g_rv_hist = true;

@@ -56,7 +56,8 @@ int main(int, char **argv) {
       size_t sdl;
       CHECK(sn && pb_envelope(cmd2, sn, act, sizeof act, &sd, &sdl) && sdl == pn && !memcmp(sd, prof, pn));
     }
-    CHECK(pb_weight_cmd(prof, pn, 301.0f, cmd, sizeof cmd) == 0);       // out of the web UI's range
+    CHECK(pb_weight_cmd(prof, pn, 200.1f, cmd, sizeof cmd) == 0);       // out of the API's range (0-200 g)
+    CHECK(pb_weight_cmd(prof, pn, -0.1f, cmd, sizeof cmd) == 0);
     CHECK(pb_weight_cmd(prof, pn, 18.5f, cmd, 64) == 0);                // buffer too small
     CHECK(pb_weight_cmd(prof, pn - 3, 18.5f, cmd, sizeof cmd) == 0);    // truncated profile
     // brew temperature: only ProfileDto.waterTemperature changes; with the profile's own value the bytes are identical

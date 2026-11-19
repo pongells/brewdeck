@@ -23,7 +23,18 @@ void cs_hist_loaded(int state, const ShotTrace *s, const ProfileShape *sh, const
 void cs_wifi_scan(const WifiNet *n, int count, bool scanning);
 void cs_wifi_join(int state);                           // WIFI_JOIN_*
 
-// commands: the checks before sending, shared by the device core and the emulator's fake core
+// commands: each command's whole rule set (checks, range, then the answer watched), shared by the device core and the
+// emulator's fake core, so the emulator runs the screen's rules. BD_OK = send it; else refused, nothing to send.
+// The ranges are also the last check where the message is built (pb.cpp).
+#define CS_WEIGHT_MAX 200.0f   // g (0 = no stop weight)
+#define CS_TEMP_MIN 1          // degC (0 = heater off: never)
+#define CS_TEMP_MAX 105
+bd_result cs_cmd_select(int id, const char **name);                    // name: the profile to watch / save
+bd_result cs_cmd_weight(int profile_id, float grams, int *w10, const char **name);
+bd_result cs_cmd_temp(int profile_id, int deg, const char **name);
+bd_result cs_cmd_flush(bd_flush mode, int *pb_mode);                   // PB_MODE_FLUSH / FLUSH_AUTO / HOME
+bd_result cs_cmd_tare(void);
+// the parts they are made of (also used by the tests)
 bd_result cs_check_idle(void);                          // BD_OK, BD_ERR_OFFLINE, or BD_ERR_BUSY (not idle in HOME)
 bd_result cs_check_active(int profile_id);              // BD_ERR_PROFILE_CHANGED if another profile is active now
 bd_result cs_check_flush(bd_flush mode);                // on / timed: idle in HOME; off: from a flush mode

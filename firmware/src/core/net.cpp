@@ -482,7 +482,7 @@ static void wifi_scan_step(void) {
     if (k == MAX_NETS) continue;
     snprintf(nets[k].ssid, sizeof nets[k].ssid, "%s", nm.c_str());
     nets[k].rssi = (int8_t)rssi;
-    nets[k].lock = WiFi.encryptionType(i) != WIFI_AUTH_OPEN;
+    nets[k].locked = WiFi.encryptionType(i) != WIFI_AUTH_OPEN;
     k++;
   }
   for (int a = 1; a < k; a++)                     // strongest first
@@ -857,6 +857,17 @@ static void task(void *) {
         }
         set_why(WHY_NAME_UNKNOWN, IPAddress()); publish(NULL, LINK_NO_MACHINE); delay(1500); continue;
       }
+    }
+    // a Wi-Fi scan (roaming, or the Wi-Fi page) takes the radio off the channel for 1-4 s: a request then fails and
+    // counted towards "machine not answering". Wait for the scan instead; the WebSocket keeps the last values meanwhile
+    {
+      static uint32_t scan_wait = 0;                // at most 6 s: a scan that never ends must not stop the polling
+      if (WiFi.scanComplete() == WIFI_SCAN_RUNNING && (!scan_wait || millis() - scan_wait < 6000)) {
+        if (!scan_wait) scan_wait = stamp_nz(millis());
+        delay(100);
+        continue;
+      }
+      scan_wait = 0;
     }
     // a shot-history tap first (it woke the task): judged on the last status (< ~1 s old, it must have succeeded),
     // so the shot is not delayed by this status request; the call after the status below covers the other case

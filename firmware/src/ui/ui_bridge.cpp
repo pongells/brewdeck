@@ -10,9 +10,7 @@
 
 extern "C" const bd_ui_desc BD_UI = {"screen", "1", 1};          // "screen": the NVS namespace of its settings
 
-static_assert(sizeof(ShotTrace) == sizeof(bd_shot) && offsetof(ShotTrace, pt) == offsetof(bd_shot, pt), "shot layout");
-static_assert(sizeof(ProfileShape) == sizeof(bd_profile_shape) && sizeof(PhaseShape) == sizeof(bd_phase), "shape layout");
-static_assert(sizeof(WifiNet) == sizeof(bd_wifi_net), "wifi net layout");
+// ShotTrace, ProfileShape, WifiNet (live.h) are the API's bd_shot, bd_profile_shape, bd_wifi_net
 
 static void cpy(char *d, size_t n, const char *s) { snprintf(d, n, "%s", s ? s : ""); }
 
@@ -216,7 +214,7 @@ void bd_ui_tick(uint32_t now) {
   }
   if (bd_seq_shape() != seen_sh) {
     seen_sh = bd_seq_shape();
-    ui_set_shape((const ProfileShape *)bd_active_shape());
+    ui_set_shape(bd_active_shape());
   }
   if (bd_seq_history() != seen_hi && bd_shot_history()) {
     seen_hi = bd_seq_history();
@@ -253,11 +251,11 @@ void bd_ui_event(const bd_event *e) {
     case BD_EV_COMMAND: ui_command_answer(e->u.command.cmd, e->u.command.answer); break;
     case BD_EV_SHOT_LOADED:
       if (e->u.loaded.history)
-        ui_set_hist(e->u.loaded.state, (const ShotTrace *)e->u.loaded.shot, (const ProfileShape *)e->u.loaded.shape,
-                    (const ShotTrace *)e->u.loaded.previous, e->u.loaded.previous_state);
-      else ui_set_prev(e->u.loaded.state, (const ShotTrace *)e->u.loaded.shot);
+        ui_set_hist(e->u.loaded.state, e->u.loaded.shot, e->u.loaded.shape,
+                    e->u.loaded.previous, e->u.loaded.previous_state);
+      else ui_set_prev(e->u.loaded.state, e->u.loaded.shot);
       break;
-    case BD_EV_WIFI_SCAN: ui_set_wifi_scan((const WifiNet *)e->u.scan.nets, e->u.scan.n, e->u.scan.scanning); break;
+    case BD_EV_WIFI_SCAN: ui_set_wifi_scan(e->u.scan.nets, e->u.scan.n, e->u.scan.scanning); break;
     case BD_EV_WIFI_JOIN: ui_set_wifi_join(e->u.join.state); break;
     default: break;
   }

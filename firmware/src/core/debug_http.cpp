@@ -11,7 +11,7 @@
 #include <esp_flash.h>
 #include "board.h"
 #include "net.h"
-#include "shot.h"
+#include "debug_http.h"
 #include "../board/common/board_internal.h"
 
 static WiFiServer g_srv(80);
@@ -242,14 +242,14 @@ static void task(void *) {
   }
 }
 
-void shot_begin(void) {
-  xTaskCreatePinnedToCore(task, "shot", 4096, NULL, 1, NULL, 0);
+void debug_http_begin(void) {
+  xTaskCreatePinnedToCore(task, "debug_http", 4096, NULL, 1, NULL, 0);
 }
-void shot_route(const char *path, bd_debug_fn fn) {
+void debug_http_route(const char *path, bd_debug_fn fn) {
   snprintf(g_rt_path, sizeof g_rt_path, "%s", path ? path : "");
   g_rt_fn = fn;
 }
-void shot_service(void) {
+void debug_http_service(void) {
   if (!g_rt_req) return;
   g_rt_req = false;
   const size_t n = g_rt_fn ? g_rt_fn(g_rt_out, sizeof g_rt_out) : 0;

@@ -224,7 +224,7 @@ void on_blink(lv_timer_t *t) {
 void ui_set_shape(const ProfileShape *sh) {
   static bd_preview bp;                            // the core's preview for our box (preview.cpp geometry)
   if (sh != &g_last_shape) g_last_shape = *sh;
-  bd_profile_preview((const bd_profile_shape *)sh, PV_W, PV_H, &bp);
+  bd_profile_preview(sh, PV_W, PV_H, &bp);
   const PvSeries *pv = (const PvSeries *)bp.s;
   // draw order: limits (dim, 2 px) under targets (3 px). Dashed is kept for "compared with" (brewing chart, review)
   static const int order[PV_SERIES] = {PV_P_LIMIT, PV_F_LIMIT, PV_P_TARGET, PV_F_TARGET};
@@ -254,7 +254,7 @@ void ui_set_shape(const ProfileShape *sh) {
   // stop weight: the STORED profile's, only until the machine reports the running one (d_act_prof, ui_set_live):
   // a graph re-read after a save must not put an older stored weight over the running one (seen: a restore to
   // "no stop weight" went back to 5.0 g when the graph came in a moment later)
-  const int w10 = (int)(sh->weight * 10.0f + 0.5f);
+  const int w10 = (int)(sh->stop_weight * 10.0f + 0.5f);
   if (g_act_weight10 < 0 && w10 > 0 && (sh->id != g_shape_id || w10 != g_shape_weight10)) {
     g_weight10 = clamp_w10(w10);
     refresh_value();

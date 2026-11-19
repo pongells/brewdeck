@@ -65,7 +65,7 @@ void wifi_refresh(void) {
     set_text(g_wl_sub[k], cur ? b : "");
     set_hidden(g_wl_conn[k], !cur);
     set_hidden(g_wl_chev[k], cur);
-    set_hidden(g_wl_lock[k], cur || !n || !n->lock);
+    set_hidden(g_wl_lock[k], cur || !n || !n->locked);
   }
   set_hidden(g_wl_empty.box, r > 0);
   if (g_nets_scanning) empty_set(g_wl_empty, "Looking for networks", "2.4 GHz networks only.");
@@ -133,7 +133,7 @@ static void on_net_row(lv_event_t *e) {
   if (k == 0 && g_wifi_ssid[0]) { menu_show_page(4); return; }
   const WifiNet *n = &g_nets[g_wl_idx[k]];
   snprintf(g_wj_ssid, sizeof g_wj_ssid, "%s", n->ssid);
-  if (!n->lock) { wifi_join_now(n->ssid, ""); return; }
+  if (!n->locked) { wifi_join_now(n->ssid, ""); return; }
   memset(g_pw, 0, sizeof g_pw);
   g_wj_state = WIFI_JOIN_IDLE;
   g_layer = 0; g_shift = g_caps = false; g_pw_show = true;

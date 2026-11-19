@@ -134,7 +134,7 @@ static void push_shape(void) {
   memset(&sh, 0, sizeof sh);
   if (!load_shape(g_active_id, &sh)) { sh.id = g_active_id; sh.n = 0; }   // no recording of this one: empty preview
   cs_take_shape(&sh);
-  g_m.act_weight = g_weights[g_active_id] > 0 ? g_weights[g_active_id] : sh.weight;
+  g_m.act_weight = g_weights[g_active_id] > 0 ? g_weights[g_active_id] : sh.stop_weight;
   snprintf(g_m.act_profile, sizeof g_m.act_profile, "%s", profile_name(g_active_id));
   float t = 0;
   for (int i = 0; i < g_list.count; i++) if (g_list.p[i].id == g_active_id) t = g_list.p[i].temp;
@@ -628,58 +628,49 @@ static void emu_stored(int id, float grams, int deg) {
     cs_take_profiles(&g_list);
   }
 }
-bd_result bd_select_profile(int id, bool save) {   // the same checks as the device core (core_state.cpp)
-  const bd_result r = cs_check_idle();
+// the device core's rules (core_state.cpp cs_cmd_*), then the fake machine instead of the network
+bd_result bd_select_profile(int id, bool save) {
+  const char *name;
+  const bd_result r = cs_cmd_select(id, &name);
   if (r != BD_OK) return r;
-  const char *name = cs_profile_name(id);
-  if (!name) return BD_ERR_UNKNOWN_ID;
-  if (cs_select_pending()) return BD_ERR_PENDING;
-  cs_watch_select(name);
   if (getenv("EMU_IGNORE")) { printf("machine: ignores the pick (EMU_IGNORE)\n"); return BD_OK; }
   on_select(id);
   if (save) printf("machine <- save as boot profile once active: \"%s\" (c_save_act_prof)\n", name);
   return BD_OK;
 }
 bd_result bd_set_stop_weight(int profile_id, float grams, bool save) {
-  bd_result r = cs_check_idle();
+  int w10;
+  const char *name;
+  const bd_result r = cs_cmd_weight(profile_id, grams, &w10, &name);
   if (r != BD_OK) return r;
-  if (!(grams >= 0.0f && grams <= 200.0f)) return BD_ERR_RANGE;   // 0 = no stop weight
-  if ((r = cs_check_active(profile_id)) != BD_OK) return r;
-  const int w10 = (int)(grams * 10.0f + 0.5f);
-  cs_watch_weight(w10);
   if (getenv("EMU_IGNORE")) { printf("machine: ignores the weight (EMU_IGNORE)\n"); return BD_OK; }
-  on_weight(cs_profile_name(profile_id), w10);
+  on_weight(name, w10);
   if (!save) printf("machine: (not saved, only for now)\n");
   else emu_stored(profile_id, grams, -1);
   return BD_OK;
 }
 bd_result bd_set_brew_temp(int profile_id, int deg, bool save) {
-  bd_result r = cs_check_idle();
+  const char *name;
+  const bd_result r = cs_cmd_temp(profile_id, deg, &name);
   if (r != BD_OK) return r;
-  if (deg < 1 || deg > 105) return BD_ERR_RANGE;
-  if ((r = cs_check_active(profile_id)) != BD_OK) return r;
-  cs_watch_temp(deg);
   if (getenv("EMU_IGNORE")) { printf("machine: ignores the temperature (EMU_IGNORE)\n"); return BD_OK; }
-  on_temp(cs_profile_name(profile_id), deg);
+  on_temp(name, deg);
   if (!save) printf("machine: (not saved, only for now)\n");
   else emu_stored(profile_id, -1, deg);
   return BD_OK;
 }
 bd_result bd_flush_mode(bd_flush mode) {
-  const bd_result r = cs_check_flush(mode);
+  int pm;
+  const bd_result r = cs_cmd_flush(mode, &pm);
   if (r != BD_OK) return r;
-  cs_watch_flush(mode == BD_FLUSH_ON ? "FLUSH" : mode == BD_FLUSH_TIMED ? "FLUSH_AUTO" : "HOME");
   if (getenv("EMU_IGNORE")) { printf("machine: ignores the flush change (EMU_IGNORE)\n"); return BD_OK; }
-  on_flush(mode == BD_FLUSH_ON ? PB_MODE_FLUSH : mode == BD_FLUSH_TIMED ? PB_MODE_FLUSH_AUTO : PB_MODE_HOME);
+  on_flush(pm);
   return BD_OK;
 }
 bd_result bd_tare(void) {
-  const bd_result r = cs_check_idle();
-  if (r != BD_OK) return r;
-  if (!bd_machine_state()->scale_present) return BD_ERR_NO_SCALE;
-  cs_watch_tare();
-  on_tare();
-  return BD_OK;
+  const bd_result r = cs_cmd_tare();
+  if (r == BD_OK) on_tare();
+  return r;
 }
 bd_result bd_load_previous_shot(const char *profile, int dur10) { on_prev(profile, dur10); return BD_OK; }
 bd_result bd_load_stored_shot(uint32_t id) { on_hist(id); return BD_OK; }

@@ -16,7 +16,7 @@
 #include "tlog.h"
 #include "net.h"
 #include "ws.h"
-#include "shot.h"
+#include "debug_http.h"
 
 void bd_log(const char *fmt, ...) {
   char b[192];
@@ -59,51 +59,38 @@ static void take_network(void) {
   cs_network_done();
 }
 
-// ---- commands (checked here, then again just before sending by net.cpp / ws.cpp on the latest data) ---------------
+// ---- commands (rules in core_state.cpp, then checked again just before sending by net.cpp / ws.cpp on the latest data)
 bd_result bd_select_profile(int id, bool save) {
-  const bd_result r = cs_check_idle();
+  const char *name;
+  const bd_result r = cs_cmd_select(id, &name);
   if (r != BD_OK) return r;
-  const char *name = cs_profile_name(id);
-  if (!name) return BD_ERR_UNKNOWN_ID;
-  if (cs_select_pending()) return BD_ERR_PENDING;
   net_select_profile(id);
-  cs_watch_select(name);
   if (save) ws_save_pick(name);     // boot profile once the machine reports it active
   return BD_OK;
 }
 bd_result bd_set_stop_weight(int profile_id, float grams, bool save) {
-  bd_result r = cs_check_idle();
-  if (r != BD_OK) return r;
-  if (!(grams >= 0.0f && grams <= 200.0f)) return BD_ERR_RANGE;   // 0 = no stop weight
-  if ((r = cs_check_active(profile_id)) != BD_OK) return r;
-  const int w10 = (int)(grams * 10.0f + 0.5f);
-  ws_set_weight(cs_profile_name(profile_id), w10, save);           // sent 1 s after the last change
-  cs_watch_weight(w10);
-  return BD_OK;
+  int w10;
+  const char *name;
+  const bd_result r = cs_cmd_weight(profile_id, grams, &w10, &name);
+  if (r == BD_OK) ws_set_weight(name, w10, save);   // sent 1 s after the last change
+  return r;
 }
 bd_result bd_set_brew_temp(int profile_id, int deg, bool save) {
-  bd_result r = cs_check_idle();
-  if (r != BD_OK) return r;
-  if (deg < 1 || deg > 105) return BD_ERR_RANGE;   // 0 = heater off: never
-  if ((r = cs_check_active(profile_id)) != BD_OK) return r;
-  ws_set_temp(cs_profile_name(profile_id), deg, save);
-  cs_watch_temp(deg);
-  return BD_OK;
+  const char *name;
+  const bd_result r = cs_cmd_temp(profile_id, deg, &name);
+  if (r == BD_OK) ws_set_temp(name, deg, save);
+  return r;
 }
 bd_result bd_flush_mode(bd_flush mode) {
-  const bd_result r = cs_check_flush(mode);
-  if (r != BD_OK) return r;
-  ws_flush(mode == BD_FLUSH_ON ? PB_MODE_FLUSH : mode == BD_FLUSH_TIMED ? PB_MODE_FLUSH_AUTO : PB_MODE_HOME);
-  cs_watch_flush(mode == BD_FLUSH_ON ? "FLUSH" : mode == BD_FLUSH_TIMED ? "FLUSH_AUTO" : "HOME");
-  return BD_OK;
+  int pm;
+  const bd_result r = cs_cmd_flush(mode, &pm);
+  if (r == BD_OK) ws_flush(pm);
+  return r;
 }
 bd_result bd_tare(void) {
-  const bd_result r = cs_check_idle();
-  if (r != BD_OK) return r;
-  if (!bd_machine_state()->scale_present) return BD_ERR_NO_SCALE;
-  ws_tare();
-  cs_watch_tare();
-  return BD_OK;
+  const bd_result r = cs_cmd_tare();
+  if (r == BD_OK) ws_tare();
+  return r;
 }
 // stored shots: always queued; the network task sends them once the machine is online and idle (the previous shot is
 // asked for right at the end of a shot, before the machine is back in HOME, and the link can drop then)
@@ -163,6 +150,21 @@ static void migrate_orig(void) {
 }
 
 // ---- setup and loop -----------------------------------------------------------------------------------------------
+// the loop's copies of stored shots and the history index, in PSRAM (~40 KB): allocated once in setup
+static struct { ShotTrace *prev, *hs, *hp; ProfileShape *hsh; WsShotIndex *ix; } g_buf;
+template <typename T> static T *psram(const char *what) {
+  T *p = (T *)heap_caps_malloc(sizeof(T), MALLOC_CAP_SPIRAM);
+  if (!p) Log.printf("core: no PSRAM for %s (%u B): it stays off\n", what, (unsigned)sizeof(T));
+  return p;
+}
+static void alloc_buffers(void) {
+  g_buf.prev = psram<ShotTrace>("the previous shot");
+  g_buf.hs = psram<ShotTrace>("a history shot");
+  g_buf.hp = psram<ShotTrace>("a history shot's previous");
+  g_buf.hsh = psram<ProfileShape>("a history shot's profile");
+  g_buf.ix = psram<WsShotIndex>("the shot history");
+}
+
 static bd_reset reset_of(esp_reset_reason_t r) {
   switch (r) {
     case ESP_RST_POWERON:   return BD_RESET_POWER_ON;
@@ -192,13 +194,14 @@ void bd_core_setup(void) {
              BD_UI.api_version);
   if (BD_UI.api_version > BD_API_VERSION)
     Log.printf("core: WARNING: the UI wants a newer API (%d) than this core has (%d)\n", BD_UI.api_version, BD_API_VERSION);
+  alloc_buffers();
   g_store_ok = g_store.begin(BD_UI.name, false);
   migrate_orig();
   bd_ui_init();
   Log.printf("internal RAM free %u, largest block %u\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
 #ifdef BREWDECK_DEBUG_HTTP
-  shot_begin();                     // debug web server (shot.cpp: screen.bmp, heap, tasks, flash, roam, touch, bl, the UI's route): env ui-debug only
+  debug_http_begin();                     // debug web server (debug_http.cpp: screen.bmp, heap, tasks, flash, roam, touch, bl, the UI's route): env ui-debug only
 #endif
   ws_begin();
   Log.printf("ui \"%s\" %s ready\n", BD_UI.name, BD_UI.version);
@@ -206,7 +209,7 @@ void bd_core_setup(void) {
 
 void bd_debug_route(const char *path, bd_debug_fn fn) {
 #ifdef BREWDECK_DEBUG_HTTP
-  shot_route(path, fn);
+  debug_http_route(path, fn);
 #else
   (void)path; (void)fn;
 #endif
@@ -239,33 +242,26 @@ void bd_core_loop(void) {
     if (net_get_shape(&sh)) cs_take_shape(&sh);
     mem_watch("loop: network data");
   }
-  {
-    static ShotTrace *prev = (ShotTrace *)heap_caps_malloc(sizeof(ShotTrace), MALLOC_CAP_SPIRAM);   // 11.5 KB
+  if (g_buf.prev) {
     bool changed;
-    const int st = net_get_prev(prev, &changed);
-    if (changed && prev) cs_prev_loaded(st, prev);
+    const int st = net_get_prev(g_buf.prev, &changed);
+    if (changed) cs_prev_loaded(st, g_buf.prev);
   }
   {
     WsNotif nt;                     // machine notifications; cs_notice filters and classifies them
     if (net_get_notif(&nt)) cs_notice(nt.type, nt.msg);
   }
-  {
-    static WsShotIndex *ix = (WsShotIndex *)heap_caps_malloc(sizeof(WsShotIndex), MALLOC_CAP_SPIRAM);
-    if (ix && net_get_index(ix)) cs_take_index(ix);
-    static ShotTrace *hs = (ShotTrace *)heap_caps_malloc(sizeof(ShotTrace), MALLOC_CAP_SPIRAM);
-    static ShotTrace *hp = (ShotTrace *)heap_caps_malloc(sizeof(ShotTrace), MALLOC_CAP_SPIRAM);
-    static ProfileShape *hsh = (ProfileShape *)heap_caps_malloc(sizeof(ProfileShape), MALLOC_CAP_SPIRAM);
-    if (hs && hp && hsh) {
-      bool changed;
-      int pst;
-      const int st = net_get_hist(hs, hsh, hp, &pst, &changed);
-      if (changed) cs_hist_loaded(st, hs, hsh, hp, pst);
-    }
+  if (g_buf.ix && net_get_index(g_buf.ix)) cs_take_index(g_buf.ix);
+  if (g_buf.hs && g_buf.hp && g_buf.hsh) {
+    bool changed;
+    int pst;
+    const int st = net_get_hist(g_buf.hs, g_buf.hsh, g_buf.hp, &pst, &changed);
+    if (changed) cs_hist_loaded(st, g_buf.hs, g_buf.hsh, g_buf.hp, pst);
   }
   mem_watch("loop: stored shots, notices");
   cs_tick(millis());
 #ifdef BREWDECK_DEBUG_HTTP
-  shot_service();                   // a UI debug route asked for (bd_debug_route): answered here, on the UI task
+  debug_http_service();                   // a UI debug route asked for (bd_debug_route): answered here, on the UI task
 #endif
   bd_display_stats(NULL, NULL, true);
   const uint32_t t0 = millis();

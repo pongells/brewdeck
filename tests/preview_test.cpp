@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
     if (!parse_profile_shape(buf, &s)) { printf("%s: parse failed\n", argv[a]); fail++; continue; }
     float tot = preview_build(&s, 336, 84, o);
     printf("%s: %d phases, weight %.1f, temp %.1f, est %.1f s, pts/seg P %d/%d p %d/%d F %d/%d f %d/%d\n   durations:",
-           argv[a], s.n, s.weight, s.temp, tot, o[0].n, o[0].nseg, o[1].n, o[1].nseg, o[2].n, o[2].nseg, o[3].n, o[3].nseg);
+           argv[a], s.n, s.stop_weight, s.brew_temp, tot, o[0].n, o[0].nseg, o[1].n, o[1].nseg, o[2].n, o[2].nseg, o[3].n, o[3].nseg);
     for (int i = 0; i < s.n; i++) printf(" %.1f", preview_phase_secs(&s.ph[i])); printf("\n");
     for (int k = 0; k < 4; k++) { const PvSeries *q = &o[k];
       for (int i = 0; i < q->n; i++) if (q->pts[i].x < 0 || q->pts[i].x > 335 || q->pts[i].y < 0 || q->pts[i].y > 83) { printf("   OUT OF BOX %d,%d\n", q->pts[i].x, q->pts[i].y); fail++; break; }
@@ -30,19 +30,19 @@ int main(int argc, char **argv) {
     if (verbose) plot(o);
     {   // planned rest: from the start it spans the whole estimate; from the middle it is shorter; time never goes back
       static ShotPoint pl[400];
-      const float wsave = s.weight; s.weight = 0;   // no stop weight: the whole estimate
+      const float wsave = s.stop_weight; s.stop_weight = 0;   // no stop weight: the whole estimate
       const int n0 = preview_plan(&s, 0, 0, 0, 0, 0, 0, pl, 400);
       if (n0 < 2 || abs((int)pl[n0 - 1].t - (int)(tot * 10 + 0.5f)) > 2) { printf("   plan from 0: %d pts, end %d vs %.1f s\n", n0, n0 ? pl[n0 - 1].t : 0, tot); fail++; }
       for (int i = 1; i < n0; i++) if (pl[i].t < pl[i - 1].t || pl[i].tp > 150 || pl[i].tf > 150) { printf("   plan bad at %d\n", i); fail++; break; }
       const int mid = s.n / 2, n1 = preview_plan(&s, mid, 1.0f, 100, 50, 20, 0, pl, 400);
       if (s.n > 1 && (n1 < 2 || pl[0].t != 100 || pl[0].tp != 50 || pl[n1 - 1].t >= 100 + (int)(tot * 10))) { printf("   plan from phase %d: %d pts\n", mid, n1); fail++; }
       if (preview_plan(&s, s.n, 0, 0, 0, 0, 0, pl, 400) != 0) { printf("   plan past the end not empty\n"); fail++; }
-      s.weight = wsave;   // with the stop weight: never longer, and already reached = ends at once
+      s.stop_weight = wsave;   // with the stop weight: never longer, and already reached = ends at once
       const int nw = preview_plan(&s, 0, 0, 0, 0, 0, 0, pl, 400);
       const float wend = nw ? pl[nw - 1].t / 10.0f : 0;
       if (nw < 2 || wend > tot + 0.2f) { printf("   plan with stop weight: %d pts, %.1f s\n", nw, wend); fail++; }
-      if (s.weight > 0 && preview_plan(&s, 0, 0, 0, 0, 0, s.weight + 1, pl, 400) > 2) { printf("   plan past the stop weight not short\n"); fail++; }
-      printf("   plan: %d points from 0 (%.1f s; to %.0f g %.1f s), %d from phase %d\n", n0, tot, s.weight, wend, n1, mid);
+      if (s.stop_weight > 0 && preview_plan(&s, 0, 0, 0, 0, 0, s.stop_weight + 1, pl, 400) > 2) { printf("   plan past the stop weight not short\n"); fail++; }
+      printf("   plan: %d points from 0 (%.1f s; to %.0f g %.1f s), %d from phase %d\n", n0, tot, s.stop_weight, wend, n1, mid);
     }
   }
   // truncated reply must fail cleanly

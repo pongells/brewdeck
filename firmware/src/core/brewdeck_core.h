@@ -3,8 +3,8 @@
 // docs/custom-ui.md.
 //
 // The firmware in three layers:
-//   board  panel, touch, backlight, pins, frame buffer (one per hardware: the Sunton ESP32-S3 RGB panel today, a
-//          Guition ESP32-P4 MIPI-DSI panel later, the emulator and the web demo); hidden behind bd_display_* / bd_touch_*
+//   board  panel, touch, backlight, pins, frame buffer (one per hardware: the Sunton ESP32-S3 RGB panel, the Guition
+//          ESP32-P4 MIPI-DSI panel (experimental), the emulator and the web demo); hidden behind bd_display_* / bd_touch_*
 //   core   Wi-Fi, finding the machine, REST + WebSocket, protobuf, settings storage, logging, and the ONLY place
 //          that sends anything to the machine (it enforces when a command is allowed)
 //   UI     screens and interaction: anything that implements the four bd_ui_* functions at the end of this file,
@@ -221,10 +221,10 @@ void    bd_log(const char *fmt, ...);                             // serial log 
 // ---- display, touch, memory (the board layer behind them; UI task only) --------------------------------------------
 typedef enum { BD_PIXEL_RGB565 = 0 } bd_pixel_format;   // native byte order (LVGL 9: LV_COLOR_FORMAT_RGB565, no byte swap)
 typedef struct {
-  int width, height;              // landscape, as the UI draws: 800 x 480 on the Sunton board (a portrait panel is turned by its board layer)
+  int width, height;              // landscape, as the UI draws: 800 x 480 on both boards (the P4's portrait panel is turned by its board layer)
   bd_pixel_format format;
   int draw_lines;                 // rows of one draw strip (width x draw_lines RGB565) that fit in internal RAM next to
-                                  // Wi-Fi: 40 on the ESP32-S3 (64 KB). One strip: the copy is synchronous anyway.
+                                  // Wi-Fi: 40 on both boards (64 KB). One strip: the copy is synchronous anyway.
 } bd_display_info;
 const bd_display_info *bd_display(void);
 // Puts a finished rectangle on the screen (x2 / y2 inclusive, px row by row, (x2-x1+1) * (y2-y1+1) pixels). Returns

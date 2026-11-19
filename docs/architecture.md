@@ -66,7 +66,7 @@ flowchart TB
 | Arduino loop (UI task) | 1 | `bd_core_loop`: takes the network tasks' data, then calls `bd_ui_tick` / `bd_ui_event`. All UI code and every `bd_*` call from the UI run here, so the UI needs no locking. |
 | `net` | 0 | Wi-Fi (join, roam, rejoin, the link status the UI shows), mDNS, REST requests. Only this task asks Wi-Fi anything: on the ESP32-P4 every Wi-Fi query is a request to its ESP32-C6 and can block. |
 | `ws` | 0 | the WebSocket session: live data in, the allowed commands out |
-| `shot` | 0 | debug builds only: screenshots and remote touch over HTTP |
+| `debug_http` | 0 | debug builds only (`debug_http.cpp`): screenshots, the screen recorder (frames kept in PSRAM), remote touch, memory over HTTP |
 
 The network tasks hand data to the UI task through a mutex. Big buffers (shot traces, chart data, the frame buffer)
 are in PSRAM; internal RAM is kept for Wi-Fi and the draw strip.

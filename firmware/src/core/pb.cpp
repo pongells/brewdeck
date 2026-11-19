@@ -399,7 +399,7 @@ static size_t act_wrap(uint8_t *out, size_t hdr_max, size_t dlen) {
 }
 
 size_t pb_weight_cmd(const uint8_t *prof, size_t n, float weight, uint8_t *out, size_t cap) {
-  if (!(weight >= 0 && weight <= 300)) return 0;   // the web UI's range
+  if (!(weight >= 0 && weight <= 200)) return 0;   // the API's range (bd_set_stop_weight; the web UI allows 300)
   // 1) patched profile into the tail of out, 2) envelope header in front of it
   static const char ACT[] = "c_upd_act_prof";
   const size_t hdr_max = 2 + (sizeof ACT - 1) + 1 + 5;   // action field + data key + length varint

@@ -115,6 +115,25 @@ int main(void) {
   d = live(false); cs_take_live(&d, LINK_NO_MACHINE);
   CHECK(cs_check_idle() == BD_ERR_OFFLINE);
 
+  // 7. the commands' whole rules (cs_cmd_*): ranges refused before anything is watched or sent
+  d = live(false); cs_take_live(&d, LINK_ONLINE);
+  {
+    const char *nm = NULL;
+    int w10 = -1, pm = -1;
+    CHECK(cs_cmd_temp(7, 0, &nm) == BD_ERR_RANGE);       // heater off: never
+    CHECK(cs_cmd_temp(7, 106, &nm) == BD_ERR_RANGE);
+    CHECK(cs_cmd_weight(7, 200.1f, &w10, &nm) == BD_ERR_RANGE);
+    CHECK(cs_cmd_weight(7, -1.0f, &w10, &nm) == BD_ERR_RANGE);
+    CHECK(cs_cmd_weight(7, 21.5f, &w10, &nm) == BD_OK && w10 == 215 && nm && !strcmp(nm, d.act_profile));
+    CHECK(cs_cmd_temp(7, 1, &nm) == BD_OK);
+    CHECK(cs_cmd_weight(99, 20.0f, &w10, &nm) == BD_ERR_UNKNOWN_ID);
+    CHECK(cs_cmd_flush(BD_FLUSH_TIMED, &pm) == BD_OK && pm == PB_MODE_FLUSH_AUTO);
+    CHECK(cs_cmd_tare() == (d.scales_present ? BD_OK : BD_ERR_NO_SCALE));
+    d = live(true); cs_take_live(&d, LINK_ONLINE);
+    CHECK(cs_cmd_temp(7, 93, &nm) == BD_ERR_BUSY);
+    CHECK(cs_cmd_flush(BD_FLUSH_ON, &pm) == BD_ERR_BUSY);
+  }
+
   printf(fails ? "core_state_test: %d FAILED\n" : "core_state_test: all passed\n", fails);
   return fails ? 1 : 0;
 }

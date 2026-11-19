@@ -166,7 +166,7 @@ bool parse_profile_shape(const char *js, ProfileShape *s) {
         p->ramp_ms = (uint32_t)num(tb, te, "time", 0);
         p->curve = raw_n(tb, te, "curve", b, sizeof b) ? curve_of(b) : CURVE_INSTANT;
       }
-      p->restriction = num(q, e, "restriction", 0);   // phase-level key (not inside target / stopConditions)
+      p->limit = num(q, e, "restriction", 0);   // phase-level key (not inside target / stopConditions)
       if (sub_object(q, e, "stopConditions", &tb, &te)) {
         p->stop_ms = (uint32_t)num(tb, te, "time", 0);
         p->stop_p_above = num(tb, te, "pressureAbove", 0);
@@ -181,8 +181,8 @@ bool parse_profile_shape(const char *js, ProfileShape *s) {
   ProfileInfo tmp;
   memset(&tmp, 0, sizeof tmp);
   if (parse_profile_detail(js, &tmp)) {
-    s->weight = tmp.weight;
-    s->temp = tmp.temp;
+    s->stop_weight = tmp.weight;
+    s->brew_temp = tmp.temp;
   }
   return true;
 }
