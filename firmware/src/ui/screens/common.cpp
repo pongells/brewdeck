@@ -18,9 +18,6 @@ void dlabel(lv_layer_t *L, lv_draw_label_dsc_t *d, const lv_area_t *a, const cha
   lv_draw_label(L, d, a);
 }
 
-// the profile name shown until the machine names one
-const char *PROFILE_NAME = "Leva 9 SINGLE v0.9";
-
 // ---- small helpers --------------------------------------------------------------------------------------------------
 lv_obj_t *box(lv_obj_t *p, int x, int y, int w, int h, lv_color_t bg, int r) {
   lv_obj_t *o = lv_obj_create(p);

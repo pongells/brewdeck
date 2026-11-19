@@ -273,7 +273,7 @@ static void br_start(void) {
   editor_close();
   rv_hide();
   char b[48];
-  display_name(g_cur_profile[0] ? g_cur_profile : PROFILE_NAME, b, sizeof b, NULL);
+  display_name(g_cur_profile, b, sizeof b, NULL);
   set_text(g_br_prof, b);
   br_pill(false);
   br_target();
@@ -548,7 +548,7 @@ void build_brew(lv_obj_t *scr) {
   lv_obj_set_style_bg_color(g_br_pill, COL_BREW_BG, 0);
   g_br_dot = box(g_br_pill, 0, 0, 10, 10, COL_GOLD, 5);
   g_br_pill_lbl = label(g_br_pill, "Brewing", F_TEXT_B, COL_BREW_TX);
-  g_br_prof = label(hl, PROFILE_NAME, F_TEXT, COL_MUTED);
+  g_br_prof = label(hl, "", F_TEXT, COL_MUTED);
   g_br_clock = label(g_brew, "0:00", F_VALUE, COL_TEXT);
   lv_obj_align(g_br_clock, LV_ALIGN_TOP_RIGHT, -24, 22);
   // values: one row under the full-width chart, left-aligned: weight (white), pressure, flow, temperature; each a dot

@@ -477,7 +477,7 @@ void build_ready(lv_obj_t *scr) {
   g_hdr_left = hl;
   g_hdr_btn_x = px;
   ntc_build_btn(scr, px - 8 - 52);
-  lv_obj_t *pl = label(hl, PROFILE_NAME, F_ROW_B, COL_TEXT);
+  lv_obj_t *pl = label(hl, "", F_ROW_B, COL_TEXT);
   g_prof_lbl = pl;
   lv_obj_set_flex_grow(pl, 1);
   one_line(pl, 0);
@@ -716,7 +716,7 @@ void build_editor(lv_obj_t *scr) {
   label(cancel, "Cancel", F_TEXT_B, COL_TEXT);
   lv_obj_add_event_cb(cancel, on_cancel, LV_EVENT_CLICKED, NULL);
 
-  lv_obj_t *pn = label(g_editor, PROFILE_NAME, F_TEXT, COL_MUTED);
+  lv_obj_t *pn = label(g_editor, "", F_TEXT, COL_MUTED);
   g_ed_prof_lbl = pn;
   lv_obj_align(pn, LV_ALIGN_TOP_RIGHT, -24, 42);
 

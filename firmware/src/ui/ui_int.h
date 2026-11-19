@@ -53,7 +53,6 @@ enum { BR_HIDDEN = 0, BR_BREWING, BR_DONE, BR_REVIEW };
 enum { FL_UNKNOWN = -1 };
 
 // ---- screens/common.cpp: drawing and object helpers, icons, chart helpers -------------------------------------------
-extern const char *PROFILE_NAME;
 void dl(lv_layer_t *L, lv_draw_line_dsc_t *d, const lv_point_t *a, const lv_point_t *b);
 void darc(lv_layer_t *L, lv_draw_arc_dsc_t *d, const lv_point_t *c, int r, int a0, int a1);
 void dlabel(lv_layer_t *L, lv_draw_label_dsc_t *d, const lv_area_t *a, const char *t);
