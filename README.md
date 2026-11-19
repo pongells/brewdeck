@@ -139,8 +139,10 @@ esptool --port /dev/cu.usbserial-XXXX --baud 460800 write-flash 0x0 backup/gaggi
 ### ESP32-P4 board (experimental)
 
 The Guition JC4880P443 (ESP32-P4, 4.3" 480x800 MIPI-DSI panel shown in landscape, Wi-Fi through an ESP32-C6) is a
-retail board with no flash encryption. It runs every screen live from the machine; a full shot on it has not been
-tested yet. There is no release package for it: build it (next section), from `firmware/`:
+retail board with no flash encryption. It runs every screen live from the machine and has been through a full shot
+(brewing, review, previous shot, history). Use the USB-C socket that carries data (on our board the top one, marked
+D4D5; the other one only powers it). Each release has a package for it, `brewdeck-<version>-esp32p4.zip`: follow its
+INSTALL.txt. Or build it (next section), from `firmware/`:
 
 1. Back up its flash as in step 2, to `backup/p4-guition-original.bin` (or point `GAGGI_BACKUP` at it; a plain board
    can also be flashed without one, `NO_BACKUP=1`). Its port is `/dev/cu.usbmodem…` on macOS, `/dev/ttyACM0` on Linux.
@@ -176,7 +178,7 @@ cd firmware
 `pio run -t upload`: it skips all these checks. `include/wifi_config.h` (git-ignored) can hold your Wi-Fi network and
 the machine's name or IP; left as created, the screen starts on "No Wi-Fi set up" and you choose the network there.
 Other envs (debug builds, the P4, the touch test) and the debug tools: [development](docs/development.md). A release
-package is made with `tools/make-release.sh <version>` (CI does it for each `v*` tag; notes from
+package is made with `tools/make-release.sh <version> [s3|p4]` (CI makes both for each `v*` tag; notes from
 [CHANGELOG.md](CHANGELOG.md)).
 
 ## Without hardware
@@ -213,7 +215,7 @@ talks to the machine. Security problems: please report them privately, see [SECU
 
 Plans, not promises:
 
-- **The ESP32-P4 board** out of experimental: a full shot on it, and its speaker for optional sounds
+- **The ESP32-P4 board** out of experimental: more daily use, and its speaker for optional sounds
   ([#2](https://github.com/pongells/brewdeck/issues/2)).
 - **Updates over Wi-Fi** for the screen, and later **switching between UIs** from the screen itself
   ([#3](https://github.com/pongells/brewdeck/issues/3)).
@@ -245,4 +247,4 @@ Not covered by Brewdeck's license:
 ## Status
 
 A personal project, in daily use on one machine, where every screen above has been checked. The first-run setup on a
-new Sunton board is untested, and the P4 board is experimental (no full shot yet).
+new Sunton board is untested, and the P4 board is experimental (one full shot so far).

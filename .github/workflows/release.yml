@@ -1,8 +1,8 @@
 name: Release
 
-# A tag like v0.1.0 builds the release image (no debug web server, no Wi-Fi network built in) and publishes it as a
-# GitHub release: brewdeck-<tag>-esp32s3.zip (images, flash.sh, SHA256SUMS, INSTALL.txt), notes from CHANGELOG.md.
-# The ESP32-P4 board has no release package yet (experimental: built from source, see the README).
+# A tag like v0.1.0 builds the release images (no debug web server, no Wi-Fi network built in) and publishes them as
+# one GitHub release: brewdeck-<tag>-esp32s3.zip and brewdeck-<tag>-esp32p4.zip (experimental) (images, flash.sh,
+# SHA256SUMS, INSTALL.txt), notes from CHANGELOG.md.
 on:
   push:
     tags: ['v*']
@@ -11,11 +11,13 @@ permissions:
   contents: read
 
 jobs:
-  release:
-    name: Build and publish the release
+  build:
+    # one job per board: the two need differently compiled Arduino libraries, and pioarduino keeps one copy
+    name: Build the ${{ matrix.board }} package
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    strategy:
+      matrix:
+        board: [s3, p4]
     steps:
       - uses: actions/checkout@v7
       - name: Unit tests
@@ -24,21 +26,50 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.platformio
-          key: platformio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
-          restore-keys: platformio-${{ runner.os }}-
+          # the same caches as CI (s3: platformio-..., p4: platformio-p4-...)
+          key: platformio-${{ matrix.board == 'p4' && 'p4-' || '' }}${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+          restore-keys: platformio-${{ matrix.board == 'p4' && 'p4-' || '' }}${{ runner.os }}-
       - name: Build and package
         run: |
           # pioarduino can install a pioarduino package its own version check rejects (6.2.0.post1 vs >=6.2.0)
-          tools/make-release.sh "$GITHUB_REF_NAME" || { uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0 && tools/make-release.sh "$GITHUB_REF_NAME"; }
+          tools/make-release.sh "$GITHUB_REF_NAME" ${{ matrix.board }} || { uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0 && tools/make-release.sh "$GITHUB_REF_NAME" ${{ matrix.board }}; }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package-${{ matrix.board }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish the release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
       - name: Release notes from CHANGELOG.md
         run: |
           # the section "## <tag> ..." up to the next "## "
           awk -v t="$GITHUB_REF_NAME" '$0 ~ "^## " {p = ($2 == t)} p' CHANGELOG.md | tail -n +2 > notes.md
           [ -s notes.md ] || { echo "CHANGELOG.md has no section for $GITHUB_REF_NAME"; exit 1; }
-          echo >> notes.md
-          echo "Install: download the zip, read INSTALL.txt (backup first). SHA-256 of the zip:" >> notes.md
-          echo '`'"$(sha256sum dist/brewdeck-$GITHUB_REF_NAME-esp32s3.zip | cut -d' ' -f1)"'`' >> notes.md
+          {
+            echo
+            echo "Install: download the zip for your board, read INSTALL.txt (backup first)."
+            echo "- \`brewdeck-$GITHUB_REF_NAME-esp32s3.zip\`: Sunton ESP32-S3 screen"
+            echo "- \`brewdeck-$GITHUB_REF_NAME-esp32p4.zip\`: Guition ESP32-P4 board (experimental)"
+            echo
+            echo "SHA-256:"
+            echo '```'
+            (cd dist && sha256sum *.zip)
+            echo '```'
+          } >> notes.md
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "dist/brewdeck-$GITHUB_REF_NAME-esp32s3.zip" --title "Brewdeck $GITHUB_REF_NAME" --notes-file notes.md
+        run: |
+          gh release create "$GITHUB_REF_NAME" "dist/brewdeck-$GITHUB_REF_NAME-esp32s3.zip" \
+            "dist/brewdeck-$GITHUB_REF_NAME-esp32p4.zip" --title "Brewdeck $GITHUB_REF_NAME" --notes-file notes.md

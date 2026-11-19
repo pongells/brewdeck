@@ -5,9 +5,13 @@ Each release has a section here; its text becomes the release notes on GitHub.
 ## Unreleased
 
 - Experimental support for the Guition JC4880P443 (ESP32-P4, 4.3" MIPI-DSI panel shown in landscape, Wi-Fi through
-  its ESP32-C6): `./build.sh ui-p4`. Not yet tested through a full shot.
+  its ESP32-C6): a release package `brewdeck-<version>-esp32p4.zip`, or `./build.sh ui-p4`. Tested through one full
+  shot.
 - `p4-c6-update`: a one-off tool that updates the P4 board's Wi-Fi chip firmware; with the firmware these boards ship
-  with, the first Wi-Fi join dropped at every start.
+  with, the first Wi-Fi join dropped at every start. In the P4 package as `c6-update/`.
+- Dragging (the review's scrubber, scrolling) follows the finger more closely: touch is read right before each redraw.
+- A router that blocks or drops the screen no longer shows "did not accept the password": that message now needs the
+  network to have refused the password before the screen's first join since it started.
 - Board code split into `firmware/src/board/common` (shared) and one folder per board (`s3`, `p4`).
 - `flash.sh` refuses images built for another chip and writes the bootloader where that chip expects it.
 - The screen's Wi-Fi status is read by the network task, not the UI task; a dropped first Wi-Fi join is retried after
