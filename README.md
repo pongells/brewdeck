@@ -71,7 +71,8 @@ It never sends brewing, steam, pump, valve, heater, descaling or calibration com
 - **Experimental**: the Guition JC4880P443 (ESP32-P4, 4.3" 480x800 MIPI-DSI shown in landscape, Wi-Fi through its
   ESP32-C6), a retail board with no flash encryption: `./build-pio.sh ui-p4 --flash`. It runs Brewdeck's screens live
   from the machine; a full shot on it has not been tested yet. On the network it is `brewdeck-p4` (the S3 screen is
-  `brewdeck`). These boards ship with old firmware on their Wi-Fi chip (an ESP32-C6): if the first Wi-Fi join drops
+  `brewdeck`). Its backup (Installing, step 2) goes to `backup/p4-guition-original.bin` (or point `GAGGI_BACKUP` at
+  it); as a plain board it can also be flashed without one (`NO_BACKUP=1`). These boards ship with old firmware on their Wi-Fi chip (an ESP32-C6): if the first Wi-Fi join drops
   at every start, update it once with `./build-pio.sh p4-c6-update --flash` (it uses the network saved on the screen;
   progress in the serial log), then flash `ui-p4` again. Pins in
   [`firmware/src/board/p4/board.h`](firmware/src/board/p4/board.h).

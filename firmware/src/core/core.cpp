@@ -3,7 +3,6 @@
 // events, notice filtering and command answers are in core_state.cpp (shared with the emulator).
 #include <Arduino.h>
 #include <Preferences.h>
-#include <WiFi.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
 #include <nvs.h>

@@ -9,10 +9,11 @@
 #include "../../core/brewdeck_core.h"
 #include "board_internal.h"
 
+const char *board_hostname(void) { return "brewdeck-p4"; }   // brewdeck-p4.local: the S3 screen keeps "brewdeck"
+
 // Serial is the chip's USB port. When the computer on the other end does not read it, every write waits up to 20 x
 // the TX timeout (2 s at the default 100 ms), and the UI, network and WebSocket tasks all stop on the log (seen:
 // 30 s freezes). Timeout 0: lines nobody reads are dropped instead; a larger buffer for bursts.
-const char *board_hostname(void) { return "brewdeck-p4"; }   // brewdeck-p4.local: the S3 screen keeps "brewdeck"
 
 void board_serial_begin(void) {
   Serial.setTxBufferSize(4096);

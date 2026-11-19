@@ -6,7 +6,7 @@ static Arduino_ESP32DSIPanel *bus = new Arduino_ESP32DSIPanel(
     12 /* hsync_pulse_width */, 42 /* hsync_back_porch */, 42 /* hsync_front_porch */,
     2 /* vsync_pulse_width */, 8 /* vsync_back_porch */, 166 /* vsync_front_porch */,
     34000000 /* prefer_speed */);
-Arduino_DSI_Display *gfx = new Arduino_DSI_Display(PANEL_W, PANEL_H, bus, PANEL_ROT, true /* IPS */, PIN_PANEL_RST,
+Arduino_DSI_Display *gfx = new Arduino_DSI_Display(PANEL_W, PANEL_H, bus, PANEL_ROT, true /* auto_flush: cache write-back */, PIN_PANEL_RST,
     st7701_dsi_init_operations, sizeof(st7701_dsi_init_operations) / sizeof(lcd_init_cmd_t));
 
 void board_init() {
