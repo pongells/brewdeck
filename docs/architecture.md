@@ -41,8 +41,8 @@ flowchart TB
   subgraph board["Board (firmware/src/board: common/ + one of s3/, p4/)"]
     direction TB
     disp["s3/board_s3.cpp or p4/board_p4.cpp<br/>bd_display_flush (P4: turned to landscape)"]
-    common["common/<br/>bd_touch_read (GT911), bd_alloc, start-up"]
-    drv["s3/panel.cpp or p4/panel.cpp<br/>RGB or DSI panel, backlight"]
+    common["common/<br/>bd_touch_read (GT911), bd_alloc, backlight, start-up"]
+    drv["s3/panel.cpp or p4/panel.cpp<br/>RGB or DSI panel"]
     disp --> drv
   end
 

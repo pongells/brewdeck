@@ -102,8 +102,8 @@ gradients band, so use flat colour (the release glow dithers).
 | `RAD_PILL` | round | pills and tags: information, never a control |
 
 No shadows, and no borders on the screens themselves: surfaces are told apart by colour. Panels that float over
-another screen (the notices list, a centred notice, the restore panel) and the password field get a 1 px `#3A3A40`
-edge, so they stand off what is behind them.
+another screen (the notices list, a centred notice, the restore panel) and the password field get a 1 px `COL_BORDER`
+(#3A3A40) edge, so they stand off what is behind them.
 
 ## Logo
 

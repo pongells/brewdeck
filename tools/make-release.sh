@@ -75,17 +75,17 @@ socket that carries data (on our board the top one, marked D4D5; the other one o
      esptool --port <port> get-security-info
 2. Back up its whole flash, in this folder; it is the only way back to Guition's firmware. Keep a copy:
      mkdir -p backup
-     esptool --port <port> --baud 460800 read-flash 0 0x1000000 backup/gaggiuino-screen-backup.bin
+     esptool --port <port> --baud 460800 read-flash 0 0x1000000 backup/p4-guition-original.bin
      (the file must be exactly 16777216 bytes)
 3. Flash (DRY_RUN=1 shows what it would do):
-     PORT=<port> ./flash.sh
+     GAGGI_BACKUP=backup/p4-guition-original.bin PORT=<port> ./flash.sh
 
 The screen starts on "No Wi-Fi set up": choose your network on the screen, then it looks for the machine
 ("gaggiuino.local"; another name or IP under Menu > Wi-Fi). On the network the screen is "brewdeck-p4".
 
 Optional, once: the board's Wi-Fi chip (ESP32-C6) ships with older firmware that drops the first Wi-Fi join at every
 start (Brewdeck retries, so it only joins slower). c6-update/ updates it: after step 3 and joining Wi-Fi on the screen,
-     GAGGI_BACKUP=backup/gaggiuino-screen-backup.bin PORT=<port> ./flash.sh c6-update
+     GAGGI_BACKUP=backup/p4-guition-original.bin PORT=<port> ./flash.sh c6-update
 It uses the network saved on the screen, downloads Espressif's image and installs it only if its checksum matches
 (progress on the serial port, 115200 baud). Then flash Brewdeck again (step 3).
 Ports: /dev/cu.usbmodem... on macOS, /dev/ttyACM0 or similar on Linux.

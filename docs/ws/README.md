@@ -13,7 +13,7 @@ from it on your own machine). Field numbers as decoded by `firmware/src/core/pb.
 
 | Message | Field | Used for |
 |---|---|---|
-| `ShotSnapshotDto` | `phaseIndex = 11` (0-based phase of the profile) | brewing screen |
+| `ShotSnapshotDto` | `phaseIndex = 11` (0-based phase of the profile) | shot review (the profile's planned rest after the stop) |
 | `SystemStateDto` | `dashboardReadinessState = 33` (0 waiting, 1 warming, 2 heating, 3 ready, ...: see [gaggiuino-api.md](../gaggiuino-api.md)), `dashboardWarmupRemainingSeconds = 35` | Ready / Heating / Warming up |
 | `ShotHistoryIndexDto` (`d_shot_hist_index`) | `records = 1`: `{ uint32 id = 1; string profileName = 2; uint32 timestamp = 3; uint32 duration = 4; }`, newest first | shot history, previous shot |
 | `GaggiaSettingsDto` (`d_settings`) | only `scales = 4` (`forcePredictive = 1`, `hwScalesEnabled = 2`, `btScalesEnabled = 5`), `boiler = 1` (`steamSetPoint = 1`), `versions = 7` (`frontVersion = 2`, `staticVersion = 3`); nothing else is read | scale icon, steam screen, About |

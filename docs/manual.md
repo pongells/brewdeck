@@ -183,7 +183,7 @@ Profiles and maintenance are edited in the machine's web UI.
 - Menu > **Wi-Fi** lists the 2.4 GHz networks around, the connected one on top. Tap a network to join it: type the
   password on the on-screen keyboard (letters, two symbol layers, shift; double-tap for caps) and tap *Join* (active
   from 8 characters). An open network joins at once. If the password is refused, the screen says so and you can try
-  again.
+  again. When you came from the *No Wi-Fi set up* or *Not connected* screen, the menu closes by itself once joined.
 - Tap the connected network for its details: signal, access point, the screen's and the machine's address, and
   *Forget this network* (tap twice; the screen then shows *No Wi-Fi set up*).
 - **Machine address**: Brewdeck finds the machine by its name (*gaggiuino.local* by default). If yours has another name
@@ -199,7 +199,7 @@ shorter drop goes unnoticed: Ready stays as it is):
 
 | Screen | Means | Buttons |
 |---|---|---|
-| *Joining Wi-Fi* → *Not connected to Wi-Fi* | the network is out of range, or the password was refused | while joining: Wi-Fi settings; then Try again, Wi-Fi settings (Wi-Fi settings first after a refused password) |
+| *Joining Wi-Fi* → *Not connected to Wi-Fi* | the network is out of range, the password was refused, or the network did not let the screen join (*Could not join*, e.g. a router blocking it) | while joining: Wi-Fi settings; then Try again, Wi-Fi settings (Wi-Fi settings first after a refused password) |
 | *Looking for your machine* → *Machine not found* | Wi-Fi is fine, but nothing answers at the machine's name or address | none while looking; then Machine address, Wi-Fi settings |
 | *No Wi-Fi set up* | no network saved yet | Choose network |
 

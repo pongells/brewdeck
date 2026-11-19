@@ -9,6 +9,12 @@ Each release has a section here; its text becomes the release notes on GitHub.
   shot.
 - `p4-c6-update`: a one-off tool that updates the P4 board's Wi-Fi chip firmware; with the firmware these boards ship
   with, the first Wi-Fi join dropped at every start. In the P4 package as `c6-update/`.
+- Profiles: the list is ordered by, and shows, when each profile was last selected (on the screen or in the web
+  UI) or used for a shot; the column is now "Last selected".
+- A network chosen from the "No Wi-Fi set up" or "Not connected" screen closes the menu once joined.
+- A Wi-Fi drop of a few seconds mid-shot no longer ends the shot early; a resent point of a finished shot is no
+  longer drawn over its review.
+- Web demo: an introduction, how Brewdeck works and how to make your own interface or support another screen.
 - Dragging (the review's scrubber, scrolling) follows the finger more closely: touch is read right before each redraw.
 - A router that blocks or drops the screen no longer shows "did not accept the password": that message now needs the
   network to have refused the password before the screen's first join since it started.

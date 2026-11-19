@@ -128,6 +128,7 @@ void setup() {
   if (!hostedHasUpdate()) { versions("no update needed"); return; }
 #endif
   const char *url = hostedGetUpdateURL();
+  if (!url) { Serial.println("c6update: no image address for this C6. Nothing written."); return; }
   for (const auto &img : IMAGES) {
     if (strcmp(url, img.url) != 0) continue;
     Serial.printf("c6update: updating from %s\n", url);
