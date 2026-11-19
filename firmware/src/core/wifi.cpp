@@ -49,20 +49,20 @@ static bool g_retry_req = false;                   // "Try again" on the offline
 static volatile bool g_roam_force = false;
 // scan / join requests from the UI task, results back to it (all under g_net_mtx)
 static bool g_scan_req = false, g_scanning = false;
-static WifiNet g_nets[MAX_NETS];
+static bd_wifi_net g_nets[BD_MAX_NETS];
 static int g_nets_n = 0;
 static uint32_t g_nets_seq = 0, g_nets_seen = 0;
 static bool g_join_req = false;
 static char g_join_ssid[33], g_join_pass[65];
-static int g_join_state = WIFI_JOIN_IDLE;
+static int g_join_state = BD_JOIN_IDLE;
 static uint32_t g_join_seq = 0, g_join_seen = 0;
 static volatile uint8_t g_disc_reason = 0;
 static volatile uint32_t g_disc_ms = 0;   // when the last disconnect event came (stamp_nz), for the quick first retries
 static bool g_ever_joined = false;        // joined at least once since boot
 static int wifi_why(uint8_t r) {                   // ESP-IDF wifi_err_reason_t
-  if (r == 201 || (r >= 210 && r <= 212)) return WHY_WIFI_NO_AP;           // network not seen
-  if (r == 2 || r == 15 || r == 202 || r == 204) return WHY_WIFI_AUTH;     // auth expired / handshake / auth fail
-  return WHY_WIFI_OTHER;
+  if (r == 201 || (r >= 210 && r <= 212)) return BD_WHY_WIFI_NO_AP;           // network not seen
+  if (r == 2 || r == 15 || r == 202 || r == 204) return BD_WHY_WIFI_AUTH;     // auth expired / handshake / auth fail
+  return BD_WHY_WIFI_OTHER;
 }
 bool wifi_down_why(int *why) {
   if (WiFi.status() == WL_CONNECTED) return false;
@@ -89,7 +89,7 @@ static void wifi_scan_step(void) {
   if (!g_scanning) return;
   const int16_t n = WiFi.scanComplete();
   if (n == WIFI_SCAN_RUNNING) return;
-  static WifiNet nets[MAX_NETS];
+  static bd_wifi_net nets[BD_MAX_NETS];
   int k = 0;
   for (int i = 0; i < n; i++) {                   // one row per name (mesh: several APs), strongest kept
     String nm = WiFi.SSID(i);
@@ -98,14 +98,18 @@ static void wifi_scan_step(void) {
     int j = 0;
     while (j < k && strcmp(nets[j].ssid, nm.c_str()) != 0) j++;
     if (j < k) { if (rssi > nets[j].rssi) nets[j].rssi = (int8_t)rssi; continue; }
-    if (k == MAX_NETS) continue;
+    if (k == BD_MAX_NETS) continue;
     snprintf(nets[k].ssid, sizeof nets[k].ssid, "%s", nm.c_str());
     nets[k].rssi = (int8_t)rssi;
     nets[k].locked = WiFi.encryptionType(i) != WIFI_AUTH_OPEN;
     k++;
   }
   for (int a = 1; a < k; a++)                     // strongest first
-    for (int b = a; b > 0 && nets[b].rssi > nets[b - 1].rssi; b--) { WifiNet t = nets[b]; nets[b] = nets[b - 1]; nets[b - 1] = t; }
+    for (int b = a; b > 0 && nets[b].rssi > nets[b - 1].rssi; b--) {
+      bd_wifi_net t = nets[b];
+      nets[b] = nets[b - 1];
+      nets[b - 1] = t;
+    }
   WiFi.scanDelete();
   Log.printf("wifi: scan found %d networks (%d names)\n", n < 0 ? 0 : n, k);
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
@@ -248,7 +252,7 @@ static bool wifi_join_step(void) {
   xSemaphoreGive(g_net_mtx);
   if (!req) return false;
   g_pinned = false;                                  // a new network: any of its APs
-  join_publish(WIFI_JOIN_BUSY);
+  join_publish(BD_JOIN_BUSY);
   Log.printf("wifi: joining \"%s\" from the menu\n", ssid);
   WiFi.disconnect(false);
   delay(200);
@@ -283,7 +287,7 @@ static bool wifi_join_step(void) {
   }
   memset(pass, 0, sizeof pass);
   wifi_info_step(true);
-  join_publish(ok ? WIFI_JOIN_OK : WIFI_JOIN_FAILED);
+  join_publish(ok ? BD_JOIN_OK : BD_JOIN_FAILED);
   return true;
 }
 
@@ -389,7 +393,7 @@ void net_wifi_scan(void) {
   g_scan_req = true;
   xSemaphoreGive(g_net_mtx);
 }
-bool net_get_wifi_scan(WifiNet *out, int *n, bool *scanning) {
+bool net_get_wifi_scan(bd_wifi_net *out, int *n, bool *scanning) {
   if (!g_net_mtx) return false;
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const bool ch = g_nets_seq != g_nets_seen;
@@ -406,7 +410,7 @@ void net_wifi_join(const char *ssid, const char *pass) {
   snprintf(g_join_ssid, sizeof g_join_ssid, "%s", ssid);
   snprintf(g_join_pass, sizeof g_join_pass, "%s", pass);
   g_join_req = true;
-  g_join_state = WIFI_JOIN_BUSY;
+  g_join_state = BD_JOIN_BUSY;
   g_join_seq++;
   xSemaphoreGive(g_net_mtx);
   net_wake();

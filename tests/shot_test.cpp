@@ -7,7 +7,7 @@
 #include "parse.h"
 #include "pb.h"
 #include "test_util.h"
-static ShotTrace t, u;
+static bd_shot t, u;
 int main(int, char **argv) {
   {   // target weight command, built on the machine's own d_act_prof from ws_idle.bin
     FILE *fp = fopen(argv[3], "rb");
@@ -182,7 +182,7 @@ int main(int, char **argv) {
   free(cut);
   CHECK(!parse_shot("{\"datapoints\":{\"timeInShot\":[]}}", &u));
   CHECK(!parse_shot("{\"datapoints\":{\"timeInShot\":[1,2],\"pressure\":[1]}}", &u));   // unequal lengths
-  // long shot: thinned to SHOT_MAX
+  // long shot: thinned to BD_SHOT_MAX
   {
     const int N = 2000;
     static char big[200000]; size_t o = 0;
@@ -196,7 +196,7 @@ int main(int, char **argv) {
     snprintf(big + o, sizeof big - o, "}}");
     CHECK(parse_shot(big, &u));
     printf("long shot: %d -> %d points, last t %u\n", N, u.n, u.pt[u.n - 1].t);
-    CHECK(u.n <= SHOT_MAX && u.n >= SHOT_MAX / 2 && u.pt[0].t == 1 && u.pt[1].t == 4 && u.pt[0].ph == 7);
+    CHECK(u.n <= BD_SHOT_MAX && u.n >= BD_SHOT_MAX / 2 && u.pt[0].t == 1 && u.pt[1].t == 4 && u.pt[0].ph == 7);
   }
   // history index from the recorded connect burst
   size_t n;

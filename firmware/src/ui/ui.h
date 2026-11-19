@@ -1,7 +1,7 @@
 // Brewdeck's screens (LVGL 9): fed through ui_set_* by ui_bridge.cpp; commands go to the core with bd_* directly.
 #pragma once
 
-#include "../core/live.h"   // the plain data types the screens take (shared with the core's network code)
+#include "../core/brewdeck_core.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,10 +10,10 @@ extern "C" {
 void ui_init(void);
 // the boot splash (Brewdeck, unofficial): 5 s or until a tap; called at start when the setting is on
 void ui_splash(void);
-void ui_set_live(const LiveData *d, int link);   // link: LINK_CONNECTING / LINK_NO_MACHINE / LINK_ONLINE
-void ui_set_profiles(const ProfileList *l);      // list for the profile picker (display only, never selects)
-void ui_set_shape(const ProfileShape *s);        // active profile: preview graph + stop weight (display only)
-void ui_shot(const WsShot *s);                   // each shot snapshot in order: opens / feeds the brewing screen
+void ui_set_live(const bd_machine *m);            // machine state and link
+void ui_set_profiles(const bd_profiles *l);       // list for the profile picker (display only, never selects)
+void ui_set_shape(const bd_profile_shape *s);    // active profile: preview graph + stop weight (display only)
+void ui_shot(const bd_shot_point *p);            // each shot point in order: opens / feeds the brewing screen
 // each profile's original values (the UI's storage): "edited" marks, "Reset to ..." in the keypad, Restore on the
 // Profiles page. load: false if none kept; save: keep these as the profile's original
 void ui_on_originals(bool (*load)(const char *profile, int *w10, int *deg),
@@ -25,15 +25,15 @@ void ui_on_settings(void (*cb)(int bright, int idle_min, bool bounce, bool splas
 void ui_set_settings(int bright, int idle_min, bool bounce, bool splash);   // saved settings at boot
 void ui_set_wifi(const char *ssid, int rssi, int channel, const char *ap);   // menu: Wi-Fi page
 void ui_set_sysinfo(const char *build, const char *uptime, const char *memory);   // menu: About page
-void ui_set_wifi_scan(const WifiNet *n, int count, bool scanning);
-void ui_set_wifi_join(int state);                         // WIFI_JOIN_* (live.h)
-void ui_set_offline_reason(int why, const char *ip);     // WHY_* (live.h): why the link is down
+void ui_set_wifi_scan(const bd_wifi_net *n, int count, bool scanning);
+void ui_set_wifi_join(int state);                         // bd_join
+void ui_set_offline_reason(int why, const char *ip);     // bd_why: why the link is down
 void ui_set_wifi_target(const char *ssid);                // network the screen tries to join ("" = none set up)
 void ui_set_machine_host(const char *host);               // configured machine address (shown, prefilled)
 void ui_set_addr(const char *screen_ip, const char *machine);   // shown on the offline screen
-void ui_set_prev(int state, const ShotTrace *t);  // previous shot: bd_load (BD_LOAD_*); t is copied when BD_LOAD_OK
+void ui_set_prev(int state, const bd_shot *t);  // previous shot: bd_load (BD_LOAD_*); t is copied when BD_LOAD_OK
 // shot history (menu): the machine's index of stored shots; a tap asks the core for one, the answer opens the review
-void ui_set_shot_index(const WsShotIndex *ix);
+void ui_set_shot_index(const bd_history *ix);
 // machine notification (an ordinary one): banner for ~5 s, wakes the screen; type BD_NOTICE_* (brewdeck_core.h)
 void ui_notify(int type, const char *msg);
 // the pressure-release glow, applied to a finished area just before it goes to the panel
@@ -42,7 +42,7 @@ void ui_command_answer(int cmd, int answer);       // BD_EV_COMMAND (bd_command,
 void ui_pressure_release(int count);              // countdown beat N (>= 0) or releasing (-1): glow + banner
 void ui_update_notice(int type, const char *release);   // the machine's update notice (release name, "" if not given)
 // a stored shot asked for from the shot history (bd_load states): opens the review on it
-void ui_set_hist(int state, const ShotTrace *s, const ProfileShape *sh, const ShotTrace *prev, int prev_state);
+void ui_set_hist(int state, const bd_shot *s, const bd_profile_shape *sh, const bd_shot *prev, int prev_state);
 
 // hooks for the desktop render test, the emulator and the debug benchmark (harmless on the device)
 void ui_test_open_editor(void);

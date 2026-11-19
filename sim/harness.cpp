@@ -58,51 +58,51 @@ int main(int argc, char **argv) {
   snprintf(path, sizeof path, "%s/editor_temp_93.raw", dir); dump(path);
   ui_test_cancel();
   {
-    LiveData d; memset(&d, 0, sizeof d); d.readiness = -1;
-    d.temperature = 90.509f; d.target = 90; d.water_level = 30;
-    strcpy(d.profile, "Leva 9 SINGLE v0.9 (community)"); strcpy(d.mode, "HOME");
-    ui_set_live(&d, LINK_ONLINE);
+    bd_machine d; memset(&d, 0, sizeof d); d.readiness = BD_RD_UNKNOWN;
+    d.temperature = 90.509f; d.target_temp = 90; d.water_level = 30;
+    strcpy(d.profile_name, "Leva 9 SINGLE v0.9 (community)"); strcpy(d.mode, "HOME");
+    d.link = BD_LINK_ONLINE; ui_set_live(&d);
     snprintf(path, sizeof path, "%s/live_ready.raw", dir); dump(path);
-    d.scales_present = true; d.weight = 101.9f; d.scale_type = SCALE_BT;   // scale pill per type
-    ui_set_live(&d, LINK_ONLINE);
+    d.scale_present = true; d.weight = 101.9f; d.scale_type = BD_SCALE_BT;   // scale pill per type
+    d.link = BD_LINK_ONLINE; ui_set_live(&d);
     snprintf(path, sizeof path, "%s/live_ready_scale.raw", dir); dump(path);
-    d.scale_type = SCALE_HW;
-    ui_set_live(&d, LINK_ONLINE);
+    d.scale_type = BD_SCALE_WIRED;
+    d.link = BD_LINK_ONLINE; ui_set_live(&d);
     snprintf(path, sizeof path, "%s/live_scale_hw.raw", dir); dump(path);
-    d.scale_type = SCALE_PREDICTIVE; d.scales_present = false;
-    ui_set_live(&d, LINK_ONLINE);
+    d.scale_type = BD_SCALE_PREDICTIVE; d.scale_present = false;
+    d.link = BD_LINK_ONLINE; ui_set_live(&d);
     snprintf(path, sizeof path, "%s/live_scale_pred.raw", dir); dump(path);
-    d.scale_type = SCALE_BT;
-    ui_set_live(&d, LINK_ONLINE);
+    d.scale_type = BD_SCALE_BT;
+    d.link = BD_LINK_ONLINE; ui_set_live(&d);
     snprintf(path, sizeof path, "%s/live_scale_bt_off.raw", dir); dump(path);
-    d.scales_present = false; d.weight = 0; d.scale_type = SCALE_UNKNOWN;
+    d.scale_present = false; d.weight = 0; d.scale_type = BD_SCALE_UNKNOWN;
     d.temperature = 72.3f; d.warmup_remaining = 80; d.water_level = 12;
-    ui_set_live(&d, LINK_ONLINE);
+    d.link = BD_LINK_ONLINE; ui_set_live(&d);
     snprintf(path, sizeof path, "%s/live_heating.raw", dir); dump(path);
-    d.temperature = 91.2f; d.warmup_remaining = 0; d.brew_active = true; d.scales_present = true; d.weight = 18.4f; d.water_level = 78;
-    ui_set_live(&d, LINK_ONLINE);
+    d.temperature = 91.2f; d.warmup_remaining = 0; d.brewing = true; d.scale_present = true; d.weight = 18.4f; d.water_level = 78;
+    d.link = BD_LINK_ONLINE; ui_set_live(&d);
     snprintf(path, sizeof path, "%s/live_brewing.raw", dir); dump(path);
     ui_set_addr("192.168.1.42", "192.168.1.50");
-    ui_set_live(&d, LINK_NO_MACHINE);
+    d.link = BD_LINK_NO_MACHINE; ui_set_live(&d);
     snprintf(path, sizeof path, "%s/live_offline_0s.raw", dir); dump(path);   // < 5 s: Ready screen still shown
     lv_tick_inc(5200); lv_timer_handler();
     snprintf(path, sizeof path, "%s/live_offline.raw", dir); dump(path);      // offline screen
-    ui_set_live(&d, LINK_CONNECTING);
+    d.link = BD_LINK_CONNECTING; ui_set_live(&d);
     lv_tick_inc(5200); lv_timer_handler();
     snprintf(path, sizeof path, "%s/live_nowifi.raw", dir); dump(path);
-    ui_set_live(&d, LINK_ONLINE);
+    d.link = BD_LINK_ONLINE; ui_set_live(&d);
     lv_tick_inc(300); lv_timer_handler();
     snprintf(path, sizeof path, "%s/live_back.raw", dir); dump(path);         // back: offline screen gone
     ui_set_clock(7, 52);
-    d.brew_active = false; d.temperature = 90.1f;
-    ui_set_live(&d, LINK_ONLINE);
+    d.brewing = false; d.temperature = 90.1f;
+    d.link = BD_LINK_ONLINE; ui_set_live(&d);
     lv_tick_inc(10 * 60000 + 600); lv_timer_handler();
     snprintf(path, sizeof path, "%s/idle.raw", dir); dump(path);              // idle screen after 10 min
     ui_test_wake(); lv_tick_inc(600); lv_timer_handler();                   // a touch wakes it (the idle clock
                                                                             // only goes on a touch; trig_activity
                                                                             // left it over the later renders)
-    d.scales_present = true; d.scale_type = SCALE_BT; d.weight = 0.4f;
-    ui_set_live(&d, LINK_ONLINE);
+    d.scale_present = true; d.scale_type = BD_SCALE_BT; d.weight = 0.4f;
+    d.link = BD_LINK_ONLINE; ui_set_live(&d);
     ui_set_wifi("HomeMesh", -61, 6, "02:00:00:00:00:02");
     ui_set_sysinfo("Nov  5 2026 00:40", "0 h 12 min", "84 KB internal, 6.1 MB PSRAM");
     static const char *const MP[] = {"menu", "menu_display", "menu_scale", "menu_wifi", "menu_about"};
@@ -119,24 +119,24 @@ int main(int argc, char **argv) {
       {5, "Filter 2.1", 6, 0, 93}, {6, "Blooming espresso", 4, 40, 92}, {7, "LMD Single v1.1 (community)", 6, 38, 91},
       {8, "Leva 9 SINGLE v0.9 (community)", 19, 21, 90}, {9, "[UT] Tube Fill (community)", 1, 0, 90},
       {10, "[UT] Test OPV (community)", 2, 0, 90}};
-    static ProfileList L; memset(&L, 0, sizeof L);
+    static bd_profiles L; memset(&L, 0, sizeof L);
     L.count = 10;
     for (int i = 0; i < 10; i++) {
-      ProfileInfo *p = &L.p[i];
-      p->id = P[i].id; strcpy(p->name, P[i].name); p->selected = P[i].id == 8;
-      p->detail = P[i].id != 2; p->phases = P[i].ph; p->weight = P[i].w; p->temp = P[i].t;
+      bd_profile *p = &L.p[i];
+      p->id = P[i].id; strcpy(p->name, P[i].name); p->active = P[i].id == 8;
+      p->detail = P[i].id != 2; p->phases = P[i].ph; p->stop_weight = P[i].w; p->brew_temp = P[i].t;
     }
-    LiveData d; memset(&d, 0, sizeof d); d.readiness = -1;
-    d.temperature = 90.1f; d.target = 90; d.water_level = 18;
-    strcpy(d.profile, "Leva 9 SINGLE v0.9 (community)"); strcpy(d.mode, "HOME");
-    ui_set_live(&d, LINK_ONLINE);
+    bd_machine d; memset(&d, 0, sizeof d); d.readiness = BD_RD_UNKNOWN;
+    d.temperature = 90.1f; d.target_temp = 90; d.water_level = 18;
+    strcpy(d.profile_name, "Leva 9 SINGLE v0.9 (community)"); strcpy(d.mode, "HOME");
+    d.link = BD_LINK_ONLINE; ui_set_live(&d);
     ui_set_profiles(&L);
     ui_test_profiles(1, 0);
     snprintf(path, sizeof path, "%s/profiles.raw", dir); dump(path);
     ui_test_profiles(1, 1);
     snprintf(path, sizeof path, "%s/profiles_all.raw", dir); dump(path);
     ui_test_profiles(0, 0);
-    ProfileList E; memset(&E, 0, sizeof E);
+    bd_profiles E; memset(&E, 0, sizeof E);
     ui_set_profiles(&E);
     ui_test_profiles(1, 0);
     snprintf(path, sizeof path, "%s/profiles_empty.raw", dir); dump(path);
@@ -145,33 +145,33 @@ int main(int argc, char **argv) {
   {
     // profile preview + target weight from real profiles (sim/data, GET /api/profile/<id>)
     static const int ids[] = {8, 1, 4, 5, 2};
-    LiveData d; memset(&d, 0, sizeof d); d.readiness = -1;
-    d.temperature = 90.1f; d.target = 90; d.water_level = 18; strcpy(d.mode, "HOME");
+    bd_machine d; memset(&d, 0, sizeof d); d.readiness = BD_RD_UNKNOWN;
+    d.temperature = 90.1f; d.target_temp = 90; d.water_level = 18; strcpy(d.mode, "HOME");
     for (int id : ids) {
       char jp[256]; snprintf(jp, sizeof jp, "%s/data/profile_%d.json", SIM_DIR, id);
       FILE *f = fopen(jp, "rb"); if (!f) { printf("missing %s\n", jp); return 1; }
       static char js[16384]; size_t n = fread(js, 1, sizeof js - 1, f); js[n] = 0; fclose(f);
-      static ProfileShape sh;
+      static bd_profile_shape sh;
       if (!parse_profile_shape(js, &sh)) { printf("parse failed %s\n", jp); return 1; }
       sh.id = id;
       char nm[48] = ""; const char *q = strstr(js, "\"name\":\""); if (q) sscanf(q + 8, "%47[^\"]", nm);
-      strcpy(d.profile, nm);
-      ui_set_live(&d, LINK_ONLINE);
+      strcpy(d.profile_name, nm);
+      d.link = BD_LINK_ONLINE; ui_set_live(&d);
       ui_set_shape(&sh);
       snprintf(path, sizeof path, "%s/preview_%d.raw", dir, id); dump(path);
     }
   }
   {
     // brewing screen: play back the demo shot (sim/data/ws_demo_shot.bin, LMD Single, stored as 341) through the real decoder
-    static ProfileShape sh;
+    static bd_profile_shape sh;
     { char jp[256]; snprintf(jp, sizeof jp, "%s/data/profile_7.json", SIM_DIR); FILE *f = fopen(jp, "rb");
       static char js[16384]; size_t n = fread(js, 1, sizeof js - 1, f); js[n] = 0; fclose(f);
       parse_profile_shape(js, &sh); sh.id = 7; ui_set_shape(&sh); }
     char bp[256]; snprintf(bp, sizeof bp, "%s/data/ws_demo_shot.bin", SIM_DIR);
     FILE *f = fopen(bp, "rb"); if (!f) { printf("missing %s\n", bp); return 1; }
     static uint8_t b[1 << 20]; size_t n = fread(b, 1, sizeof b, f); fclose(f);
-    LiveData d; memset(&d, 0, sizeof d); d.readiness = -1;
-    d.target = 91; d.water_level = 20; strcpy(d.profile, "LMD Single v1.1 (community)"); strcpy(d.mode, "HOME");
+    bd_machine d; memset(&d, 0, sizeof d); d.readiness = BD_RD_UNKNOWN;
+    d.target_temp = 91; d.water_level = 20; strcpy(d.profile_name, "LMD Single v1.1 (community)"); strcpy(d.mode, "HOME");
     static const int at[] = {50, 120, 200}; int next = 0; uint32_t last_t = 0;
     for (size_t i = 0; i + 4 <= n;) {
       uint32_t L = b[i] | b[i+1] << 8 | b[i+2] << 16 | (uint32_t)b[i+3] << 24; const uint8_t *fr = b + i + 4; i += 4 + L;
@@ -179,12 +179,13 @@ int main(int argc, char **argv) {
       if (!pb_envelope(fr, L, act, sizeof act, &dd, &dl)) continue;
       if (!strcmp(act, "d_sensor_snap")) {
         WsSensor s; pb_sensor(dd, dl, &s);
-        d.temperature = s.temperature; d.pressure = s.pressure; d.brew_active = s.brew_active; d.water_level = s.water_level;
-        ui_set_live(&d, LINK_ONLINE); lv_tick_inc(100); lv_timer_handler();
+        d.temperature = s.temperature; d.pressure = s.pressure; d.brewing = s.brew_active; d.water_level = s.water_level;
+        d.link = BD_LINK_ONLINE; ui_set_live(&d); lv_tick_inc(100); lv_timer_handler();
       } else if (!strcmp(act, "d_shot_snap")) {
         WsShot s; pb_shot(dd, dl, &s);
         if (s.time10 > last_t) { lv_tick_inc((s.time10 - last_t) * 100 > 600 ? 600 : (s.time10 - last_t) * 100); last_t = s.time10; }
-        ui_shot(&s); lv_timer_handler();
+        bd_shot_point pt; pb_shot_point(&s, &pt);
+        ui_shot(&pt); lv_timer_handler();
         if (next < 3 && (int)s.time10 >= at[next]) { snprintf(path, sizeof path, "%s/brew_%02d.raw", dir, at[next] / 10); dump(path); next++; }
       }
     }
@@ -195,7 +196,7 @@ int main(int argc, char **argv) {
     ui_test_review(0, 120); lv_timer_handler();                                 // scrubbed to 12 s
     snprintf(path, sizeof path, "%s/review_scrub.raw", dir); dump(path);
     {   // previous shot: the stored shot before it (sim/data/shot_340.json, GET /api/shots/340)
-      static ShotTrace prev; static char js[65536]; char jp[256];
+      static bd_shot prev; static char js[65536]; char jp[256];
       snprintf(jp, sizeof jp, "%s/data/shot_340.json", SIM_DIR); FILE *g = fopen(jp, "rb");
       size_t m = fread(js, 1, sizeof js - 1, g); js[m] = 0; fclose(g);
       if (!parse_shot(js, &prev)) { printf("shot_340.json did not parse\n"); return 1; }

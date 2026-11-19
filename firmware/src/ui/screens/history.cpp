@@ -5,31 +5,31 @@
 // The newest 50 stored shots from the machine's WebSocket index (no request): day headers, then time, profile and
 // duration per row (grams once that shot was opened in this session). A tap loads the shot and the next older one of
 // its profile (bd_load_stored_shot, sent once the machine is idle) and opens the shot review on it.
-WsShotIndex *g_hx;                         // the machine's index of stored shots (PSRAM)
+bd_history *g_hx;                         // the machine's index of stored shots (PSRAM)
 bool g_hx_ok = false;                      // g_hx holds an index
 static const uint32_t LOAD_TIMEOUT_MS = 15000;   // a stored shot that does not come by then is "Not available"
 static lv_obj_t *g_hl_list;
 static EmptyState g_hl_empty;
-static uint32_t g_hl_ids[WS_SHOT_INDEX_MAX];
-static lv_obj_t *g_hl_val[WS_SHOT_INDEX_MAX];
+static uint32_t g_hl_ids[BD_HISTORY_MAX];
+static lv_obj_t *g_hl_val[BD_HISTORY_MAX];
 static int g_hl_n = 0;
 static uint32_t g_hl_wait = 0, g_hl_wait_ms = 0;  // shot being loaded (0 = none)
 static uint32_t g_hl_msg_id = 0;                  // row showing "Not available" / "Machine busy"
 static const char *g_hl_msg = "";
-static struct { uint32_t id; uint16_t w10; } g_hw[WS_SHOT_INDEX_MAX];   // yield of shots opened this session
+static struct { uint32_t id; uint16_t w10; } g_hw[BD_HISTORY_MAX];   // yield of shots opened this session
 static int g_hw_n = 0;
 
 static int hw_find(uint32_t id) { for (int i = 0; i < g_hw_n; i++) if (g_hw[i].id == id) return i; return -1; }
 static void hw_put(uint32_t id, unsigned w10) {
   int i = hw_find(id);
   if (i < 0) {
-    if (g_hw_n < WS_SHOT_INDEX_MAX) i = g_hw_n++;
-    else { memmove(&g_hw[0], &g_hw[1], sizeof g_hw[0] * (WS_SHOT_INDEX_MAX - 1)); i = WS_SHOT_INDEX_MAX - 1; }
+    if (g_hw_n < BD_HISTORY_MAX) i = g_hw_n++;
+    else { memmove(&g_hw[0], &g_hw[1], sizeof g_hw[0] * (BD_HISTORY_MAX - 1)); i = BD_HISTORY_MAX - 1; }
   }
   g_hw[i].id = id;
   g_hw[i].w10 = (uint16_t)w10;
 }
-static void hist_row_value(lv_obj_t *l, const WsShotRec *r) {
+static void hist_row_value(lv_obj_t *l, const bd_history_entry *r) {
   char b[40];
   if (r->id == g_hl_wait) { set_text(l, "Loading..."); set_tc(l, COL_MUTED); return; }
   if (r->id == g_hl_msg_id && g_hl_msg[0]) { set_text(l, g_hl_msg); set_tc(l, COL_WARN); return; }
@@ -43,13 +43,13 @@ static void hist_row_value(lv_obj_t *l, const WsShotRec *r) {
 static void hist_values(void) {
   for (int i = 0; i < g_hl_n && g_hx_ok; i++)
     for (int j = 0; j < g_hx->n; j++)
-      if (g_hx->r[j].id == g_hl_ids[i]) { hist_row_value(g_hl_val[i], &g_hx->r[j]); break; }
+      if (g_hx->e[j].id == g_hl_ids[i]) { hist_row_value(g_hl_val[i], &g_hx->e[j]); break; }
 }
 static void on_hist_row(lv_event_t *e) {
   const uint32_t id = (uint32_t)(uintptr_t)lv_event_get_user_data(e);
   if (g_hl_wait) return;                          // one at a time
   g_hl_msg_id = 0;
-  if (g_menu_link != LINK_ONLINE) { g_hl_msg_id = id; g_hl_msg = "Machine offline"; }
+  if (g_menu_link != BD_LINK_ONLINE) { g_hl_msg_id = id; g_hl_msg = "Machine offline"; }
   else if (g_idle_busy || g_br_state != BR_HIDDEN) { g_hl_msg_id = id; g_hl_msg = "Machine busy"; }
   else if (bd_load_stored_shot(id) == BD_OK) { g_hl_wait = id; g_hl_wait_ms = lv_tick_get(); }
   hist_values();
@@ -61,7 +61,7 @@ static lv_timer_t *g_hb_timer;
 static void hist_add(int k) {
   char b[48];
   for (; k > 0 && g_hx_ok && g_hb_i < g_hx->n; k--) {
-    const WsShotRec *r = &g_hx->r[g_hb_i++];
+    const bd_history_entry *r = &g_hx->e[g_hb_i++];
     fmt_day(r->ts, b, sizeof b);
     if (strcmp(b, g_hb_day)) {                     // day header
       snprintf(g_hb_day, sizeof g_hb_day, "%s", b);
@@ -84,7 +84,7 @@ static void hist_add(int k) {
     } else snprintf(b, sizeof b, "#%u", (unsigned)r->id);
     lv_obj_t *tl = label(row, b, F_ROW, COL_TEXT);
     lv_obj_align(tl, LV_ALIGN_LEFT_MID, 0, 0);
-    display_name(r->name[0] ? r->name : "Unknown profile", b, sizeof b, NULL);
+    display_name(r->profile[0] ? r->profile : "Unknown profile", b, sizeof b, NULL);
     lv_obj_t *nl = label(row, b, F_ROW, COL_TEXT);
     one_line(nl, 400);
     lv_obj_align(nl, LV_ALIGN_LEFT_MID, 84, 0);
@@ -113,9 +113,9 @@ static uint32_t hist_sig(void) {
   const int n = g_hx_ok ? g_hx->n : -1;
   mix(&n, sizeof n);
   for (int i = 0; i < n; i++) {
-    mix(&g_hx->r[i].id, 4);
-    mix(&g_hx->r[i].ts, 4);
-    mix(g_hx->r[i].name, strlen(g_hx->r[i].name));
+    mix(&g_hx->e[i].id, 4);
+    mix(&g_hx->e[i].ts, 4);
+    mix(g_hx->e[i].profile, strlen(g_hx->e[i].profile));
   }
   if (n <= 0) mix(&g_menu_link, sizeof g_menu_link);
   const int day = today_key();
@@ -131,7 +131,7 @@ static void hist_build(void) {
   const int n = g_hx_ok ? g_hx->n : 0;
   set_hidden(g_hl_empty.box, n > 0);
   if (g_hx_ok) empty_set(g_hl_empty, "No stored shots", "Shots the machine keeps appear here after you pull one.");
-  else if (g_menu_link == LINK_ONLINE) empty_set(g_hl_empty, "Loading the list", "It comes from the machine.");
+  else if (g_menu_link == BD_LINK_ONLINE) empty_set(g_hl_empty, "Loading the list", "It comes from the machine.");
   else empty_set(g_hl_empty, "Machine not connected", "The list comes from the machine.");
   hist_add(8);                                     // what fits on the page (+1), the rest from the timer
   if (g_hb_i < n) lv_timer_resume(g_hb_timer);
@@ -151,13 +151,13 @@ void hist_timer(void) {                    // from menu_timer (every second): a 
     if (g_menu_cur == MP_HISTORY) hist_values();
   }
 }
-void ui_set_shot_index(const WsShotIndex *ix) {
+void ui_set_shot_index(const bd_history *ix) {
   if (!g_hx) return;
   *g_hx = *ix;
   g_hx_ok = true;
   if (g_menu_cur == MP_HISTORY && !lv_obj_is_hidden(g_menu)) hist_build();
 }
-void ui_set_hist(int state, const ShotTrace *s, const ProfileShape *sh, const ShotTrace *prev, int prev_state) {
+void ui_set_hist(int state, const bd_shot *s, const bd_profile_shape *sh, const bd_shot *prev, int prev_state) {
   if (!g_hl_wait || state == RV_PREV_LOADING || state == RV_PREV_NONE) return;
   const uint32_t id = g_hl_wait;
   g_hl_wait = 0;
@@ -185,7 +185,7 @@ void build_hist(lv_obj_t *m) {
   lv_obj_set_style_bg_color(g_hl_list, COL_OUTLINE, LV_PART_SCROLLBAR);
   lv_obj_set_style_bg_opa(g_hl_list, LV_OPA_COVER, LV_PART_SCROLLBAR);
   g_hl_empty = empty_state(pg, IC_HISTORY);
-  g_hx = (WsShotIndex *)bd_alloc(sizeof(WsShotIndex), BD_MEM_PSRAM);   // ~2.8 KB
+  g_hx = (bd_history *)bd_alloc(sizeof(bd_history), BD_MEM_PSRAM);   // ~2.8 KB
   if (g_hx) memset(g_hx, 0, sizeof *g_hx);
   g_hb_timer = lv_timer_create(on_hb_timer, 30, NULL);
   lv_timer_pause(g_hb_timer);

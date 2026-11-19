@@ -23,18 +23,18 @@ static const int CH_BASE = 261;                                     // brewing +
 static const int RV_X = BR_X, RV_Y = BR_Y, RV_W = BR_W, RV_H = BR_H;
 static const int RV_PW = BR_W;                                      // plot width
 static const int RV_BASE = CH_BASE;
-ShotPoint *g_br;                          // SHOT_MAX points (11.5 KB) in PSRAM: internal RAM is for Wi-Fi
+bd_shot_point *g_br;                          // BD_SHOT_MAX points (11.5 KB) in PSRAM: internal RAM is for Wi-Fi
 int g_br_n = 0;
 static int g_br_step = 1, g_br_skip = 0, g_br_tmax = 30, g_br_lastx = -1;
 int g_br_state = BR_HIDDEN;
 bool g_br_seen_brew = false, g_live_brew = false;
 static uint32_t g_br_last_ms = 0, g_br_done_ms = 0;
-static WsShot g_br_cur;
+static bd_shot_point g_br_cur;
 lv_obj_t *g_brew;
 static lv_obj_t *g_br_chart, *g_br_pill, *g_br_dot, *g_br_pill_lbl, *g_br_prof, *g_br_clock;
 static lv_obj_t *g_br_w, *g_br_target, *g_br_p, *g_br_f, *g_br_temp;
 // review
-static ShotTrace *g_rv_prev;                     // previous shot (PSRAM)
+static bd_shot *g_rv_prev;                     // previous shot (PSRAM)
 int g_rv_prev_state = RV_PREV_NONE;       // the previous shot: RV_PREV_* (= bd_load)
 int g_rv_mode = 0, g_rv_i = 0;
 static int g_rv_tmax = 25;
@@ -47,12 +47,12 @@ lv_obj_t *g_rv, *g_rv_chart;
 static lv_obj_t *g_rv_res_w, *g_rv_res_t, *g_rv_close_t, *g_rv_tog[2], *g_rv_tog_l[2];
 static lv_obj_t *g_rv_v[4][2];
 // "vs Profile target": the profile's planned rest after the shot stopped (estimated, preview_plan), drawn dimmer
-static ShotPoint g_rv_plan[240];
+static bd_shot_point g_rv_plan[240];
 static int g_rv_plan_n = 0;
 // review of a STORED shot (menu > Shot history): the same screen, fed with the shot the core loaded; its own profile
 // (targets, planned rest) instead of the active one; Close goes back to the list
 static bool g_rv_hist = false;
-static ProfileShape *g_rv_shape;                 // that shot's stored profile (PSRAM)
+static bd_profile_shape *g_rv_shape;                 // that shot's stored profile (PSRAM)
 static int g_rv_tw10 = 0, g_rv_tset = -1;         // its stop weight (x10) and set temperature
 
 static float target_g(void) { return g_weight10 > 0 ? g_weight10 / 10.0f : 21.0f; }
@@ -69,7 +69,7 @@ static ChartMap rv_map(void) {   // X = t*RV_PW/axis; y as br_map, weight scaled
 }
 static int cm_x(const ChartMap *m, int t10) { return m->ox + (int)(t10 * m->kx + 0.5f); }
 
-static int sp_val(const ShotPoint *s, int k) {
+static int sp_val(const bd_shot_point *s, int k) {
   switch (k) { case BS_P: return s->p; case BS_F: return s->f; case BS_W: return s->w; case BS_T: return s->temp;
                case BS_TP: return s->tp; default: return s->tf; }
 }
@@ -119,7 +119,7 @@ static void pen_to(Pen *pn, int x, int y) {
 
 // one value of a shot as a line. Weight: the scale reports less often than the snapshots come, so short runs of the
 // same reading (<= 3 points, ~0.4 s) are drawn as a ramp to the next reading instead of a stair step.
-static void ch_series(lv_layer_t *ctx, int ox, int oy, const ChartMap *m, const ShotPoint *pts, int n, int k,
+static void ch_series(lv_layer_t *ctx, int ox, int oy, const ChartMap *m, const bd_shot_point *pts, int n, int k,
                       lv_color_t col, int width, bool dashed) {
   Pen pn;
   pen_init(&pn, ctx, col, width, dashed);
@@ -149,14 +149,14 @@ static int rv_at_cx(int x, int ox, int w) {
 }
 
 // the four live lines (temperature, weight, flow, pressure on top)
-static void ch_live(lv_layer_t *ctx, int ox, int oy, const ChartMap *m, const ShotPoint *pts, int n) {
+static void ch_live(lv_layer_t *ctx, int ox, int oy, const ChartMap *m, const bd_shot_point *pts, int n) {
   // design: 1.25 px at opacity 0.5. 1 px lines look grey when flat and red when sloped (anti-aliasing), so 2 px dimmer
   ch_series(ctx, ox, oy, m, pts, n, BS_T, lv_color_mix(COL_RED, COL_BG, 96), 2, false);
   ch_series(ctx, ox, oy, m, pts, n, BS_W, lv_color_mix(COL_TEXT, COL_BG, 191), 2, false);   // 0.75
   ch_series(ctx, ox, oy, m, pts, n, BS_F, COL_FLOW, 2, false);
   ch_series(ctx, ox, oy, m, pts, n, BS_P, COL_PRESS, 3, false);
 }
-static void ch_dots(lv_layer_t *ctx, int ox, int oy, const ChartMap *m, const ShotPoint *s) {
+static void ch_dots(lv_layer_t *ctx, int ox, int oy, const ChartMap *m, const bd_shot_point *s) {
   const int x = ox + cm_x(m, s->t);
   ch_dot(ctx, x, oy + cm_y(m, BS_P, s->p), 5, COL_PRESS);
   ch_dot(ctx, x, oy + cm_y(m, BS_F, s->f), 4, COL_FLOW);    // design radii 5 / 4.5 / 4 / 3.5
@@ -216,7 +216,7 @@ static void rv_draw(lv_event_t *e) {
   }
   ch_live(ctx, ox, oy, &m, g_br, g_br_n);
   // scrubber
-  const ShotPoint *s = &g_br[g_rv_i];
+  const bd_shot_point *s = &g_br[g_rv_i];
   const int x = ox + cm_x(&m, s->t);
   lv_draw_line_dsc_t d;
   lv_draw_line_dsc_init(&d);
@@ -287,7 +287,7 @@ static void br_done(void) {
   g_br_done_ms = lv_tick_get();
   br_pill(true);
   // look up the previous shot of this profile now, so it is there when the review opens
-  if (g_cur_profile[0] && bd_load_previous_shot(g_cur_profile, (int)g_br_cur.time10) == BD_OK)
+  if (g_cur_profile[0] && bd_load_previous_shot(g_cur_profile, (int)g_br_cur.t) == BD_OK)
     g_rv_prev_state = RV_PREV_LOADING;
 }
 
@@ -303,16 +303,16 @@ static void fmt10(unsigned v, char *b, size_t n) { snprintf(b, n, "%u.%u", v / 1
 // values row: values at the scrubber, this shot (solid) and the dashed line (previous shot or the targets)
 void rv_values(void) {
   char b[40];
-  const ShotPoint *s = &g_br[g_rv_i];
+  const bd_shot_point *s = &g_br[g_rv_i];
   const unsigned v[4] = {s->p, s->f, s->w, s->temp};
   for (int i = 0; i < 4; i++) { fmt10(v[i], b, sizeof b); set_text(g_rv_v[i][0], b); }
   const bool prev = g_rv_prev_state == RV_PREV_READY && g_rv_prev->n;
   if (g_rv_mode == 1 && prev) {
-    const ShotTrace *pt = g_rv_prev;
+    const bd_shot *pt = g_rv_prev;
     int best = 0;
     for (int i = 1; i < pt->n; i++)
       if (abs((int)pt->pt[i].t - (int)s->t) < abs((int)pt->pt[best].t - (int)s->t)) best = i;
-    const ShotPoint *q = &pt->pt[best];
+    const bd_shot_point *q = &pt->pt[best];
     const bool past = s->t > pt->pt[pt->n - 1].t + 5;     // the previous shot had ended by then
     const unsigned w[4] = {q->p, q->f, q->w, q->temp};
     for (int i = 0; i < 4; i++) {
@@ -334,10 +334,10 @@ void rv_values(void) {
 
 static void rv_plan(void) {   // the rest of the active profile from the phase (and moment) where the shot stopped
   g_rv_plan_n = 0;
-  const ProfileShape *sh = g_rv_hist ? (g_rv_shape && g_rv_shape->n ? g_rv_shape : NULL)
+  const bd_profile_shape *sh = g_rv_hist ? (g_rv_shape && g_rv_shape->n ? g_rv_shape : NULL)
                                       : (g_shape_loaded ? &g_last_shape : NULL);
   if (!sh || g_br_n < 2) return;
-  const ShotPoint *e = &g_br[g_br_n - 1];
+  const bd_shot_point *e = &g_br[g_br_n - 1];
   int k = g_br_n - 1;
   while (k > 0 && g_br[k - 1].ph == e->ph) k--;     // first point of the last phase
   g_rv_plan_n = preview_plan(sh, e->ph, (e->t - g_br[k].t) / 10.0f, e->t, e->tp, e->tf, e->w / 10.0f, g_rv_plan,
@@ -373,9 +373,9 @@ static void rv_open(void) {
   g_rv_i = g_br_n - 1;
   g_rv_touch_ms = lv_tick_get();
   char b[48];
-  snprintf(b, sizeof b, "%u.%u g", (unsigned)(g_br_cur.weight10 / 10), (unsigned)(g_br_cur.weight10 % 10));
+  snprintf(b, sizeof b, "%u.%u g", (unsigned)(g_br_cur.w / 10), (unsigned)(g_br_cur.w % 10));
   set_text(g_rv_res_w, b);
-  snprintf(b, sizeof b, "%u.%u s", (unsigned)(g_br_cur.time10 / 10), (unsigned)(g_br_cur.time10 % 10));
+  snprintf(b, sizeof b, "%u.%u s", (unsigned)(g_br_cur.t / 10), (unsigned)(g_br_cur.t % 10));
   set_text(g_rv_res_t, b);
   rv_plan();
   rv_axis();
@@ -429,7 +429,7 @@ static void on_rv_scrub(lv_event_t *e) {
   }
 }
 
-void ui_set_prev(int state, const ShotTrace *t) {
+void ui_set_prev(int state, const bd_shot *t) {
   if (g_rv_hist) return;                          // a late answer for the last shot while a stored one is shown
   if (state == RV_PREV_READY && t) memcpy(g_rv_prev, t, sizeof *t);
   if (g_br_state == BR_HIDDEN) return;                    // a late answer after the review was closed
@@ -442,14 +442,14 @@ void ui_set_prev(int state, const ShotTrace *t) {
 }
 
 // opens the review on a stored shot (shot history); the menu stays below it, so Close shows the list again
-void rv_open_stored(const ShotTrace *s, const ProfileShape *sh, const ShotTrace *prev, int prev_state) {
-  const int n = s->n < SHOT_MAX ? s->n : SHOT_MAX;
+void rv_open_stored(const bd_shot *s, const bd_profile_shape *sh, const bd_shot *prev, int prev_state) {
+  const int n = s->n < BD_SHOT_MAX ? s->n : BD_SHOT_MAX;
   if (n < 3) return;
-  memcpy(g_br, s->pt, sizeof(ShotPoint) * n);
+  memcpy(g_br, s->pt, sizeof(bd_shot_point) * n);
   g_br_n = n;
   memset(&g_br_cur, 0, sizeof g_br_cur);
-  g_br_cur.weight10 = s->pt[n - 1].w;
-  g_br_cur.time10 = s->dur10 > 0 ? (uint32_t)s->dur10 : s->pt[n - 1].t;
+  g_br_cur.w = s->pt[n - 1].w;
+  g_br_cur.t = s->dur10 > 0 ? (uint16_t)s->dur10 : s->pt[n - 1].t;
   *g_rv_shape = *sh;
   g_rv_tw10 = sh->stop_weight > 0 ? (int)(sh->stop_weight * 10 + 0.5f) : 0;
   g_rv_tset = sh->brew_temp > 0 ? (int)(sh->brew_temp + 0.5f) : -1;
@@ -480,32 +480,28 @@ static void on_brew_timer(lv_timer_t *t) {
   }
 }
 
-void ui_shot(const WsShot *s) {
-  if (g_br_state != BR_BREWING || s->time10 + 5 < g_br_cur.time10) br_start();   // first snapshot, or time went back
+void ui_shot(const bd_shot_point *s) {
+  if (g_br_state != BR_BREWING || s->t + 5 < g_br_cur.t) br_start();   // first snapshot, or time went back
   g_br_last_ms = lv_tick_get();
   g_br_cur = *s;
   // keep the point (thinned 2:1 when full)
   if (++g_br_skip >= g_br_step) {
     g_br_skip = 0;
-    if (g_br_n == SHOT_MAX) {
-      for (int i = 0; i < SHOT_MAX / 2; i++) g_br[i] = g_br[2 * i];
-      g_br_n = SHOT_MAX / 2;
+    if (g_br_n == BD_SHOT_MAX) {
+      for (int i = 0; i < BD_SHOT_MAX / 2; i++) g_br[i] = g_br[2 * i];
+      g_br_n = BD_SHOT_MAX / 2;
       g_br_step *= 2;
     }
-    ShotPoint *b = &g_br[g_br_n++];
-    b->t = (uint16_t)s->time10; b->p = (uint16_t)s->pressure10; b->f = (uint16_t)s->pump_flow10;
-    b->w = (uint16_t)s->weight10; b->temp = (uint16_t)s->temperature10;
-    b->tp = (uint16_t)s->target_pressure10; b->tf = (uint16_t)s->target_flow10;
-    b->ph = (uint8_t)(s->phase > 255 ? 255 : s->phase);
+    g_br[g_br_n++] = *s;
   }
   // time axis: 30 s, grows by 15 s when the shot gets near the end of it. Each step squeezes and redraws the whole
   // chart in one frame (~100-140 ms), so few, larger steps: most shots fit in 30 or 45 s
-  if ((int)s->time10 > (g_br_tmax - 1) * 10) {
-    while ((int)s->time10 > (g_br_tmax - 1) * 10) g_br_tmax += 15;
+  if ((int)s->t > (g_br_tmax - 1) * 10) {
+    while ((int)s->t > (g_br_tmax - 1) * 10) g_br_tmax += 15;
     g_br_lastx = -1;
   }
   const ChartMap m = br_map();
-  const int x = cm_x(&m, s->time10);
+  const int x = cm_x(&m, s->t);
   if (g_br_lastx < 0) lv_obj_invalidate(g_br_chart);
   else {
     lv_area_t a;
@@ -517,22 +513,23 @@ void ui_shot(const WsShot *s) {
   g_br_lastx = x;
   // numbers
   char b[24];
-  snprintf(b, sizeof b, "%u:%02u", (unsigned)(s->time10 / 600), (unsigned)(s->time10 / 10 % 60));
+  snprintf(b, sizeof b, "%u:%02u", (unsigned)(s->t / 600), (unsigned)(s->t / 10 % 60));
   set_text(g_br_clock, b);
-  snprintf(b, sizeof b, "%u.%u", (unsigned)(s->weight10 / 10), (unsigned)(s->weight10 % 10));
+  snprintf(b, sizeof b, "%u.%u", (unsigned)(s->w / 10), (unsigned)(s->w % 10));
   set_text(g_br_w, b);
-  snprintf(b, sizeof b, "%u.%u", (unsigned)(s->pressure10 / 10), (unsigned)(s->pressure10 % 10));
+  snprintf(b, sizeof b, "%u.%u", (unsigned)(s->p / 10), (unsigned)(s->p % 10));
   set_text(g_br_p, b);
-  snprintf(b, sizeof b, "%u.%u", (unsigned)(s->pump_flow10 / 10), (unsigned)(s->pump_flow10 % 10));
+  snprintf(b, sizeof b, "%u.%u", (unsigned)(s->f / 10), (unsigned)(s->f % 10));
   set_text(g_br_f, b);
-  snprintf(b, sizeof b, "%u.%u", (unsigned)(s->temperature10 / 10), (unsigned)(s->temperature10 % 10));
+  snprintf(b, sizeof b, "%u.%u", (unsigned)(s->temp / 10), (unsigned)(s->temp % 10));
   set_text(g_br_temp, b);
 }
 
 void build_brew(lv_obj_t *scr) {
-  g_br = (ShotPoint *)bd_alloc(sizeof(ShotPoint) * SHOT_MAX, BD_MEM_PSRAM);   // the shot being drawn (~11.5 KB)
-  g_rv_prev = (ShotTrace *)bd_alloc(sizeof(ShotTrace), BD_MEM_PSRAM);
-  g_rv_shape = (ProfileShape *)bd_alloc(sizeof(ProfileShape), BD_MEM_PSRAM);
+  // the shot being drawn (~11.5 KB)
+  g_br = (bd_shot_point *)bd_alloc(sizeof(bd_shot_point) * BD_SHOT_MAX, BD_MEM_PSRAM);
+  g_rv_prev = (bd_shot *)bd_alloc(sizeof(bd_shot), BD_MEM_PSRAM);
+  g_rv_shape = (bd_profile_shape *)bd_alloc(sizeof(bd_profile_shape), BD_MEM_PSRAM);
   if (!g_br || !g_rv_prev || !g_rv_shape) { bd_log("ui: no PSRAM for the brewing screen\n"); abort(); }
   memset(g_rv_prev, 0, sizeof *g_rv_prev);
   memset(g_rv_shape, 0, sizeof *g_rv_shape);

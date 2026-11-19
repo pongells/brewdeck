@@ -91,7 +91,7 @@ void bd_log(const char *fmt, ...) {
 
 // ---- fake machine -----------------------------------------------------------------------------
 static LiveData g_m;                      // what the "machine" reports
-static int g_link = LINK_ONLINE;
+static int g_link = BD_LINK_ONLINE;
 static bool g_offline = false, g_nowifi = false;
 static ProfileList g_list;
 static int g_active_id = 7;                 // LMD Single: the recorded shot's profile
@@ -117,7 +117,7 @@ static char *read_file(const char *name, size_t *len) {
   return b;
 }
 
-static bool load_shape(int id, ProfileShape *sh) {
+static bool load_shape(int id, bd_profile_shape *sh) {
   char nm[40];
   snprintf(nm, sizeof nm, "profile_%d.json", id);
   char *js = read_file(nm, NULL);
@@ -135,7 +135,7 @@ static const char *profile_name(int id) {
 }
 
 static void push_shape(void) {
-  static ProfileShape sh;
+  static bd_profile_shape sh;
   memset(&sh, 0, sizeof sh);
   if (!load_shape(g_active_id, &sh)) { sh.id = g_active_id; sh.n = 0; }   // no recording of this one: empty preview
   cs_take_shape(&sh);
@@ -300,7 +300,7 @@ static void fake_index(void) {
   static WsShotIndex ix;
   memset(&ix, 0, sizeof ix);
   g_fake_t0 = time(NULL);
-  for (int i = 0; i < FAKE_N && i < WS_SHOT_INDEX_MAX; i++) {
+  for (int i = 0; i < FAKE_N && i < BD_HISTORY_MAX; i++) {
     WsShotRec *r = &ix.r[ix.n++];
     r->id = FAKE_SHOTS[i].id;
     r->dur10 = (uint32_t)FAKE_SHOTS[i].dur10;
@@ -316,7 +316,7 @@ static void on_hist(uint32_t id) {
   g_hist_id = id;
   g_hist_due = SDL_GetTicks() + 400;
 }
-static bool fake_load(int i, ShotTrace *t, ProfileShape *sh) {
+static bool fake_load(int i, bd_shot *t, bd_profile_shape *sh) {
   if (!FAKE_SHOTS[i].file) return false;
   char *js = read_file(FAKE_SHOTS[i].file, NULL);
   const bool ok = js && parse_shot(js, t);
@@ -332,8 +332,8 @@ static bool fake_load(int i, ShotTrace *t, ProfileShape *sh) {
 static void hist_step(uint32_t now) {
   if (!g_hist_due || now < g_hist_due) return;
   g_hist_due = 0;
-  static ShotTrace s, p;
-  static ProfileShape sh;
+  static bd_shot s, p;
+  static bd_profile_shape sh;
   int at = -1;
   for (int i = 0; i < FAKE_N; i++) if (FAKE_SHOTS[i].id == g_hist_id) at = i;
   if (at < 0 || !fake_load(at, &s, &sh)) { printf("machine: shot %u not available\n", (unsigned)g_hist_id); cs_hist_loaded(4, NULL, NULL, NULL, 0); return; }
@@ -346,7 +346,7 @@ static void hist_step(uint32_t now) {
 static void prev_step(uint32_t now) {
   if (!g_prev_due || now < g_prev_due) return;
   g_prev_due = 0;
-  static ShotTrace t;
+  static bd_shot t;
   char *js = read_file("shot_340.json", NULL);   // the stored shot before the recorded one (same profile)
   if (js && parse_shot(js, &t)) cs_prev_loaded(2 /* PREV_READY */, &t);
   else cs_prev_loaded(3 /* PREV_MISSING */, NULL);
@@ -377,7 +377,7 @@ static void on_forget(void) { printf("screen: forget \"%s\"\n", g_ssid); g_no_cf
 static void wifi_step(uint32_t now) {
   if (g_scan_due && now >= g_scan_due) {
     g_scan_due = 0;
-    static const WifiNet N[] = {{"Home Wi-Fi", -55, true}, {"Home Wi-Fi 2", -57, true}, {"Home Wi-Fi Guest", -66, false},
+    static const bd_wifi_net N[] = {{"Home Wi-Fi", -55, true}, {"Home Wi-Fi 2", -57, true}, {"Home Wi-Fi Guest", -66, false},
                                 {"Hallway-2G", -72, true}, {"Neighbour-2G", -81, true}};
     cs_wifi_scan(N, 5, false);
   }
@@ -385,7 +385,7 @@ static void wifi_step(uint32_t now) {
     g_join_due = 0;
     if (g_join_ok) { snprintf(g_ssid, sizeof g_ssid, "%s", g_join_ssid); g_no_cfg = false; }
     printf("screen: join %s\n", g_join_ok ? "OK" : "FAILED (back to the previous network)");
-    cs_wifi_join(g_join_ok ? WIFI_JOIN_OK : WIFI_JOIN_FAILED);
+    cs_wifi_join(g_join_ok ? BD_JOIN_OK : BD_JOIN_FAILED);
   }
 }
 
@@ -457,7 +457,7 @@ static void shot_step(uint32_t now) {
       WsShot s;
       pb_shot(d, dl, &s);
       cs_shot_point(&s);
-      if (g_m.scales_present && g_m.scale_type != SCALE_PREDICTIVE) g_m.weight = s.weight10 / 10.0f;
+      if (g_m.scales_present && g_m.scale_type != BD_SCALE_PREDICTIVE) g_m.weight = s.weight10 / 10.0f;
     } else {
       WsSensor s;
       pb_sensor(d, dl, &s);
@@ -571,8 +571,9 @@ static void a_history(void) { go_home(); ui_test_menu(7); }
 static uint32_t g_vnow = 1;                 // the UI's clock (bd_ui_tick), runs faster with the fast steam
 static void t_skip(void) { g_vnow += 20000; }   // jump 20 s (timeouts) without waiting
 static void t_scale(void) { g_m.scales_present = !g_m.scales_present; }
-static void t_scale_type(void) {
-  g_m.scale_type = g_m.scale_type == SCALE_BT ? SCALE_HW : g_m.scale_type == SCALE_HW ? SCALE_PREDICTIVE : SCALE_BT;
+static void t_scale_type(void) {   // Bluetooth -> wired -> predictive -> Bluetooth
+  const int t = g_m.scale_type;
+  g_m.scale_type = t == BD_SCALE_BT ? BD_SCALE_WIRED : t == BD_SCALE_WIRED ? BD_SCALE_PREDICTIVE : BD_SCALE_BT;
 }
 static void t_water(void) { g_m.water_level = g_m.water_level > 20 ? 12 : 100; }
 static void t_machine(void) { g_offline = !g_offline; }
@@ -770,7 +771,7 @@ static void panel_status(void) {
            g_offline ? "off" : "on", host_ok() ? "" : " at ", host_ok() ? "" : g_mhost,
            g_no_cfg ? "not set up" : g_nowifi ? (g_wifi_auth ? "refuses pw" : "off") : "on",
            g_m.scales_present ? "on" : "gone",
-           g_m.scale_type == SCALE_BT ? "Bluetooth" : g_m.scale_type == SCALE_HW ? "wired" : "predictive",
+           g_m.scale_type == BD_SCALE_BT ? "Bluetooth" : g_m.scale_type == BD_SCALE_WIRED ? "wired" : "predictive",
            g_m.water_level, g_heating ? "heating" : "ready", g_m.steam_active ? (g_st.on && g_st.speed > 1 ? ", steam (10x)" : ", steam") : "",
            g_shot_on ? "playing" : "idle", g_shot_on && g_speed > 1 ? " (10x)" : "");
   if (g_status && strcmp(lv_label_get_text(g_status), b)) lv_label_set_text(g_status, b);
@@ -869,7 +870,7 @@ static void emu_setup(void) {
   g_m.target = 90;
   g_m.water_level = 100;
   g_m.scales_present = true;
-  g_m.scale_type = SCALE_BT;
+  g_m.scale_type = BD_SCALE_BT;
   strcpy(g_m.mode, "HOME");
   strcpy(g_m.machine, "gaggiuino");
   strcpy(g_m.core_ver, "c929939");                           // REST coreVersion / coreType on the machine
@@ -912,7 +913,7 @@ static void emu_step(uint32_t now) {
   }
   if (now - last_live >= 150 / (uint32_t)sp) {           // live updates as often in the screen's time
     last_live = now;
-    g_link = g_nowifi || g_no_cfg ? LINK_CONNECTING : g_offline || !host_ok() ? LINK_NO_MACHINE : LINK_ONLINE;
+    g_link = g_nowifi || g_no_cfg ? BD_LINK_CONNECTING : g_offline || !host_ok() ? BD_LINK_NO_MACHINE : BD_LINK_ONLINE;
     LiveData d = g_m;
     if (!g_shot_on && !g_heating) d.temperature = g_m.temperature + 0.1f * sinf(now / 4000.0f);
     // the machine's readiness (dashboardReadinessState, names of its web UI): a guess of when it switches
@@ -928,8 +929,8 @@ static void emu_step(uint32_t now) {
     bd_network *n = cs_network();
     snprintf(n->target, sizeof n->target, "%s", g_no_cfg ? "" : g_ssid);
     snprintf(n->machine_addr, sizeof n->machine_addr, "%s", g_mhost);
-    cs_set_why(g_nowifi ? (g_wifi_auth ? WHY_WIFI_AUTH : WHY_WIFI_NO_AP) : !host_ok() ? WHY_NAME_UNKNOWN
-               : g_offline ? WHY_NO_REPLY : WHY_NONE);
+    cs_set_why(g_nowifi ? (g_wifi_auth ? BD_WHY_WIFI_AUTH : BD_WHY_WIFI_NO_AP) : !host_ok() ? BD_WHY_NAME_UNKNOWN
+               : g_offline ? BD_WHY_NO_REPLY : BD_WHY_NONE);
     snprintf(n->why_ip, sizeof n->why_ip, "192.168.1.50");
     snprintf(n->screen_ip, sizeof n->screen_ip, "%s", g_nowifi || g_no_cfg ? "" : "192.168.1.42");
     snprintf(n->machine_where, sizeof n->machine_where, "%s", host_ok() ? "192.168.1.50" : g_mhost);
@@ -1003,8 +1004,9 @@ int main(int argc, char **argv) {
           case SDLK_s: start_shot(); break;
           case SDLK_b: g_m.scales_present = !g_m.scales_present; printf("scale %s\n", g_m.scales_present ? "connected" : "gone"); break;
           case SDLK_p:
-            g_m.scale_type = g_m.scale_type == SCALE_BT ? SCALE_HW : g_m.scale_type == SCALE_HW ? SCALE_PREDICTIVE : SCALE_BT;
-            printf("scale type %s\n", g_m.scale_type == SCALE_BT ? "Bluetooth" : g_m.scale_type == SCALE_HW ? "wired" : "predictive");
+            t_scale_type();
+            printf("scale type %s\n", g_m.scale_type == BD_SCALE_BT ? "Bluetooth"
+                                      : g_m.scale_type == BD_SCALE_WIRED ? "wired" : "predictive");
             break;
           case SDLK_h: t_heating(); printf("%s\n", g_heating ? "heating" : "ready"); break;
           case SDLK_l: g_m.water_level = g_m.water_level > 20 ? 12 : 100; printf("water %d %%\n", g_m.water_level); break;

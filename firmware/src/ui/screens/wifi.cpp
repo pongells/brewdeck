@@ -17,10 +17,10 @@ int g_wifi_rssi = 0, g_wifi_ch = 0;
 char g_wifi_target[33] = "";                     // network the screen tries to join ("" = none set up)
 char g_mach_host[64] = "gaggiuino.local";        // configured machine address
 char g_wj_ssid[33] = "";                         // network being joined (password page title)
-static WifiNet g_nets[MAX_NETS];
+static bd_wifi_net g_nets[BD_MAX_NETS];
 static int g_nets_n = 0;
 static bool g_nets_scanning = false;
-int g_wj_state = WIFI_JOIN_IDLE;
+int g_wj_state = BD_JOIN_IDLE;
 char g_pw[65] = "";
 bool g_pw_show = true, g_shift = false, g_caps = false;
 static bool g_kb_addr = false;                      // keyboard page used for the machine address
@@ -49,9 +49,9 @@ void ui_set_wifi(const char *ssid, int rssi, int channel, const char *ap) {
 }
 void ui_set_wifi_target(const char *ssid) { snprintf(g_wifi_target, sizeof g_wifi_target, "%s", ssid); }
 void ui_set_machine_host(const char *host) { snprintf(g_mach_host, sizeof g_mach_host, "%s", host); }
-void ui_set_wifi_scan(const WifiNet *n, int count, bool scanning) {
-  g_nets_n = count < 0 ? 0 : count > MAX_NETS ? MAX_NETS : count;
-  memcpy(g_nets, n, sizeof(WifiNet) * g_nets_n);
+void ui_set_wifi_scan(const bd_wifi_net *n, int count, bool scanning) {
+  g_nets_n = count < 0 ? 0 : count > BD_MAX_NETS ? BD_MAX_NETS : count;
+  memcpy(g_nets, n, sizeof(bd_wifi_net) * g_nets_n);
   g_nets_scanning = scanning;
   wifi_refresh();
 }
@@ -76,7 +76,7 @@ void wifi_refresh(void) {
     if (k >= r) { set_hidden(g_wl_row[k], true); continue; }
     set_hidden(g_wl_row[k], false);
     const bool cur = k == 0 && g_wifi_ssid[0];
-    const WifiNet *n = g_wl_idx[k] >= 0 ? &g_nets[g_wl_idx[k]] : NULL;
+    const bd_wifi_net *n = g_wl_idx[k] >= 0 ? &g_nets[g_wl_idx[k]] : NULL;
     set_text(g_wl_name[k], cur ? g_wifi_ssid : n->ssid);
     set_bars(k, cur ? g_wifi_rssi : n->rssi, cur);
     if (cur) snprintf(b, sizeof b, "%d dBm  \xC2\xB7  channel %d  \xC2\xB7  %s", g_wifi_rssi, g_wifi_ch, g_off_sip);
@@ -99,7 +99,7 @@ static void pw_refresh(void) {
   if (g_pw_show || g_kb_addr) snprintf(b, sizeof b, "%s", g_pw);
   else { size_t i = 0; for (; i < n && i < sizeof b - 1; i++) b[i] = '*'; b[i] = 0; }
   set_text(g_pw_txt, b);
-  const bool can = g_kb_addr ? n >= 1 : n >= 8 && g_wj_state != WIFI_JOIN_BUSY;
+  const bool can = g_kb_addr ? n >= 1 : n >= 8 && g_wj_state != BD_JOIN_BUSY;
   set_bg(g_pw_join, can ? COL_GOLD : COL_CARD);
   lv_obj_set_style_text_color(g_pw_join_l, can ? COL_BG : COL_OUTLINE, 0);
   char jb[64];
@@ -108,10 +108,10 @@ static void pw_refresh(void) {
     set_text(g_pw_hint, "A name (gaggiuino.local) or an IP address (192.168.1.50). Saved on this screen.");
     lv_obj_set_style_text_color(g_pw_hint, COL_MUTED, 0);
   } else
-  set_text(g_pw_hint, g_wj_state == WIFI_JOIN_BUSY ? jb :
-                      g_wj_state == WIFI_JOIN_FAILED ? "Could not join. Wrong password? Check it and try again." :
+  set_text(g_pw_hint, g_wj_state == BD_JOIN_BUSY ? jb :
+                      g_wj_state == BD_JOIN_FAILED ? "Could not join. Wrong password? Check it and try again." :
                       "Saved on this screen. The machine has its own Wi-Fi setting.");
-  if (!g_kb_addr) lv_obj_set_style_text_color(g_pw_hint, g_wj_state == WIFI_JOIN_FAILED ? COL_WARN : COL_MUTED, 0);
+  if (!g_kb_addr) lv_obj_set_style_text_color(g_pw_hint, g_wj_state == BD_JOIN_FAILED ? COL_WARN : COL_MUTED, 0);
   // key labels for the layer / shift state
   for (int r = 0, k = 0; r < 3; r++) {
     const char *row = KL[g_layer][r];
@@ -132,12 +132,12 @@ static void pw_refresh(void) {
 
 static void wifi_join_now(const char *ssid, const char *pass) {
   snprintf(g_wj_ssid, sizeof g_wj_ssid, "%s", ssid);
-  g_wj_state = WIFI_JOIN_BUSY;
+  g_wj_state = BD_JOIN_BUSY;
   bd_wifi_join(ssid, pass);
 }
 void ui_set_wifi_join(int state) {
   g_wj_state = state;
-  if (state == WIFI_JOIN_OK) {
+  if (state == BD_JOIN_OK) {
     memset(g_pw, 0, sizeof g_pw);
     if (g_menu_cur == MP_PASSWORD) menu_show_page(MP_WIFI);
     bd_wifi_scan();
@@ -149,11 +149,11 @@ void ui_set_wifi_join(int state) {
 static void on_net_row(lv_event_t *e) {
   const int k = (int)(intptr_t)lv_event_get_user_data(e);
   if (k == 0 && g_wifi_ssid[0]) { menu_show_page(MP_WIFI_DETAILS); return; }
-  const WifiNet *n = &g_nets[g_wl_idx[k]];
+  const bd_wifi_net *n = &g_nets[g_wl_idx[k]];
   snprintf(g_wj_ssid, sizeof g_wj_ssid, "%s", n->ssid);
   if (!n->locked) { wifi_join_now(n->ssid, ""); return; }
   memset(g_pw, 0, sizeof g_pw);
-  g_wj_state = WIFI_JOIN_IDLE;
+  g_wj_state = BD_JOIN_IDLE;
   g_layer = 0; g_shift = g_caps = false; g_pw_show = true;
   menu_show_page(MP_PASSWORD);
 }
@@ -210,15 +210,15 @@ static void on_join(lv_event_t *e) {
     menu_close();
     return;
   }
-  if (strlen(g_pw) < 8 || g_wj_state == WIFI_JOIN_BUSY) return;
+  if (strlen(g_pw) < 8 || g_wj_state == BD_JOIN_BUSY) return;
   wifi_join_now(g_wj_ssid, g_pw);
   pw_refresh();
 }
 static void on_kb_key(lv_event_t *e) {
   const int k = (int)(intptr_t)lv_event_get_user_data(e);
   size_t n = strlen(g_pw);
-  if (g_wj_state == WIFI_JOIN_BUSY && !g_kb_addr) return;
-  if (g_wj_state == WIFI_JOIN_FAILED) g_wj_state = WIFI_JOIN_IDLE;
+  if (g_wj_state == BD_JOIN_BUSY && !g_kb_addr) return;
+  if (g_wj_state == BD_JOIN_FAILED) g_wj_state = BD_JOIN_IDLE;
   if (k == K_SHIFT) {                               // shift (letters) / other symbol layer
     if (g_layer) g_layer = g_layer == 1 ? 2 : 1;
     else {

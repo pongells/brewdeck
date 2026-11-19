@@ -142,7 +142,7 @@ void cs_take_profiles(const ProfileList *l) {
   last_used_all();
   g_seq_pl++;
 }
-void cs_take_shape(const ProfileShape *s) { memcpy(&g_shape, s, sizeof g_shape); g_seq_sh++; }
+void cs_take_shape(const bd_profile_shape *s) { memcpy(&g_shape, s, sizeof g_shape); g_seq_sh++; }
 void cs_take_index(const WsShotIndex *ix) {
   bd_history *h = (bd_history *)bd_shot_history();
   if (!h) return;
@@ -169,10 +169,7 @@ void cs_core_info(const char *build, bd_reset reset) {
 
 void cs_shot_point(const WsShot *s) {
   bd_shot_point p;
-  p.t = (uint16_t)s->time10; p.p = (uint16_t)s->pressure10; p.f = (uint16_t)s->pump_flow10;
-  p.w = (uint16_t)s->weight10; p.temp = (uint16_t)s->temperature10;
-  p.tp = (uint16_t)s->target_pressure10; p.tf = (uint16_t)s->target_flow10;
-  p.ph = (uint8_t)(s->phase > 255 ? 255 : s->phase);
+  pb_shot_point(s, &p);
   const bool back = g_live && g_live->n && p.t + 5 < g_live->pt[g_live->n - 1].t;   // time went back: a new shot
   if (g_shot_on && back) { shot_end(); shot_begin(); }
   else if (!g_shot_on) {
@@ -222,7 +219,7 @@ void cs_notice(int type, const char *msg) {
   bd_ui_event(&e);
   if (!e.u.notice.update) bd_ui_wake();           // the update notice repeats every 2 min: it does not wake the screen
 }
-void cs_prev_loaded(int state, const ShotTrace *t) {
+void cs_prev_loaded(int state, const bd_shot *t) {
   bd_event e;
   memset(&e, 0, sizeof e);
   e.type = BD_EV_SHOT_LOADED;
@@ -230,7 +227,7 @@ void cs_prev_loaded(int state, const ShotTrace *t) {
   e.u.loaded.shot = t;
   bd_ui_event(&e);
 }
-void cs_hist_loaded(int state, const ShotTrace *s, const ProfileShape *sh, const ShotTrace *prev, int prev_state) {
+void cs_hist_loaded(int state, const bd_shot *s, const bd_profile_shape *sh, const bd_shot *prev, int prev_state) {
   bd_event e;
   e.type = BD_EV_SHOT_LOADED;
   e.u.loaded.history = true;
@@ -241,7 +238,7 @@ void cs_hist_loaded(int state, const ShotTrace *s, const ProfileShape *sh, const
   e.u.loaded.previous_state = (bd_load)prev_state;
   bd_ui_event(&e);
 }
-void cs_wifi_scan(const WifiNet *n, int count, bool scanning) {
+void cs_wifi_scan(const bd_wifi_net *n, int count, bool scanning) {
   bd_event e;
   e.type = BD_EV_WIFI_SCAN;
   e.u.scan.nets = n;

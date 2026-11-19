@@ -22,7 +22,7 @@ void data_init(void);                                // creates the lock: first 
 void data_publish(const LiveData *d, int link);      // d NULL: the link state only
 void data_set_why(int why, IPAddress ip);            // offline reason (WHY_*) and the address that did not answer
 void data_publish_profiles(const ProfileList *l);
-void data_publish_shape(const ProfileShape *s);      // the core loop hears of it only when it changed
+void data_publish_shape(const bd_profile_shape *s);      // the core loop hears of it only when it changed
 bool data_index(WsShotIndex *out);                   // a copy of the shot history index; false = none yet
 uint32_t data_newest_shot(void);                     // newest stored shot id in the index, 0 = none
 uint32_t data_last_shot_ms(void);                    // millis() of the last shot snapshot

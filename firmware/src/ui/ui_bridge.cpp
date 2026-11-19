@@ -11,10 +11,6 @@
 
 extern "C" const bd_ui_desc BD_UI = {"screen", "1", 1};          // "screen": the NVS namespace of its settings
 
-// ShotTrace, ProfileShape, WifiNet (live.h) are the API's bd_shot, bd_profile_shape, bd_wifi_net
-
-static void cpy(char *d, size_t n, const char *s) { snprintf(d, n, "%s", s ? s : ""); }
-
 // each profile's original values (screens/profiles.cpp): key "p" + FNV-1a of the name (storage keys are at most 15
 // chars), value = weight x10 << 16 | degC
 static void orig_key(const char *n, char *k, size_t kn) {
@@ -51,56 +47,6 @@ static void on_settings(int bright, int idle_min, bool bounce, bool splash) {
 }
 
 // ---- state: bd_* -> the screens -------------------------------------------------------------------------------------
-static void live_of(const bd_machine *m, LiveData *d) {
-  memset(d, 0, sizeof *d);
-  d->temperature = m->temperature;
-  d->target = m->target_temp;
-  d->pressure = m->pressure;
-  d->weight = m->weight;
-  d->water_level = m->water_level;
-  d->warmup_remaining = m->warmup_remaining;
-  d->readiness = m->readiness;
-  d->brew_active = m->brewing;
-  d->steam_active = m->steaming;
-  d->hot_water_active = m->hot_water;
-  d->scales_present = m->scale_present;
-  d->scale_type = m->scale_type;
-  d->steam_set = m->steam_set;
-  d->act_weight = m->running.stop_weight;
-  d->act_temp = m->running.brew_temp;
-  cpy(d->act_profile, sizeof d->act_profile, m->running.name);
-  cpy(d->profile, sizeof d->profile, m->profile_name);
-  cpy(d->mode, sizeof d->mode, m->mode);
-  cpy(d->core_ver, sizeof d->core_ver, m->core_version);
-  cpy(d->core_type, sizeof d->core_type, m->core_board);
-  cpy(d->front_ver, sizeof d->front_ver, m->screen_version);
-  cpy(d->static_ver, sizeof d->static_ver, m->web_version);
-}
-static void profiles_of(const bd_profiles *l, ProfileList *o) {
-  o->count = l->count < MAX_PROFILES ? l->count : MAX_PROFILES;
-  for (int i = 0; i < o->count; i++) {
-    ProfileInfo *p = &o->p[i];
-    const bd_profile *q = &l->p[i];
-    p->id = q->id;
-    cpy(p->name, sizeof p->name, q->name);
-    p->selected = q->active;
-    p->detail = q->detail;
-    p->phases = q->phases;
-    p->weight = q->stop_weight;
-    p->temp = q->brew_temp;
-  }
-}
-static void index_of(const bd_history *h, WsShotIndex *o) {
-  o->n = h->n < WS_SHOT_INDEX_MAX ? h->n : WS_SHOT_INDEX_MAX;
-  for (int i = 0; i < o->n; i++) {
-    WsShotRec *r = &o->r[i];
-    r->id = h->e[i].id;
-    r->dur10 = h->e[i].dur10;
-    r->ts = h->e[i].ts;
-    cpy(r->name, sizeof r->name, h->e[i].profile);
-    r->name_hash = shot_name_hash(r->name, strlen(r->name));
-  }
-}
 static const char *const RESET_TXT[] = {"since power-on", "after the reset pin", "after a software restart",
                                         "after a crash", "after a freeze (watchdog)", "after a power dip",
                                         "after deep sleep", "after a USB reset", "after an unknown reset"};
@@ -193,9 +139,7 @@ void bd_ui_tick(uint32_t now) {
   static uint32_t seen_m, seen_pl, seen_sh, seen_hi, seen_net, last_info;
   if (bd_seq_machine() != seen_m) {
     seen_m = bd_seq_machine();
-    LiveData d;
-    live_of(bd_machine_state(), &d);
-    ui_set_live(&d, bd_machine_state()->link);
+    ui_set_live(bd_machine_state());
   }
   if (bd_seq_network() != seen_net && now - last_info >= 1000) {   // once a second, like the core's network info
     seen_net = bd_seq_network();
@@ -204,9 +148,7 @@ void bd_ui_tick(uint32_t now) {
   }
   if (bd_seq_profiles() != seen_pl) {
     seen_pl = bd_seq_profiles();
-    static ProfileList pl;          // ~1.8 KB
-    profiles_of(bd_profile_list(), &pl);
-    ui_set_profiles(&pl);
+    ui_set_profiles(bd_profile_list());
   }
   if (bd_seq_shape() != seen_sh) {
     seen_sh = bd_seq_shape();
@@ -214,8 +156,7 @@ void bd_ui_tick(uint32_t now) {
   }
   if (bd_seq_history() != seen_hi && bd_shot_history()) {
     seen_hi = bd_seq_history();
-    static WsShotIndex *ix = (WsShotIndex *)bd_alloc(sizeof(WsShotIndex), BD_MEM_PSRAM);   // 2.8 KB
-    if (ix) { index_of(bd_shot_history(), ix); ui_set_shot_index(ix); }
+    ui_set_shot_index(bd_shot_history());
   }
   if (g_set_dirty && now - g_set_dirty > 2000) {
     g_set_dirty = 0;
@@ -231,15 +172,7 @@ void bd_ui_tick(uint32_t now) {
 
 void bd_ui_event(const bd_event *e) {
   switch (e->type) {
-    case BD_EV_SHOT_POINT: {
-      const bd_shot_point *p = e->u.point;
-      WsShot s;
-      memset(&s, 0, sizeof s);
-      s.time10 = p->t; s.pressure10 = p->p; s.pump_flow10 = p->f; s.weight10 = p->w; s.temperature10 = p->temp;
-      s.target_pressure10 = p->tp; s.target_flow10 = p->tf; s.phase = p->ph;
-      ui_shot(&s);
-      break;
-    }
+    case BD_EV_SHOT_POINT: ui_shot(e->u.point); break;
     case BD_EV_NOTICE:
       if (e->u.notice.update) ui_update_notice(e->u.notice.type, bd_machine_state()->update);
       else ui_notify(e->u.notice.type, e->u.notice.text);

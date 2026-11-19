@@ -9,7 +9,7 @@
 void cs_take_live(const LiveData *d, int link);         // machine state (bumps bd_seq_machine)
 void cs_set_why(int why);                               // WHY_*: kept with the machine state, set with the network info
 void cs_take_profiles(const ProfileList *l);
-void cs_take_shape(const ProfileShape *s);
+void cs_take_shape(const bd_profile_shape *s);
 void cs_take_index(const WsShotIndex *ix);
 bd_network *cs_network(void);                           // fill it, then cs_network_done()
 void cs_network_done(void);
@@ -18,9 +18,9 @@ void cs_core_info(const char *build, bd_reset reset);   // once at start
 // events: each calls bd_ui_event at once (on the caller's task: the UI task)
 void cs_shot_point(const WsShot *s);                    // also records the live shot (bd_live_shot)
 void cs_notice(int type, const char *msg);
-void cs_prev_loaded(int state, const ShotTrace *t);     // PREV_* (net.h)
-void cs_hist_loaded(int state, const ShotTrace *s, const ProfileShape *sh, const ShotTrace *prev, int prev_state);
-void cs_wifi_scan(const WifiNet *n, int count, bool scanning);
+void cs_prev_loaded(int state, const bd_shot *t);     // PREV_* (net.h)
+void cs_hist_loaded(int state, const bd_shot *s, const bd_profile_shape *sh, const bd_shot *prev, int prev_state);
+void cs_wifi_scan(const bd_wifi_net *n, int count, bool scanning);
 void cs_wifi_join(int state);                           // WIFI_JOIN_*
 
 // commands: each command's whole rule set (checks, range, then the answer watched), shared by the device core and the

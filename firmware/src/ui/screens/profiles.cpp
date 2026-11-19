@@ -13,7 +13,7 @@ static const int PK_NAME_W = 376, PK_STOP_R = 476, PK_TEMP_R = 540, PK_USED_R = 
 lv_obj_t *g_pick;                          // full-screen page
 static lv_obj_t *g_pick_list;
 static lv_obj_t *g_pick_sub;               // the page's subtitle ("Active, then recently used")
-ProfileList g_profiles;
+bd_profiles g_profiles;
 // profile select in flight: shown at once, until the machine reports it or the core answers that it was not taken
 int g_pend_id = 0;
 char g_pend_name[48];
@@ -23,14 +23,13 @@ int prof_id(const char *name) {
   for (int i = 0; i < g_profiles.count; i++) if (!strcmp(g_profiles.p[i].name, name)) return g_profiles.p[i].id;
   return 0;
 }
-static const ProfileInfo *prof_by_id(int id) {
+static const bd_profile *prof_by_id(int id) {
   for (int i = 0; i < g_profiles.count; i++) if (g_profiles.p[i].id == id) return &g_profiles.p[i];
   return NULL;
 }
 // when a profile was last used (the core works it out from the shot history), 0 = not in it
 static uint32_t prof_last_used(const char *name) {
-  const bd_profiles *l = bd_profile_list();
-  for (int i = 0; i < l->count; i++) if (!strcmp(l->p[i].name, name)) return l->p[i].last_used;
+  for (int i = 0; i < g_profiles.count; i++) if (!strcmp(g_profiles.p[i].name, name)) return g_profiles.p[i].last_used;
   return 0;
 }
 
@@ -85,11 +84,11 @@ void orig_paint(void) {
 
 // ---- profile snapshots (Profiles page): the originals of every profile, restore / keep ------------------------------
 // snapshots kept in RAM: the page asks for every profile's on each update while open, and storage (NVS) reads are slow
-static struct { char name[48]; int w10, deg; bool have; } g_snap[MAX_PROFILES];
+static struct { char name[48]; int w10, deg; bool have; } g_snap[BD_MAX_PROFILES];
 static int g_snap_n = 0;
 static int snap_slot(const char *name) {
   for (int i = 0; i < g_snap_n; i++) if (!strcmp(g_snap[i].name, name)) return i;
-  if (g_snap_n == MAX_PROFILES) return -1;
+  if (g_snap_n == BD_MAX_PROFILES) return -1;
   snprintf(g_snap[g_snap_n].name, sizeof g_snap[0].name, "%s", name);   // first ask: read it from storage once
   g_snap[g_snap_n].have = g_orig_load && g_orig_load(name, &g_snap[g_snap_n].w10, &g_snap[g_snap_n].deg);
   return g_snap_n++;
@@ -110,25 +109,25 @@ static void snap_capture(void) {
   if (!g_orig_save) return;
   bool any = false;
   for (int i = 0; i < g_profiles.count; i++) {
-    const ProfileInfo *p = &g_profiles.p[i];
+    const bd_profile *p = &g_profiles.p[i];
     int w, d;
-    if (!p->detail || p->temp < T_MIN || snap_get(p->name, &w, &d)) continue;
-    snap_put(p->name, (int)(p->weight * 10.0f + 0.5f), (int)(p->temp + 0.5f));
+    if (!p->detail || p->brew_temp < T_MIN || snap_get(p->name, &w, &d)) continue;
+    snap_put(p->name, (int)(p->stop_weight * 10.0f + 0.5f), (int)(p->brew_temp + 0.5f));
     any = true;
   }
   if (any) { g_orig_name[0] = 1; orig_paint(); }    // the active profile's cache reloads
 }
 // a profile's current values: what the machine runs for the active one, else the stored ones
-static void prof_now(const ProfileInfo *p, int *w10, int *deg) {
-  if (p->selected && !g_pend_id && g_act_weight10 >= 0 && g_act_temp > 0) {
+static void prof_now(const bd_profile *p, int *w10, int *deg) {
+  if (p->active && !g_pend_id && g_act_weight10 >= 0 && g_act_temp > 0) {
     *w10 = g_act_weight10;
     *deg = g_act_temp;
     return;
   }
-  *w10 = (int)(p->weight * 10.0f + 0.5f);
-  *deg = (int)(p->temp + 0.5f);
+  *w10 = (int)(p->stop_weight * 10.0f + 0.5f);
+  *deg = (int)(p->brew_temp + 0.5f);
 }
-static bool prof_edited(const ProfileInfo *p) {
+static bool prof_edited(const bd_profile *p) {
   int sw, sd, cw, cd;
   if (!p->detail || !snap_get(p->name, &sw, &sd)) return false;
   prof_now(p, &cw, &cd);
@@ -161,7 +160,7 @@ static int g_rs_id = 0;
 static void snap_close(void) { if (g_rs_back) lv_obj_set_hidden(g_rs_back, true); g_rs_id = 0; }
 static void on_rs_restore(lv_event_t *e) {
   (void)e;
-  const ProfileInfo *p = prof_by_id(g_rs_id);
+  const bd_profile *p = prof_by_id(g_rs_id);
   int sw, sd;
   snap_close();
   if (!p || !snap_get(p->name, &sw, &sd) || !g_can_select) return;
@@ -170,13 +169,13 @@ static void on_rs_restore(lv_event_t *e) {
   g_rst.w10 = sw;
   g_rst.deg = sd;
   g_rst.t = stamp_nz(lv_tick_get());
-  if (p->selected) snap_apply();                   // active: at once
+  if (p->active) snap_apply();                   // active: at once
   else if (pick_profile(p->id)) picker_close();    // else after the switch (ui_set_live)
   else g_rst.id = 0;
 }
 static void on_rs_keep(lv_event_t *e) {
   (void)e;
-  const ProfileInfo *p = prof_by_id(g_rs_id);
+  const bd_profile *p = prof_by_id(g_rs_id);
   snap_close();
   if (!p || !g_orig_save) return;
   int cw, cd;
@@ -234,7 +233,7 @@ static void snap_build(void) {
   lv_obj_set_hidden(g_rs_back, true);
 }
 static void on_pick_hold(lv_event_t *e) {           // a long press on an edited row: its snapshot
-  const ProfileInfo *p = prof_by_id((int)(intptr_t)lv_event_get_user_data(e));
+  const bd_profile *p = prof_by_id((int)(intptr_t)lv_event_get_user_data(e));
   int sw, sd, cw, cd;
   if (!p || !prof_edited(p) || !snap_get(p->name, &sw, &sd)) return;
   prof_now(p, &cw, &cd);
@@ -248,7 +247,7 @@ static void on_pick_hold(lv_event_t *e) {           // a long press on an edited
   snap_values(v, sizeof v, cw, cd);
   set_text(g_rs_now, v);
   set_text(g_rs_note,
-           p->selected ? "Restore sets the original values and saves them on the machine."
+           p->active ? "Restore sets the original values and saves them on the machine."
                        : "Restore selects this profile, then sets the original values and saves them on the machine.");
   lv_obj_set_hidden(g_rs_back, false);
 }
@@ -259,8 +258,8 @@ static void on_pick_row(lv_event_t *e) {
 }
 // selects profile id on the machine and shows it at once; false if not sent (active already, busy, offline)
 static bool pick_profile(int id) {
-  const ProfileInfo *p = prof_by_id(id);
-  if (!p || p->selected || !g_can_select) return false;
+  const bd_profile *p = prof_by_id(id);
+  if (!p || p->active || !g_can_select) return false;
   // a -/+ change still waiting to be sent belongs to the OLD profile: send it now, before the switch (the core
   // refuses it if the machine has already switched), so it can never land on the new profile or poison its originals
   if (timer_pending(g_weight_tm)) weight_commit(NULL);
@@ -270,15 +269,16 @@ static bool pick_profile(int id) {
   // show the choice right away; the machine's status confirms it, or the core's answer reverts it (ui_command_answer)
   g_pend_id = id;
   snprintf(g_pend_name, sizeof g_pend_name, "%s", p->name);
-  for (int i = 0; i < g_profiles.count; i++) g_profiles.p[i].selected = g_profiles.p[i].id == id;
+  for (int i = 0; i < g_profiles.count; i++) g_profiles.p[i].active = g_profiles.p[i].id == id;
   show_profile(p->name);
   if (p->detail) {                                  // 0 = no stop weight
-    int w10 = (int)(p->weight * 10.0f + 0.5f);
+    int w10 = (int)(p->stop_weight * 10.0f + 0.5f);
     g_weight10 = clamp_w10(w10);
     refresh_value();
   }
-  if (p->detail && p->temp >= T_MIN && p->temp <= T_MAX) {   // its stored temperature too, until the machine's comes
-    g_tset = (int)(p->temp + 0.5f);
+  // its stored temperature too, until the machine's comes
+  if (p->detail && p->brew_temp >= T_MIN && p->brew_temp <= T_MAX) {
+    g_tset = (int)(p->brew_temp + 0.5f);
     refresh_tset();
   }
   pv_loading();                                  // the new graph follows in about a second
@@ -301,8 +301,8 @@ static lv_obj_t *pk_cell(lv_obj_t *row, const char *t, int x_right, int w, lv_co
   return l;
 }
 
-static void add_row(lv_obj_t *list, const ProfileInfo *p) {
-  const bool sel = p->selected;
+static void add_row(lv_obj_t *list, const bd_profile *p) {
+  const bool sel = p->active;
   // the row reaches 12 px past the 24 px margin on both sides, so the active / pressed background sits around the text
   lv_obj_t *row = box(list, 0, 0, PK_W + 24, PK_RH, sel ? COL_PK_SEL : COL_BG, RAD_CTRL);
   if (!sel) lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
@@ -376,12 +376,14 @@ static void add_row(lv_obj_t *list, const ProfileInfo *p) {
 static uint32_t picker_sig(void) {
   uint32_t h = FNV_SEED;
   auto mix = [&h](const void *p, size_t n) { h = fnv1a(h, p, n); };
-  const ProfileList *l = &g_profiles;
+  const bd_profiles *l = &g_profiles;
   mix(&l->count, sizeof l->count);
   for (int i = 0; i < l->count; i++) {
-    const ProfileInfo *p = &l->p[i];
-    mix(&p->id, sizeof p->id); mix(p->name, strlen(p->name)); mix(&p->selected, 1); mix(&p->detail, 1);
-    mix(&p->phases, sizeof p->phases); mix(&p->weight, sizeof p->weight); mix(&p->temp, sizeof p->temp);
+    const bd_profile *p = &l->p[i];
+    mix(&p->id, sizeof p->id); mix(p->name, strlen(p->name)); mix(&p->active, 1); mix(&p->detail, 1);
+    mix(&p->phases, sizeof p->phases);
+    mix(&p->stop_weight, sizeof p->stop_weight);
+    mix(&p->brew_temp, sizeof p->brew_temp);
     const uint32_t used = prof_last_used(p->name);
     mix(&used, sizeof used);
     // its snapshot and current values (edited ones blue, Restore button)
@@ -400,7 +402,7 @@ void picker_rebuild(void) {
   if (g_profiles.count && sig == g_pick_sig) return;   // the rows on the page are still right
   g_pick_sig = sig;
   lv_obj_clean(g_pick_list);
-  const ProfileList *l = &g_profiles;
+  const bd_profiles *l = &g_profiles;
   set_hidden(g_pick_hdr, l->count == 0);
   if (l->count == 0) {
     EmptyState es = empty_state(g_pick_list, IC_PROFILES);
@@ -416,7 +418,7 @@ void picker_rebuild(void) {
     for (int j = i; j > 0; j--) {
       const int a = idx[j - 1], b = idx[j];
       bool swap;
-      if (l->p[a].selected != l->p[b].selected) swap = l->p[b].selected;
+      if (l->p[a].active != l->p[b].active) swap = l->p[b].active;
       else if (used[a] != used[b]) swap = used[b] > used[a];
       else {
         char na[48], nb[48];
@@ -472,11 +474,11 @@ void build_picker(lv_obj_t *scr) {
   lv_obj_set_style_bg_opa(g_pick_list, LV_OPA_COVER, LV_PART_SCROLLBAR);
 }
 
-void ui_set_profiles(const ProfileList *l) {
+void ui_set_profiles(const bd_profiles *l) {
   g_profiles = *l;
   snap_capture();                                  // new profiles' stored values become their snapshots
   if (g_pend_id)                                 // a select is in flight: keep showing the choice
-    for (int i = 0; i < g_profiles.count; i++) g_profiles.p[i].selected = g_profiles.p[i].id == g_pend_id;
+    for (int i = 0; i < g_profiles.count; i++) g_profiles.p[i].active = g_profiles.p[i].id == g_pend_id;
   if (!lv_obj_is_hidden(g_pick)) {
     int32_t sy = lv_obj_get_scroll_y(g_pick_list);
     picker_rebuild();

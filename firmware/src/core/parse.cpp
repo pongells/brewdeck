@@ -98,7 +98,7 @@ int parse_profile_list(const char *js, ProfileList *out) {
   const char *p = strchr(js, '[');
   if (!p) return 0;
   p++;
-  while (out->count < MAX_PROFILES) {
+  while (out->count < BD_MAX_PROFILES) {
     p = strchr(p, '{');
     if (!p) break;
     const char *e = skip_value(p);
@@ -132,16 +132,16 @@ static bool sub_object(const char *p, const char *end, const char *key, const ch
 }
 
 static uint8_t curve_of(const char *s) {
-  if (!strcmp(s, "LINEAR")) return CURVE_LINEAR;
-  if (!strcmp(s, "EASE_IN")) return CURVE_EASE_IN;
-  if (!strcmp(s, "EASE_OUT")) return CURVE_EASE_OUT;
-  if (!strcmp(s, "EASE_IN_OUT")) return CURVE_EASE_IN_OUT;
-  return CURVE_INSTANT;
+  if (!strcmp(s, "LINEAR")) return BD_CURVE_LINEAR;
+  if (!strcmp(s, "EASE_IN")) return BD_CURVE_EASE_IN;
+  if (!strcmp(s, "EASE_OUT")) return BD_CURVE_EASE_OUT;
+  if (!strcmp(s, "EASE_IN_OUT")) return BD_CURVE_EASE_IN_OUT;
+  return BD_CURVE_INSTANT;
 }
 
 // phases of one profile:  {"type":"PRESSURE","target":{"start":3,"end":9,"curve":"EASE_IN_OUT","time":5000},
 //   "restriction":2.5,"stopConditions":{"time":7000,"pressureAbove":3,"weight":10,"waterPumpedInPhase":3.5},"skip":false}
-bool parse_profile_shape(const char *js, ProfileShape *s) {
+bool parse_profile_shape(const char *js, bd_profile_shape *s) {
   memset(s, 0, sizeof *s);
   const char *ph = strstr(js, "\"phases\":");
   if (!ph) return false;
@@ -149,22 +149,22 @@ bool parse_profile_shape(const char *js, ProfileShape *s) {
   if (!ph) return false;
   const char *ph_end = skip_value(ph);
   if (!ph_end) return false;                           // truncated
-  for (const char *q = ph + 1; q < ph_end - 1 && s->n < MAX_PHASES;) {
+  for (const char *q = ph + 1; q < ph_end - 1 && s->n < BD_MAX_PHASES;) {
     while (q < ph_end - 1 && *q != '{') q++;
     if (q >= ph_end - 1) break;
     const char *e = skip_value(q);
     if (!e) return false;
     if (!flag(q, e, "skip")) {
-      PhaseShape *p = &s->ph[s->n];
+      bd_phase *p = &s->ph[s->n];
       char b[16];
-      p->type = (raw_n(q, e, "type", b, sizeof b) && !strcmp(b, "FLOW")) ? PHASE_FLOW : PHASE_PRESSURE;
+      p->type = (raw_n(q, e, "type", b, sizeof b) && !strcmp(b, "FLOW")) ? BD_PHASE_FLOW : BD_PHASE_PRESSURE;
       const char *tb, *te;
       if (sub_object(q, e, "target", &tb, &te)) {
         p->has_start = raw_n(tb, te, "start", b, sizeof b);
         p->start = p->has_start ? (float)atof(b) : 0;
         p->end = num(tb, te, "end", 0);
         p->ramp_ms = (uint32_t)num(tb, te, "time", 0);
-        p->curve = raw_n(tb, te, "curve", b, sizeof b) ? curve_of(b) : CURVE_INSTANT;
+        p->curve = raw_n(tb, te, "curve", b, sizeof b) ? curve_of(b) : BD_CURVE_INSTANT;
       }
       p->limit = num(q, e, "restriction", 0);   // phase-level key (not inside target / stopConditions)
       if (sub_object(q, e, "stopConditions", &tb, &te)) {
@@ -239,8 +239,8 @@ static const char *int_array(const char *b, const char *e, const char *key) {
 // {"id":298,"timestamp":...,"duration":73,"datapoints":{"timeInShot":[4,5,...],"pressure":[...],"pumpFlow":[...],
 //  "weightFlow":[...],"temperature":[...],"shotWeight":[...],"waterPumped":[...],"targetTemperature":[...],
 //  "targetPumpFlow":[...],"targetPressure":[...],"phaseIndex":[...]},"profile":{"id":8,"name":"...",...}}
-// All arrays are x10 integers of the same length. Points beyond SHOT_MAX are thinned (every k-th kept).
-bool parse_shot(const char *js, ShotTrace *t) {
+// All arrays are x10 integers of the same length. Points beyond BD_SHOT_MAX are thinned (every k-th kept).
+bool parse_shot(const char *js, bd_shot *t) {
   memset(t, 0, sizeof *t);
   const char *jend = js + strlen(js), *db, *de;
   if (!sub_object(js, jend, "datapoints", &db, &de)) return false;
@@ -254,7 +254,7 @@ bool parse_shot(const char *js, ShotTrace *t) {
   while (*q == ' ') q++;
   if (*q != ']') for (n = 1; q < de && *q != ']'; q++) if (*q == ',') n++;
   if (n == 0) return false;
-  const int step = (n + SHOT_MAX - 1) / SHOT_MAX;
+  const int step = (n + BD_SHOT_MAX - 1) / BD_SHOT_MAX;
   int kept = (n + step - 1) / step;
   for (int k = 0; k < 8; k++) {
     p = int_array(db, de, keys[k]);
@@ -264,7 +264,7 @@ bool parse_shot(const char *js, ShotTrace *t) {
       const long v = strtol(p, &x, 10);
       if (x == p || x >= de) return false;            // truncated or not a number
       if (i % step == 0) {
-        ShotPoint *s = &t->pt[i / step];
+        bd_shot_point *s = &t->pt[i / step];
         const uint16_t u = (uint16_t)(v < 0 ? 0 : (v > 65535 ? 65535 : v));
         switch (k) {
           case 0: s->t = u; break;      case 1: s->p = u; break;    case 2: s->f = u; break;

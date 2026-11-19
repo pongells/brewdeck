@@ -148,6 +148,12 @@ bool pb_system(const uint8_t *b, size_t n, WsSystem *o) {
   return r.ok;
 }
 
+void pb_shot_point(const WsShot *s, bd_shot_point *p) {
+  p->t = (uint16_t)s->time10; p->p = (uint16_t)s->pressure10; p->f = (uint16_t)s->pump_flow10;
+  p->w = (uint16_t)s->weight10; p->temp = (uint16_t)s->temperature10;
+  p->tp = (uint16_t)s->target_pressure10; p->tf = (uint16_t)s->target_flow10;
+  p->ph = (uint8_t)(s->phase > 255 ? 255 : s->phase);
+}
 bool pb_shot(const uint8_t *b, size_t n, WsShot *o) {
   memset(o, 0, sizeof *o);
   Rd r = {b, b + n, true};
@@ -207,7 +213,7 @@ bool pb_shot_index(const uint8_t *b, size_t n, WsShotIndex *o) {
       } else skip(&s, wt);
     }
     if (!s.ok) return false;
-    if (o->n < WS_SHOT_INDEX_MAX) o->r[o->n++] = rec;
+    if (o->n < BD_HISTORY_MAX) o->r[o->n++] = rec;
   }
   return r.ok;
 }

@@ -151,17 +151,17 @@ static void migrate_orig(void) {
 
 // ---- setup and loop -----------------------------------------------------------------------------------------------
 // the loop's copies of stored shots and the history index, in PSRAM (~40 KB): allocated once in setup
-static struct { ShotTrace *prev, *hs, *hp; ProfileShape *hsh; WsShotIndex *ix; } g_buf;
+static struct { bd_shot *prev, *hs, *hp; bd_profile_shape *hsh; WsShotIndex *ix; } g_buf;
 template <typename T> static T *psram(const char *what) {
   T *p = (T *)heap_caps_malloc(sizeof(T), MALLOC_CAP_SPIRAM);
   if (!p) Log.printf("core: no PSRAM for %s (%u B): it stays off\n", what, (unsigned)sizeof(T));
   return p;
 }
 static void alloc_buffers(void) {
-  g_buf.prev = psram<ShotTrace>("the previous shot");
-  g_buf.hs = psram<ShotTrace>("a history shot");
-  g_buf.hp = psram<ShotTrace>("a history shot's previous");
-  g_buf.hsh = psram<ProfileShape>("a history shot's profile");
+  g_buf.prev = psram<bd_shot>("the previous shot");
+  g_buf.hs = psram<bd_shot>("a history shot");
+  g_buf.hp = psram<bd_shot>("a history shot's previous");
+  g_buf.hsh = psram<bd_profile_shape>("a history shot's profile");
   g_buf.ix = psram<WsShotIndex>("the shot history");
 }
 
@@ -230,7 +230,7 @@ void bd_core_loop(void) {
     if (net_get(&d, &link)) cs_take_live(&d, link);
     if (millis() - last_info > 1000) { last_info = millis(); take_network(); }
     {
-      static WifiNet nets[MAX_NETS];
+      static bd_wifi_net nets[BD_MAX_NETS];
       int nn, js;
       bool scanning;
       if (net_get_wifi_scan(nets, &nn, &scanning)) cs_wifi_scan(nets, nn, scanning);
@@ -238,7 +238,7 @@ void bd_core_loop(void) {
     }
     static ProfileList pl;          // ~1.8 KB, off the loop stack
     if (net_get_profiles(&pl)) cs_take_profiles(&pl);
-    static ProfileShape sh;
+    static bd_profile_shape sh;
     if (net_get_shape(&sh)) cs_take_shape(&sh);
     mem_watch("loop: network data");
   }

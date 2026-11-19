@@ -14,7 +14,7 @@ enum { OI_WIFI_TRY = 0, OI_WIFI_FAIL, OI_WIFI_NONE, OI_CUP_TRY, OI_CUP_FAIL };
 static const uint32_t OFF_DELAY_MS = 5000;
 lv_obj_t *g_off;
 static lv_obj_t *g_off_title, *g_off_body, *g_off_detail, *g_off_icon;
-int g_off_link = LINK_CONNECTING;
+int g_off_link = BD_LINK_CONNECTING;
 uint32_t g_off_since;          // lv_tick when the link was last lost (OFF_DELAY_MS before the screen shows)
 uint32_t g_off_phase;          // lv_tick when the current state began (joining Wi-Fi / looking for the machine)
 bool g_off_ever_online = false;
@@ -27,7 +27,7 @@ char g_off_sip[20] = "", g_off_mach[40] = "";
 static const uint32_t OFF_GIVE_UP_MS = 20000;
 static lv_obj_t *g_off_btn[2], *g_off_btn_l[2];
 static int g_off_btn_act[2];                   // what each button does: OFF_ACT_*
-static int g_off_why = WHY_NONE;               // WHY_* (live.h), from the core
+static int g_off_why = BD_WHY_NONE;               // bd_why, from the core
 static char g_off_why_ip[16] = "";
 void ui_set_offline_reason(int why, const char *ip) {
   g_off_why = why;
@@ -36,7 +36,7 @@ void ui_set_offline_reason(int why, const char *ip) {
 
 static int off_state(void) {
   const bool late = lv_tick_elaps(g_off_phase) >= OFF_GIVE_UP_MS;
-  if (g_off_link == LINK_CONNECTING) return !g_wifi_target[0] ? OFF_NO_CFG : late ? OFF_WIFI_FAIL : OFF_JOINING;
+  if (g_off_link == BD_LINK_CONNECTING) return !g_wifi_target[0] ? OFF_NO_CFG : late ? OFF_WIFI_FAIL : OFF_JOINING;
   return late ? OFF_NOT_FOUND : OFF_LOOKING;
 }
 // two buttons: [0] = the main action (gold, like Use / Join), [1] = the other way out (card)
@@ -184,11 +184,11 @@ static void off_text(void) {
     case OFF_WIFI_FAIL:
       off_icon(OI_WIFI_FAIL);
       set_text(g_off_title, "Not connected to Wi-Fi");
-      if (g_off_why == WHY_WIFI_AUTH) {
+      if (g_off_why == BD_WHY_WIFI_AUTH) {
         snprintf(b, sizeof b, "%s did not accept the password. Choose the network again to enter it.", g_wifi_target);
         off_buttons(OFF_ACT_WIFI, "Wi-Fi settings", OFF_ACT_RETRY, "Try again");
       } else {
-        if (g_off_why == WHY_WIFI_NO_AP)
+        if (g_off_why == BD_WHY_WIFI_NO_AP)
           snprintf(b, sizeof b, "%s is not in range. Is the router on?", g_wifi_target);
         else snprintf(b, sizeof b, "Could not join %s.", g_wifi_target);
         off_buttons(OFF_ACT_RETRY, "Try again", OFF_ACT_WIFI, "Wi-Fi settings");
@@ -209,9 +209,9 @@ static void off_text(void) {
     default:
       off_icon(OI_CUP_FAIL);
       set_text(g_off_title, "Machine not found");
-      if (g_off_why == WHY_NO_REPLY && g_off_why_ip[0] && strcmp(g_off_why_ip, g_mach_host) != 0)
+      if (g_off_why == BD_WHY_NO_REPLY && g_off_why_ip[0] && strcmp(g_off_why_ip, g_mach_host) != 0)
         snprintf(b, sizeof b, "%s is at %s but does not answer. Is it switched on?", g_mach_host, g_off_why_ip);
-      else if (g_off_why == WHY_NO_REPLY)
+      else if (g_off_why == BD_WHY_NO_REPLY)
         snprintf(b, sizeof b, "Nothing answers at %s. Is the machine switched on?", g_mach_host);
       else
         snprintf(b, sizeof b, "Nothing on %s answers to %s. Is the machine switched on? If it uses another "
@@ -239,7 +239,7 @@ static void on_off_btn(lv_event_t *e) {
 }
 void on_off_timer(lv_timer_t *t) {
   (void)t;
-  const bool want = g_off_active && g_off_link != LINK_ONLINE && (g_br_state == BR_HIDDEN) && !g_in_wifi_pages &&
+  const bool want = g_off_active && g_off_link != BD_LINK_ONLINE && (g_br_state == BR_HIDDEN) && !g_in_wifi_pages &&
                     (!g_off_ever_online || lv_tick_elaps(g_off_since) >= OFF_DELAY_MS);
   if (want && lv_obj_is_hidden(g_off)) {
     picker_close();

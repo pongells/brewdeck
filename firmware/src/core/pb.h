@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "live.h"   // WsShot, WsShotIndex, shot_name_hash: plain data the UI uses too
+#include "live.h"   // WsShot, WsShotIndex, shot_name_hash
 
 typedef struct {                // SensorStateSnapshotDto  (action d_sensor_snap, ~3/s)
   bool  brew_active, steam_active, hot_water;
@@ -27,6 +27,7 @@ bool pb_envelope(const uint8_t *b, size_t n, char *act, size_t act_cap, const ui
 bool pb_sensor(const uint8_t *b, size_t n, WsSensor *o);
 bool pb_system(const uint8_t *b, size_t n, WsSystem *o);
 bool pb_shot(const uint8_t *b, size_t n, WsShot *o);
+void pb_shot_point(const WsShot *s, bd_shot_point *p);   // the API's point (x10 values as uint16, phase capped at 255)
 // d_shot_hist_index -> WsShotIndex (live.h)
 bool pb_shot_index(const uint8_t *b, size_t n, WsShotIndex *o);
 // NotificationDto (action d_notif): type (0 INFO, 1 SUCCESS, 2 WARN, 3 ERROR) and text, e.g. WARN "Fill the water tank!"

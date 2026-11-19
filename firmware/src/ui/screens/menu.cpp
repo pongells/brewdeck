@@ -17,8 +17,8 @@ static lv_obj_t *g_disp_val[2];                    // Display page: brightness, 
 // Display page toggles: [0] idle clock Still / Bouncing, [1] splash at start On / Off
 static lv_obj_t *g_disp_tog[2][2], *g_disp_tog_l[2][2];
 static void (*g_settings_cb)(int bright, int idle_min, bool bounce, bool splash) = NULL;
-LiveData g_menu_live;
-int g_menu_link = LINK_CONNECTING;
+bd_machine g_menu_live;
+int g_menu_link = BD_LINK_CONNECTING;
 static char g_sys_txt[3][64] = {"", "", ""};   // build, uptime (+ restart reason), memory
 static const int IDLE_OPTS[] = {0, 1, 2, 5, 10, 20, 30, 60};
 static const char *const PAGE_NAMES[MENU_PAGES] = {"Display", "Scale", "Wi-Fi", "About", "", "", "Machine address",
@@ -44,22 +44,22 @@ void ui_set_sysinfo(const char *build, const char *uptime, const char *memory) {
   snprintf(g_sys_txt[2], sizeof g_sys_txt[2], "%s", memory);
 }
 
-static const char *scale_kind_text(const LiveData *d) {
+static const char *scale_kind_text(const bd_machine *d) {
   switch (d->scale_type) {
-    case SCALE_BT: return "Bluetooth";
-    case SCALE_HW: return "Wired";
-    case SCALE_PREDICTIVE: return "Predictive (no scale)";
+    case BD_SCALE_BT: return "Bluetooth";
+    case BD_SCALE_WIRED: return "Wired";
+    case BD_SCALE_PREDICTIVE: return "Predictive (no scale)";
     default: return "Unknown";
   }
 }
 
 static void menu_refresh(void) {
   char b[64];
-  const LiveData *d = &g_menu_live;
-  const bool on = g_menu_link == LINK_ONLINE;
+  const bd_machine *d = &g_menu_live;
+  const bool on = g_menu_link == BD_LINK_ONLINE;
   // main rows: 0 Edit profile, 1 Scale, 2 Display, 3 Maintenance, 4 Wi-Fi, 5 About
-  set_text(g_mrow_val[1], !on ? "Unknown" : d->scale_type == SCALE_PREDICTIVE ? "Predictive"
-                                       : d->scales_present ? "Connected" : "Not connected");
+  set_text(g_mrow_val[1], !on ? "Unknown" : d->scale_type == BD_SCALE_PREDICTIVE ? "Predictive"
+                                       : d->scale_present ? "Connected" : "Not connected");
   if (g_idle_min) snprintf(b, sizeof b, "%d %%, dims after %d min", g_bright, g_idle_min);
   else snprintf(b, sizeof b, "%d %%, always on", g_bright);
   set_text(g_mrow_val[2], b);
@@ -78,7 +78,7 @@ static void menu_refresh(void) {
   }
   if (g_hx_ok && g_hx->n > 0) {                   // newest stored shot
     char w[32];
-    fmt_when(g_hx->r[0].ts, w, sizeof w);
+    fmt_when(g_hx->e[0].ts, w, sizeof w);
     snprintf(b, sizeof b, "Latest %s", w);
     set_text(g_mrow_val[6], b);
   } else set_text(g_mrow_val[6], on ? "Loading..." : "Unknown");
@@ -96,8 +96,8 @@ static void menu_refresh(void) {
     }
   // Scale
   set_text(g_info[MP_SCALE][0], on ? scale_kind_text(d) : "Unknown");
-  set_text(g_info[MP_SCALE][1], !on ? "Unknown" : d->scales_present ? "Connected" : "Not connected");
-  if (on && d->scales_present && d->scale_type != SCALE_PREDICTIVE) snprintf(b, sizeof b, "%.1f g", d->weight);
+  set_text(g_info[MP_SCALE][1], !on ? "Unknown" : d->scale_present ? "Connected" : "Not connected");
+  if (on && d->scale_present && d->scale_type != BD_SCALE_PREDICTIVE) snprintf(b, sizeof b, "%.1f g", d->weight);
   else snprintf(b, sizeof b, "-");
   set_text(g_info[MP_SCALE][2], b);
   set_text(g_info[MP_SCALE][3], "Automatic at the start of a shot");
@@ -117,11 +117,11 @@ static void menu_refresh(void) {
   else snprintf(b, sizeof b, "%s", g_upd_known ? "Available \xC2\xB7 install in the web UI" : "None reported");
   set_tc(g_info[MP_ABOUT][6], g_upd_known ? COL_BLUE : COL_TEXT);
   set_text(g_info[MP_ABOUT][6], b);
-  if (d->core_ver[0] && d->core_type[0]) snprintf(b, sizeof b, "%s \xC2\xB7 %s", d->core_ver, d->core_type);
-  else snprintf(b, sizeof b, "%s", d->core_ver[0] ? d->core_ver : "Unknown");
+  if (d->core_version[0] && d->core_board[0]) snprintf(b, sizeof b, "%s \xC2\xB7 %s", d->core_version, d->core_board);
+  else snprintf(b, sizeof b, "%s", d->core_version[0] ? d->core_version : "Unknown");
   set_text(g_info[MP_ABOUT][3], b);
-  set_text(g_info[MP_ABOUT][4], d->front_ver[0] ? d->front_ver : "Unknown");
-  set_text(g_info[MP_ABOUT][5], d->static_ver[0] ? d->static_ver : "Unknown");
+  set_text(g_info[MP_ABOUT][4], d->screen_version[0] ? d->screen_version : "Unknown");
+  set_text(g_info[MP_ABOUT][5], d->web_version[0] ? d->web_version : "Unknown");
 }
 
 void menu_show_page(int k) {            // MP_LIST = the menu list

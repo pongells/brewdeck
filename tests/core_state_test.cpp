@@ -58,14 +58,14 @@ int main(void) {
   snprintf(pl.p[1].name, sizeof pl.p[1].name, "%s", "Other");
   cs_take_profiles(&pl);
   LiveData d = live(false);
-  cs_take_live(&d, LINK_ONLINE);
+  cs_take_live(&d, BD_LINK_ONLINE);
   uint32_t now = 1000;
 
   // 1. a normal shot: brewing, points, brewing off -> one START, one END, the whole shot kept
   reset_counts();
-  d = live(true); cs_take_live(&d, LINK_ONLINE);
+  d = live(true); cs_take_live(&d, BD_LINK_ONLINE);
   for (uint32_t t = 1; t <= 200; t++) { point(t); cs_tick(now += 150); }
-  d = live(false); cs_take_live(&d, LINK_ONLINE);
+  d = live(false); cs_take_live(&d, BD_LINK_ONLINE);
   CHECK(n_start == 1 && n_end == 1 && n_point == 200);
   CHECK(bd_live_shot() && bd_live_shot()->n == 200);
   printf("normal shot: start %d end %d points %d kept %d\n", n_start, n_end, n_point, bd_live_shot()->n);
@@ -73,9 +73,9 @@ int main(void) {
   // 2. the last point arrives after "brewing off" was taken (the order a slow loop pass could see): the shot goes on,
   //    no new START, the points are not wiped
   reset_counts();
-  d = live(true); cs_take_live(&d, LINK_ONLINE);
+  d = live(true); cs_take_live(&d, BD_LINK_ONLINE);
   for (uint32_t t = 1; t <= 100; t++) point(t);
-  d = live(false); cs_take_live(&d, LINK_ONLINE);
+  d = live(false); cs_take_live(&d, BD_LINK_ONLINE);
   point(101);
   for (int i = 0; i < 40; i++) cs_tick(now += 150);   // 6 s of no points: ends (again) once
   CHECK(n_start == 1);
@@ -84,11 +84,11 @@ int main(void) {
 
   // 3. a shot longer than the 720 stored points keeps running (points still coming): no END, no wipe
   reset_counts();
-  d = live(true); cs_take_live(&d, LINK_ONLINE);
+  d = live(true); cs_take_live(&d, BD_LINK_ONLINE);
   for (uint32_t t = 1; t <= 900; t++) { point(t); cs_tick(now += 150); }
   CHECK(n_start == 1 && n_end == 0);
   CHECK(bd_live_shot()->n == BD_SHOT_MAX);
-  d = live(false); cs_take_live(&d, LINK_ONLINE);
+  d = live(false); cs_take_live(&d, BD_LINK_ONLINE);
   CHECK(n_end == 1);
   printf("long shot: start %d end %d kept %d\n", n_start, n_end, bd_live_shot()->n);
 
@@ -104,7 +104,7 @@ int main(void) {
   cs_watch_weight(215);
   cs_tick(now += 150);
   CHECK(n_answer[BD_CMD_STOP_WEIGHT] == 0);         // not reported yet
-  d = live(false); d.act_weight = 21.5f; cs_take_live(&d, LINK_ONLINE);
+  d = live(false); d.act_weight = 21.5f; cs_take_live(&d, BD_LINK_ONLINE);
   cs_tick(now += 150);
   CHECK(n_answer[BD_CMD_STOP_WEIGHT] == 1 && last_answer[BD_CMD_STOP_WEIGHT] == BD_ANSWER_OK);
   cs_watch_weight(300);
@@ -113,17 +113,17 @@ int main(void) {
   printf("answers: weight %d (last %d)\n", n_answer[BD_CMD_STOP_WEIGHT], last_answer[BD_CMD_STOP_WEIGHT]);
 
   // 6. checks: busy while brewing; another profile active -> PROFILE_CHANGED
-  d = live(true); cs_take_live(&d, LINK_ONLINE);
+  d = live(true); cs_take_live(&d, BD_LINK_ONLINE);
   CHECK(cs_check_idle() == BD_ERR_BUSY);
-  d = live(false); cs_take_live(&d, LINK_ONLINE);
+  d = live(false); cs_take_live(&d, BD_LINK_ONLINE);
   CHECK(cs_check_idle() == BD_OK);
-  d = live(false); snprintf(d.act_profile, sizeof d.act_profile, "%s", "Other"); cs_take_live(&d, LINK_ONLINE);
+  d = live(false); snprintf(d.act_profile, sizeof d.act_profile, "%s", "Other"); cs_take_live(&d, BD_LINK_ONLINE);
   CHECK(cs_check_active(7) == BD_ERR_PROFILE_CHANGED);
-  d = live(false); cs_take_live(&d, LINK_NO_MACHINE);
+  d = live(false); cs_take_live(&d, BD_LINK_NO_MACHINE);
   CHECK(cs_check_idle() == BD_ERR_OFFLINE);
 
   // 7. the commands' whole rules (cs_cmd_*): ranges refused before anything is watched or sent
-  d = live(false); cs_take_live(&d, LINK_ONLINE);
+  d = live(false); cs_take_live(&d, BD_LINK_ONLINE);
   {
     const char *nm = NULL;
     int w10 = -1, pm = -1;
@@ -136,13 +136,13 @@ int main(void) {
     CHECK(cs_cmd_weight(99, 20.0f, &w10, &nm) == BD_ERR_UNKNOWN_ID);
     CHECK(cs_cmd_flush(BD_FLUSH_TIMED, &pm) == BD_OK && pm == PB_MODE_FLUSH_AUTO);
     CHECK(cs_cmd_tare() == (d.scales_present ? BD_OK : BD_ERR_NO_SCALE));
-    d = live(true); cs_take_live(&d, LINK_ONLINE);
+    d = live(true); cs_take_live(&d, BD_LINK_ONLINE);
     CHECK(cs_cmd_temp(7, 93, &nm) == BD_ERR_BUSY);
     CHECK(cs_cmd_flush(BD_FLUSH_ON, &pm) == BD_ERR_BUSY);
   }
 
   // 8. profile pick: unknown id, one at a time, answered NOT_TAKEN when the machine never reports it (5 s)
-  d = live(false); cs_take_live(&d, LINK_ONLINE);
+  d = live(false); cs_take_live(&d, BD_LINK_ONLINE);
   {
     const char *nm = NULL;
     reset_counts();
@@ -152,19 +152,19 @@ int main(void) {
     for (int i = 0; i < 40; i++) cs_tick(now += 150);
     CHECK(n_answer[BD_CMD_SELECT] == 1 && last_answer[BD_CMD_SELECT] == BD_ANSWER_NOT_TAKEN);
     CHECK(!cs_select_pending());
-    d = live(false); cs_take_live(&d, LINK_NO_MACHINE);
+    d = live(false); cs_take_live(&d, BD_LINK_NO_MACHINE);
     CHECK(cs_cmd_select(7, &nm) == BD_ERR_OFFLINE);
   }
 
   // 9. flush: OK once the machine reports the mode; tare: NOT_TAKEN when the scale never reads ~0
-  d = live(false); cs_take_live(&d, LINK_ONLINE);
+  d = live(false); cs_take_live(&d, BD_LINK_ONLINE);
   reset_counts();
   cs_watch_flush("FLUSH");
   cs_tick(now += 150);
-  d = live(false); snprintf(d.mode, sizeof d.mode, "%s", "FLUSH"); cs_take_live(&d, LINK_ONLINE);
+  d = live(false); snprintf(d.mode, sizeof d.mode, "%s", "FLUSH"); cs_take_live(&d, BD_LINK_ONLINE);
   cs_tick(now += 150);
   CHECK(n_answer[BD_CMD_FLUSH] == 1 && last_answer[BD_CMD_FLUSH] == BD_ANSWER_OK);
-  d = live(false); d.weight = 30.0f; cs_take_live(&d, LINK_ONLINE);
+  d = live(false); d.weight = 30.0f; cs_take_live(&d, BD_LINK_ONLINE);
   cs_watch_tare();
   for (int i = 0; i < 60; i++) cs_tick(now += 150);
   CHECK(n_answer[BD_CMD_TARE] == 1 && last_answer[BD_CMD_TARE] == BD_ANSWER_NOT_TAKEN);

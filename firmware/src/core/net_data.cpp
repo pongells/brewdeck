@@ -13,14 +13,14 @@
 SemaphoreHandle_t g_net_mtx = NULL;
 
 static LiveData g_data;
-static int g_link = LINK_CONNECTING;
+static int g_link = BD_LINK_CONNECTING;
 static uint32_t g_seq = 0, g_seen = 0;
 static ProfileList g_prof;
 static uint32_t g_pseq = 0, g_pseen = 0;
-static ProfileShape g_shape;
+static bd_profile_shape g_shape;
 static uint32_t g_sseq = 0, g_sseen = 0;
-static int g_why = WHY_NONE;                       // offline reason (WHY_*)
-static char g_why_ip[16] = "";                     // address that did not answer (WHY_NO_REPLY)
+static int g_why = BD_WHY_NONE;                       // offline reason (WHY_*)
+static char g_why_ip[16] = "";                     // address that did not answer (BD_WHY_NO_REPLY)
 // WebSocket data (ws.cpp): overlaid on the REST values in net_get() while fresh
 static WsSensor g_wss;
 static WsSystem g_wsy;
@@ -71,7 +71,7 @@ void data_publish_profiles(const ProfileList *l) {
   xSemaphoreGive(g_net_mtx);
 }
 
-void data_publish_shape(const ProfileShape *s) {
+void data_publish_shape(const bd_profile_shape *s) {
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   if (memcmp(&g_shape, s, sizeof *s) != 0) {        // only wake the UI when the graph really changes
     g_shape = *s;
@@ -94,7 +94,7 @@ uint32_t data_last_shot_ms(void) { return g_last_shot_ms; }
 
 // ---- the core loop's side (net.h) ----------------------------------------------------------------------------------
 int net_offline_reason(char *ip, size_t cap) {
-  if (!g_net_mtx) { if (cap) ip[0] = 0; return WHY_NONE; }
+  if (!g_net_mtx) { if (cap) ip[0] = 0; return BD_WHY_NONE; }
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const int w = g_why;
   snprintf(ip, cap, "%s", g_why_ip);
@@ -109,8 +109,8 @@ bool net_get(LiveData *out, int *link) {
   const uint32_t now = millis();
   // REST requests can time out while the machine is busy (seen at the start of a shot): fresh WebSocket data
   // alone keeps the machine "online" (with the last REST values for the rest)
-  if (g_link != LINK_ONLINE && g_wss_ok && now - g_wss_ms < WS_FRESH_MS && g_data.mode[0]) *link = LINK_ONLINE;
-  if (*link == LINK_ONLINE && g_wss_ok && now - g_wss_ms < WS_FRESH_MS) {   // ~3/s instead of ~1/s
+  if (g_link != BD_LINK_ONLINE && g_wss_ok && now - g_wss_ms < WS_FRESH_MS && g_data.mode[0]) *link = BD_LINK_ONLINE;
+  if (*link == BD_LINK_ONLINE && g_wss_ok && now - g_wss_ms < WS_FRESH_MS) {   // ~3/s instead of ~1/s
     out->temperature = g_wss.temperature;
     out->pressure = g_wss.pressure;
     out->weight = g_wss.weight;
@@ -119,7 +119,7 @@ bool net_get(LiveData *out, int *link) {
     out->steam_active = g_wss.steam_active;
     out->hot_water_active = g_wss.hot_water;
   }
-  if (*link == LINK_ONLINE && g_wsy_ok && now - g_wsy_ms < WS_FRESH_MS) {
+  if (*link == BD_LINK_ONLINE && g_wsy_ok && now - g_wsy_ms < WS_FRESH_MS) {
     out->scales_present = g_wsy.scales_present;
     out->warmup_remaining = (int)g_wsy.warmup_remaining;
     out->readiness = (int)g_wsy.readiness;
@@ -132,14 +132,14 @@ bool net_get(LiveData *out, int *link) {
   out->steam_set = (int)g_steam_set;
   snprintf(out->front_ver, sizeof out->front_ver, "%s", g_front_ver);
   snprintf(out->static_ver, sizeof out->static_ver, "%s", g_static_ver);
-  if (!g_scfg.valid) out->scale_type = SCALE_UNKNOWN;
-  else if (g_scfg.force_predictive || (!g_scfg.bt_enabled && !g_scfg.hw_enabled)) out->scale_type = SCALE_PREDICTIVE;
-  else if (g_scfg.bt_enabled && !g_scfg.hw_enabled) out->scale_type = SCALE_BT;
-  else if (g_scfg.hw_enabled && !g_scfg.bt_enabled) out->scale_type = SCALE_HW;
-  else out->scale_type = SCALE_UNKNOWN;             // both enabled: which one is connected is not reported
+  if (!g_scfg.valid) out->scale_type = BD_SCALE_UNKNOWN;
+  else if (g_scfg.force_predictive || (!g_scfg.bt_enabled && !g_scfg.hw_enabled)) out->scale_type = BD_SCALE_PREDICTIVE;
+  else if (g_scfg.bt_enabled && !g_scfg.hw_enabled) out->scale_type = BD_SCALE_BT;
+  else if (g_scfg.hw_enabled && !g_scfg.bt_enabled) out->scale_type = BD_SCALE_WIRED;
+  else out->scale_type = BD_SCALE_UNKNOWN;             // both enabled: which one is connected is not reported
   {   // the machine's readiness: log every change with the temperatures (to see when it switches)
     static int last_rd = -2;
-    if (*link == LINK_ONLINE && out->readiness != last_rd) {
+    if (*link == BD_LINK_ONLINE && out->readiness != last_rd) {
       static const char *const RN[] = {"WAITING", "WARMING", "HEATING", "READY", "STANDBY", "STEAMING", "FLUSHING",
                                        "MAINTENANCE"};
       Log.printf("net: readiness %d %s (boiler %.1f, target %.1f, pressure %.2f bar, warmup %d s left, mode %s)\n",
@@ -151,8 +151,8 @@ bool net_get(LiveData *out, int *link) {
   {   // pressure while idle in HOME, logged as a range per minute (to set the pressure warning's limits from real values)
     static float pmin = 1e9f, pmax = -1e9f;
     static uint32_t pt = 0;
-    const bool idle = *link == LINK_ONLINE && !strcmp(out->mode, "HOME") && !out->brew_active && !out->steam_active &&
-                      !out->hot_water_active;
+    const bool idle = *link == BD_LINK_ONLINE && !strcmp(out->mode, "HOME") && !out->brew_active &&
+                      !out->steam_active && !out->hot_water_active;
     if (idle) {
       if (out->pressure < pmin) pmin = out->pressure;
       if (out->pressure > pmax) pmax = out->pressure;
@@ -169,7 +169,7 @@ bool net_get(LiveData *out, int *link) {
   if (*link != shown) {
     static const char *const LN[] = {"connecting", "no machine", "online"};
     Log.printf("net: link %s (rest %s, ws data %ld ms old)\n",
-                  *link >= 0 && *link < 3 ? LN[*link] : "?", g_link == LINK_ONLINE ? "ok" : "failing",
+                  *link >= 0 && *link < 3 ? LN[*link] : "?", g_link == BD_LINK_ONLINE ? "ok" : "failing",
                   g_wss_ok ? (long)(now - g_wss_ms) : -1L);
     shown = *link;
   }
@@ -187,7 +187,7 @@ bool net_get_profiles(ProfileList *out) {
   return changed;
 }
 
-bool net_get_shape(ProfileShape *out) {
+bool net_get_shape(bd_profile_shape *out) {
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   bool changed = g_sseq != g_sseen;
   if (changed) *out = g_shape;

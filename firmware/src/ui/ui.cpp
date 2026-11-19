@@ -46,8 +46,8 @@ void ui_command_answer(int cmd, int answer) {
   if (cmd == BD_CMD_SELECT && g_pend_id) {
     g_pend_id = 0;
     for (int i = 0; i < g_profiles.count; i++)
-      g_profiles.p[i].selected = strcmp(g_profiles.p[i].name, g_menu_live.profile) == 0;
-    if (g_menu_live.profile[0]) show_profile(g_menu_live.profile);
+      g_profiles.p[i].active = strcmp(g_profiles.p[i].name, g_menu_live.profile_name) == 0;
+    if (g_menu_live.profile_name[0]) show_profile(g_menu_live.profile_name);
     g_shape_id = -1;                               // re-apply its weight too
     if (g_shape_loaded) ui_set_shape(&g_last_shape);
   } else if (cmd == BD_CMD_FLUSH && g_fl_want != FL_UNKNOWN) {
@@ -64,17 +64,18 @@ void ui_command_answer(int cmd, int answer) {
 }
 
 // Called on every machine-state change (several times a second); only widgets whose value changed are touched.
-void ui_set_live(const LiveData *d, int link) {
+void ui_set_live(const bd_machine *d) {
+  const int link = d->link;
   char b[64];
   // a boiler reading that is not a number in 0..400 (a sensor fault) is shown as 0: the big digits font has no "-" or
   // "nan", and NaN * 10 into int16 (steam chart) is undefined
-  LiveData safe;
+  bd_machine safe;
   if (!(d->temperature >= 0.0f && d->temperature < 400.0f)) {
     safe = *d;
     safe.temperature = 0.0f;
     d = &safe;
   }
-  g_live_brew = link == LINK_ONLINE && d->brew_active;   // brewing screen: "Done" once this drops after a shot
+  g_live_brew = link == BD_LINK_ONLINE && d->brewing;   // brewing screen: "Done" once this drops after a shot
   if (g_live_brew && g_br_state == BR_BREWING) g_br_seen_brew = true;
   static bool pv_msg_shown = false;                // the preview's "loading" line, once, until a profile arrives
   if (!g_shape_loaded && !pv_msg_shown) {
@@ -85,14 +86,14 @@ void ui_set_live(const LiveData *d, int link) {
   g_menu_link = link;
   g_off_active = true;
   if (link != g_off_link) {                         // offline screen: remember when the link was lost
-    if (link != LINK_ONLINE && g_off_link == LINK_ONLINE) { g_off_since = lv_tick_get(); g_upd_shown = false; }
-    if (link != LINK_ONLINE) g_off_phase = lv_tick_get();
-    if (link == LINK_ONLINE) g_off_ever_online = true;
+    if (link != BD_LINK_ONLINE && g_off_link == BD_LINK_ONLINE) { g_off_since = lv_tick_get(); g_upd_shown = false; }
+    if (link != BD_LINK_ONLINE) g_off_phase = lv_tick_get();
+    if (link == BD_LINK_ONLINE) g_off_ever_online = true;
     g_off_link = link;
   }
   g_can_select = false;
   g_can_tare = false;
-  if (link != LINK_ONLINE) {
+  if (link != BD_LINK_ONLINE) {
     g_fl_idle = false;
     g_fl_mode = FL_UNKNOWN;
     g_fl_want = FL_UNKNOWN;
@@ -108,10 +109,10 @@ void ui_set_live(const LiveData *d, int link) {
   // screen's own: the machine has no such state.
   const int rd = d->readiness;
   const bool rd_ok = rd >= 0 && rd <= 7;
-  const bool cooling = d->target > 0 && d->temperature > d->target + TEMP_MARGIN && rd != 1;
+  const bool cooling = d->target_temp > 0 && d->temperature > d->target_temp + TEMP_MARGIN && rd != 1;
   const bool heating_now = rd_ok ? (rd == 1 || rd == 2) && !cooling
                                  : d->warmup_remaining > 0 ||
-                                       (d->target > 0 && d->temperature < d->target - TEMP_MARGIN);
+                                       (d->target_temp > 0 && d->temperature < d->target_temp - TEMP_MARGIN);
   // After a heating phase, Ready only after READY_HOLD_MS of it without a break: while warming up the machine's
   // readiness goes READY / HEATING a few times as the boiler overshoots and dips. Until then the pill (and the idle
   // clock) keep saying Heating / Warming up; a state other than READY (Cooling, Standby, ...) ends it.
@@ -137,13 +138,13 @@ void ui_set_live(const LiveData *d, int link) {
   const bool heating = heating_now || s_hold;
   const char *state = "Ready";
   bool busy = true;
-  if (d->brew_active) state = "Brewing";
-  else if (d->steam_active || strcmp(d->mode, "STEAM") == 0) state = "Steam";
-  else if (d->hot_water_active) state = "Hot water";
+  if (d->brewing) state = "Brewing";
+  else if (d->steaming || strcmp(d->mode, "STEAM") == 0) state = "Steam";
+  else if (d->hot_water) state = "Hot water";
   else if (strncmp(d->mode, "FLUSH", 5) == 0) state = "Flush";
   else if (strcmp(d->mode, "DESCALE") == 0) state = "Descale";
   else busy = false;
-  st_update(d, (d->steam_active || strcmp(d->mode, "STEAM") == 0) && !d->brew_active);
+  st_update(d, (d->steaming || strcmp(d->mode, "STEAM") == 0) && !d->brewing);
   g_can_select = !busy && strcmp(d->mode, "HOME") == 0;
   {   // flush button: the machine's mode
     const int fm = !strcmp(d->mode, "FLUSH") ? BD_FLUSH_ON : !strcmp(d->mode, "FLUSH_AUTO") ? BD_FLUSH_TIMED
@@ -154,7 +155,7 @@ void ui_set_live(const LiveData *d, int link) {
     fl_show();
   }
   // flush mode left on with no water running does not keep the screen awake (only a running pump counts)
-  g_idle_busy = busy && !(strncmp(d->mode, "FLUSH", 5) == 0 && !d->brew_active && d->pressure < FLUSH_WATER_BAR);
+  g_idle_busy = busy && !(strncmp(d->mode, "FLUSH", 5) == 0 && !d->brewing && d->pressure < FLUSH_WATER_BAR);
   // a shot / steam / flush counts as activity: "Dim after" starts again when it ends, so the screen does not go
   // straight to the idle clock after steaming without a touch
   if (busy) lv_display_trigger_activity(NULL);
@@ -190,7 +191,7 @@ void ui_set_live(const LiveData *d, int link) {
   g_idle_word = heating ? 1 : cooling ? 2 : 0;
   g_idle_state = g_press_warn ? 3 : g_idle_word;
   snprintf(g_idle_temp, sizeof g_idle_temp, "%.1f", d->temperature);
-  g_can_tare = g_can_select && d->scales_present;
+  g_can_tare = g_can_select && d->scale_present;
   set_tc(g_tare_lbl, g_can_tare ? COL_TEXT : COL_OUTLINE);
   if (busy) set_pill(COL_BLUE_BG, COL_BLUE, COL_BLUE, state);
   else if (heating)
@@ -226,18 +227,18 @@ void ui_set_live(const LiveData *d, int link) {
 
   // profile (shown without the "(community)" suffix, as in the design) + scale
   if (g_pend_id) {
-    if (strcmp(d->profile, g_pend_name) == 0) g_pend_id = 0;          // confirmed by the machine
+    if (strcmp(d->profile_name, g_pend_name) == 0) g_pend_id = 0;          // confirmed by the machine
   }
-  if (d->profile[0] && !g_pend_id) show_profile(d->profile);
+  if (d->profile_name[0] && !g_pend_id) show_profile(d->profile_name);
   // the profile the values below belong to: a pick made here counts at once, so the machine's running profile (pushed
   // right at the switch) is taken without waiting ~1 s for the status poll to name it too
-  const char *vals_for = g_pend_id ? g_pend_name : d->profile;
+  const char *vals_for = g_pend_id ? g_pend_name : d->profile_name;
   // brew temperature: the active profile's (d_act_prof), REST targetTemperature until that is known; a pending
   // -/+ change is kept until it is sent
   {
     int t = -1;
-    if (d->act_temp > 0 && !strcmp(d->act_profile, vals_for)) t = (int)(d->act_temp + 0.5f);
-    else if (d->target > 0) t = (int)(d->target + 0.5f);
+    if (d->running.brew_temp > 0 && !strcmp(d->running.name, vals_for)) t = (int)(d->running.brew_temp + 0.5f);
+    else if (d->target_temp > 0) t = (int)(d->target_temp + 0.5f);
     if (t != g_act_temp) {
       g_act_temp = t;
       if (!timer_pending(g_temp_tm)) { g_tset = t; refresh_tset(); }
@@ -246,8 +247,8 @@ void ui_set_live(const LiveData *d, int link) {
   // stop weight: the ACTIVE profile's (d_act_prof) wins over the stored one (REST): a weight set from this screen
   // or the web UI's dashboard lives only in the active profile. Taken over when it changes, like ui_set_shape.
   // 0 = the profile has no stop weight (d_act_prof is known once its temperature is)
-  if ((d->act_weight > 0 || d->act_temp > 0) && !strcmp(d->act_profile, vals_for)) {
-    const int w10 = (int)(d->act_weight * 10.0f + 0.5f);
+  if ((d->running.stop_weight > 0 || d->running.brew_temp > 0) && !strcmp(d->running.name, vals_for)) {
+    const int w10 = (int)(d->running.stop_weight * 10.0f + 0.5f);
     if (w10 != g_act_weight10) {
       g_act_weight10 = w10;
       if (!timer_pending(g_weight_tm)) {
@@ -261,7 +262,7 @@ void ui_set_live(const LiveData *d, int link) {
   // a restore waiting for its profile to become active (Profiles page, snap_*): send its values once the machine runs
   // it (the core checks the active profile too), or give up after RESTORE_WAIT_MS
   if (g_rst.id) {
-    if (!strcmp(d->act_profile, g_rst.name) && g_can_select) snap_apply();
+    if (!strcmp(d->running.name, g_rst.name) && g_can_select) snap_apply();
     else if (lv_tick_elaps(g_rst.t) > RESTORE_WAIT_MS) {
       g_rst.id = 0;
       bd_log("ui: restore dropped (profile not active)");
@@ -269,11 +270,11 @@ void ui_set_live(const LiveData *d, int link) {
   }
   // scale pill: predictive (no scale used, the weight is only estimated during a shot) / connected / not connected.
   // With no scale connected the machine keeps reporting the last reading, so the weight is hidden.
-  const bool pred = d->scale_type == SCALE_PREDICTIVE;
-  const int ic = pred ? 2 : (d->scale_type == SCALE_BT ? 0 : 1);
+  const bool pred = d->scale_type == BD_SCALE_PREDICTIVE;
+  const int ic = pred ? 2 : (d->scale_type == BD_SCALE_BT ? 0 : 1);
   // "No scale" is orange like "Refill" (a missing scale is a problem); predictive is a choice: grey
-  const bool noscale = !pred && !d->scales_present;
-  const lv_color_t icc = pred ? COL_MUTED : (d->scales_present ? COL_BLUE : COL_WARN);
+  const bool noscale = !pred && !d->scale_present;
+  const lv_color_t icc = pred ? COL_MUTED : (d->scale_present ? COL_BLUE : COL_WARN);
   set_bg(g_scale_pill, COL_WARN_BG);
   foot_pill(g_scale_pill, noscale, 12, 14);
   set_hidden(g_sc_ic[0], ic != 0);
@@ -281,11 +282,11 @@ void ui_set_live(const LiveData *d, int link) {
   set_hidden(g_sc_ic[2], ic != 2);
   set_hidden(g_sc_ic[3], ic != 2);
   for (int i = 0; i < 4; i++) set_line_c(g_sc_ic[i], icc);
-  set_text(g_scale_name, pred ? "Predictive" : (d->scales_present ? "Scale" : "No scale"));
+  set_text(g_scale_name, pred ? "Predictive" : (d->scale_present ? "Scale" : "No scale"));
   set_tc(g_scale_name, noscale ? COL_WARN_TX : COL_MUTED);
-  set_hidden(g_scale_lbl, pred || !d->scales_present);
+  set_hidden(g_scale_lbl, pred || !d->scale_present);
   set_tc(g_scale_lbl, COL_TEXT);
-  if (d->scales_present) {
+  if (d->scale_present) {
     snprintf(b, sizeof b, "%.1f g", d->weight);
     set_text(g_scale_lbl, b);
   }
@@ -333,7 +334,7 @@ void ui_test_wifi_password(const char *ssid) {
   on_menu_open(NULL);
   snprintf(g_wj_ssid, sizeof g_wj_ssid, "%s", ssid);
   memset(g_pw, 0, sizeof g_pw);
-  g_wj_state = WIFI_JOIN_IDLE;
+  g_wj_state = BD_JOIN_IDLE;
   g_layer = 0; g_shift = g_caps = false; g_pw_show = true;
   menu_show_page(MP_PASSWORD);
 }

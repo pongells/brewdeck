@@ -37,8 +37,8 @@ static bool g_have_ip = false;
 // older stored shot of the same profile (its "vs Previous shot"), only while the machine is idle. PSRAM.
 static uint32_t g_hist_req = 0;       // id asked for, 0 = none
 static int g_hist_state = PREV_NONE, g_hist_prev_state = PREV_NONE;
-static ShotTrace *g_hist = NULL, *g_hist_prev = NULL;
-static ProfileShape *g_hist_shape = NULL;
+static bd_shot *g_hist = NULL, *g_hist_prev = NULL;
+static bd_profile_shape *g_hist_shape = NULL;
 static uint32_t g_hist_seq = 0, g_hist_seen = 0;
 static char *g_shot_buf = NULL;       // one reply of /api/shots/<id> (~6 KB per 20 s), PSRAM
 static const size_t SHOT_BUF_CAP = 64 * 1024;
@@ -50,7 +50,7 @@ static uint32_t g_before_id = 0;
 static uint32_t g_prev_hash = 0, g_prev_dur10 = 0;
 static int g_prev_tries = 0;          // > 0: a request is pending
 static int g_prev_state = PREV_NONE;
-static ShotTrace *g_prev = NULL;      // PSRAM
+static bd_shot *g_prev = NULL;      // PSRAM
 static uint32_t g_prev_seq = 0, g_prev_seen = 0;
 
 // machine address: an IP ("192.168.1.50") or a name ("gaggiuino" / "gaggiuino.local", found by mDNS). Set from the
@@ -131,8 +131,8 @@ static void profiles_step(const IPAddress &ip, char *buf, size_t cap, const Live
   static ProfileList cur, next;
   static bool have_list = false;
   static uint32_t last_list = 0;
-  static uint8_t tries[MAX_PROFILES];
-  static bool stale[MAX_PROFILES];                  // details to read again (saved from this screen)
+  static uint8_t tries[BD_MAX_PROFILES];
+  static bool stale[BD_MAX_PROFILES];                  // details to read again (saved from this screen)
   static int shape_id = 0;                          // profile id the published shape belongs to (0 = fetch again)
   static uint8_t shape_tries = 0;
   uint32_t now = millis();
@@ -165,7 +165,7 @@ static void profiles_step(const IPAddress &ip, char *buf, size_t cap, const Live
     shape_tries++;
     char path[32];
     snprintf(path, sizeof path, "/api/profile/%d", cur.p[i].id);
-    static ProfileShape sh;                         // ~1.2 KB, off the task stack
+    static bd_profile_shape sh;                         // ~1.2 KB, off the task stack
     if (fetch(ip, path, buf, cap) && parse_profile_shape(buf, &sh)) {
       sh.id = cur.p[i].id;
       shape_id = sh.id;
@@ -215,7 +215,7 @@ static void prev_step(const IPAddress &ip, const LiveData *d) {
   if (d->brew_active || d->steam_active || d->hot_water_active) return;   // only while idle
   char *const buf = g_shot_buf;
   const size_t CAP = SHOT_BUF_CAP;
-  if (!g_prev) g_prev = (ShotTrace *)heap_caps_malloc(sizeof(ShotTrace), MALLOC_CAP_SPIRAM);
+  if (!g_prev) g_prev = (bd_shot *)heap_caps_malloc(sizeof(bd_shot), MALLOC_CAP_SPIRAM);
   if (!buf || !g_prev || !ixp) { g_prev_tries = 0; prev_publish(PREV_FAILED); return; }
   const WsShotIndex &ix = *ixp;
   bool last_try = false;
@@ -282,9 +282,9 @@ static void hist_step(const IPAddress &ip, const LiveData *d) {
     hist_publish(PREV_FAILED, PREV_NONE);
     return;
   }
-  if (!g_hist) g_hist = (ShotTrace *)heap_caps_malloc(sizeof(ShotTrace), MALLOC_CAP_SPIRAM);
-  if (!g_hist_prev) g_hist_prev = (ShotTrace *)heap_caps_malloc(sizeof(ShotTrace), MALLOC_CAP_SPIRAM);
-  if (!g_hist_shape) g_hist_shape = (ProfileShape *)heap_caps_malloc(sizeof(ProfileShape), MALLOC_CAP_SPIRAM);
+  if (!g_hist) g_hist = (bd_shot *)heap_caps_malloc(sizeof(bd_shot), MALLOC_CAP_SPIRAM);
+  if (!g_hist_prev) g_hist_prev = (bd_shot *)heap_caps_malloc(sizeof(bd_shot), MALLOC_CAP_SPIRAM);
+  if (!g_hist_shape) g_hist_shape = (bd_profile_shape *)heap_caps_malloc(sizeof(bd_profile_shape), MALLOC_CAP_SPIRAM);
   if (!g_shot_buf || !g_hist || !g_hist_prev || !g_hist_shape || !have_ix) { hist_publish(PREV_FAILED, PREV_NONE); return; }
   char path[32];
   snprintf(path, sizeof path, "/api/shots/%u", (unsigned)id);
@@ -390,14 +390,14 @@ static void task(void *) {
         have_ip = false;
         fails = 0;
         Log.printf("net: machine address set to \"%s\" (saved)\n", nh);
-        data_publish(NULL, LINK_NO_MACHINE);
+        data_publish(NULL, BD_LINK_NO_MACHINE);
       }
     }
     {
       int why;
       if (wifi_down_why(&why)) {
         data_set_why(why, IPAddress());
-        data_publish(NULL, LINK_CONNECTING);
+        data_publish(NULL, BD_LINK_CONNECTING);
         have_ip = false;
         delay(500);
         continue;
@@ -426,7 +426,7 @@ static void task(void *) {
           t_log = stamp_nz(millis());
           Log.printf("net: \"%s\" not found (mDNS), retrying\n", g_mhost);
         }
-        data_set_why(WHY_NAME_UNKNOWN, IPAddress()); data_publish(NULL, LINK_NO_MACHINE); delay(1500); continue;
+        data_set_why(BD_WHY_NAME_UNKNOWN, IPAddress()); data_publish(NULL, BD_LINK_NO_MACHINE); delay(1500); continue;
       }
     }
     // a Wi-Fi scan (roaming, or the Wi-Fi page) takes the radio off the channel for 1-4 s: a request then fails and
@@ -445,8 +445,8 @@ static void task(void *) {
     if (fails == 0 && d.mode[0]) hist_step(ip, &d);
     if (fetch(ip, "/api/system/status", buf, sizeof buf) && strchr(buf, '{')) {
       parse_status(buf, &d);
-      data_set_why(WHY_NONE, IPAddress());
-      data_publish(&d, LINK_ONLINE);
+      data_set_why(BD_WHY_NONE, IPAddress());
+      data_publish(&d, BD_LINK_ONLINE);
       fails = 0;
       select_step(ip, buf, sizeof buf, &d);
       {   // remember the newest stored shot while idle and no lookup is pending (see g_before_id)
@@ -464,8 +464,8 @@ static void task(void *) {
       Log.printf("net: status request %d failed (rssi %d)\n", fails, WiFi.RSSI());
       if (fails >= 3) {
         Log.println("net: machine not answering, looking it up again");
-        data_set_why(WHY_NO_REPLY, ip);
-        data_publish(NULL, LINK_NO_MACHINE);
+        data_set_why(BD_WHY_NO_REPLY, ip);
+        data_publish(NULL, BD_LINK_NO_MACHINE);
         have_ip = host_is_ip(g_mhost);
       }
       delay(700);
@@ -528,7 +528,7 @@ void net_request_hist(uint32_t id) {
   net_wake();
 }
 
-int net_get_hist(ShotTrace *shot, ProfileShape *shape, ShotTrace *prev, int *prev_state, bool *changed) {
+int net_get_hist(bd_shot *shot, bd_profile_shape *shape, bd_shot *prev, int *prev_state, bool *changed) {
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const int st = g_hist_state;
   *changed = g_hist_seq != g_hist_seen;
@@ -543,7 +543,7 @@ int net_get_hist(ShotTrace *shot, ProfileShape *shape, ShotTrace *prev, int *pre
   return st;
 }
 
-int net_get_prev(ShotTrace *out, bool *changed) {
+int net_get_prev(bd_shot *out, bool *changed) {
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const int st = g_prev_state;
   *changed = g_prev_seq != g_prev_seen;

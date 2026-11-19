@@ -46,7 +46,7 @@ lv_obj_t *g_pv_msg;                        // "Loading..." / "No phases"
 static lv_obj_t *g_pv_line[PV_SERIES][PV_MAX_SEG];
 static lv_point_t g_pv_pts[PV_SERIES][PV_MAX_PTS];   // lv_line keeps a pointer: must stay alive
 bool g_shape_loaded = false;
-ProfileShape g_last_shape;                 // last one from the machine (to restore after a failed select)
+bd_profile_shape g_last_shape;                 // last one from the machine (to restore after a failed select)
 int g_shape_id = -1;                       // last profile / stop weight taken from the machine
 static int g_shape_weight10 = -1;
 // keypad
@@ -296,7 +296,7 @@ static void on_blink(lv_timer_t *t) {
 }
 
 // ---- profile preview and stop weight from the active profile (display only) -----------------------------------------
-void ui_set_shape(const ProfileShape *sh) {
+void ui_set_shape(const bd_profile_shape *sh) {
   static bd_preview bp;                            // the core's preview for our box (preview.cpp geometry)
   if (sh != &g_last_shape) g_last_shape = *sh;
   bd_profile_preview(sh, PV_W, PV_H, &bp);

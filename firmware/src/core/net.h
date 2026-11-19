@@ -12,7 +12,7 @@ bool net_get(LiveData *out, int *link);
 // Copies the profile list only when it changed since the last call (then returns true).
 bool net_get_profiles(ProfileList *out);
 // Copies the active profile's phases only when they changed since the last call (then returns true).
-bool net_get_shape(ProfileShape *out);
+bool net_get_shape(bd_profile_shape *out);
 // Queues POST /api/profile-select/<id>; the network task sends it only if the machine is idle in HOME.
 void net_select_profile(int id);
 // Next shot snapshot from the WebSocket (~7/s during a shot), oldest first; false when none is waiting.
@@ -22,7 +22,7 @@ enum { PREV_NONE = BD_LOAD_NONE, PREV_LOADING = BD_LOAD_LOADING, PREV_READY = BD
        PREV_FAILED = BD_LOAD_FAILED };
 void net_request_prev(const char *profile, int dur10);
 // Current state (PREV_*); *changed is true once per change, and on PREV_READY the shot is copied to out then.
-int  net_get_prev(ShotTrace *out, bool *changed);
+int  net_get_prev(bd_shot *out, bool *changed);
 // The machine's latest notification (d_notif over the WebSocket), copied once per new message (then true).
 bool net_get_notif(WsNotif *out);
 // Shot history (menu): the newest 50 stored shots (copied only when changed, then true), and loading one of them
@@ -31,13 +31,13 @@ bool net_get_index(WsShotIndex *out);
 void net_request_hist(uint32_t id);
 // State of the last request (PREV_*); on *changed with PREV_READY the shot, its stored profile and (prev_state
 // PREV_READY) the shot it is compared with are copied.
-int  net_get_hist(ShotTrace *shot, ProfileShape *shape, ShotTrace *prev, int *prev_state, bool *changed);
+int  net_get_hist(bd_shot *shot, bd_profile_shape *shape, bd_shot *prev, int *prev_state, bool *changed);
 
 // Wi-Fi join (menu > Wi-Fi). Scan: results via net_get_wifi_scan (true once per change). Join: tries the network for
 // up to 20 s; on success it is saved on the screen (NVS "wifi") and used first at boot, on failure the previous network
 // is joined again. The password is never logged.
 void net_wifi_scan(void);
-bool net_get_wifi_scan(WifiNet *out, int *n, bool *scanning);
+bool net_get_wifi_scan(bd_wifi_net *out, int *n, bool *scanning);
 void net_wifi_join(const char *ssid, const char *pass);
 // "Forget this network": deletes the saved network, leaves Wi-Fi and does not use the built-in one until a network
 // is joined from the list (NVS "wifi"/"nobuiltin"). The screen then shows "No Wi-Fi set up".

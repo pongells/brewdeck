@@ -111,10 +111,10 @@ answers them the same way the device does. The render harness feeds the screens 
 
 ## What Brewdeck's UI uses from the core
 
-Only the API (`brewdeck_core.h` and the LVGL 9 adapter `bd_lvgl9.h`) and two plain data headers: `live.h` (the
-machine state, profile and shot structs its screens are written around; `ui_bridge.cpp` fills them from the API) and
-`preview.h` (the profile preview and the planned rest of a shot). It never calls the network, WebSocket or board code
-directly, and takes its memory with `bd_alloc` (only the debug-build `/bench` timing uses ESP-IDF's timer).
+Only the API (`brewdeck_core.h` and the LVGL 9 adapter `bd_lvgl9.h`): its screens take the API's own types
+(`bd_machine`, `bd_profiles`, `bd_shot`, ...), which `ui_bridge.cpp` passes on as they are. One more header,
+`preview.h`, draws the profile preview and the planned rest of a shot. It never calls the network, WebSocket or board
+code directly, and takes its memory with `bd_alloc` (only the debug-build `/bench` timing uses ESP-IDF's timer).
 
 ## Writing another UI
 

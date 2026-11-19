@@ -134,7 +134,7 @@ static void st_draw(lv_event_t *e) {
 }
 
 // called from ui_set_live with every update while online
-void st_update(const LiveData *d, bool on) {
+void st_update(const bd_machine *d, bool on) {
   if (on != g_st_on) {
     g_st_on = on;
     set_hidden(g_st, !on);                          // stays in its build order: menu, brewing, offline, idle above

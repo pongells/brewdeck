@@ -110,7 +110,7 @@ extern int32_t g_hdr_btn_x;
 extern lv_obj_t *g_menu_btn;
 extern lv_obj_t *g_pv_msg;
 extern bool g_shape_loaded;
-extern ProfileShape g_last_shape;
+extern bd_profile_shape g_last_shape;
 extern int g_shape_id;
 extern lv_obj_t *g_tt_lbl, *g_tw_lbl;
 extern bool g_can_select;
@@ -146,7 +146,7 @@ void build_editor(lv_obj_t *scr);
 
 // ---- screens/profiles.cpp: the Profiles page, originals and snapshots -----------------------------------------------
 extern lv_obj_t *g_pick;
-extern ProfileList g_profiles;
+extern bd_profiles g_profiles;
 extern int g_pend_id;
 extern char g_pend_name[48];
 extern bool g_orig_have;
@@ -167,11 +167,11 @@ void snap_apply(void);
 
 // ---- screens/steam.cpp ----------------------------------------------------------------------------------------------
 extern lv_obj_t *g_st;
-void st_update(const LiveData *d, bool on);
+void st_update(const bd_machine *d, bool on);
 void build_steam(lv_obj_t *scr);
 
 // ---- screens/brew.cpp: brewing screen and shot review ---------------------------------------------------------------
-extern ShotPoint *g_br;
+extern bd_shot_point *g_br;
 extern int g_br_n;
 extern int g_br_state;
 extern bool g_br_seen_brew;
@@ -186,7 +186,7 @@ void br_hide(void);
 void rv_values(void);
 void rv_axis(void);
 void rv_toggle_style(void);
-void rv_open_stored(const ShotTrace *s, const ProfileShape *sh, const ShotTrace *prev, int prev_state);
+void rv_open_stored(const bd_shot *s, const bd_profile_shape *sh, const bd_shot *prev, int prev_state);
 void build_brew(lv_obj_t *scr);
 
 // ---- screens/offline.cpp --------------------------------------------------------------------------------------------
@@ -239,7 +239,7 @@ extern lv_obj_t *g_menu_page[MENU_PAGES];
 extern int g_menu_cur;
 extern int g_menu_entry;
 extern bool g_in_wifi_pages;
-extern LiveData g_menu_live;
+extern bd_machine g_menu_live;
 extern int g_menu_link;
 void menu_show_page(int k);
 void on_menu_open(lv_event_t *e);
@@ -270,7 +270,7 @@ void forget_refresh(void);
 void build_wifi(lv_obj_t *m);
 
 // ---- screens/history.cpp: the shot history page ---------------------------------------------------------------------
-extern WsShotIndex *g_hx;
+extern bd_history *g_hx;
 extern bool g_hx_ok;
 void hist_page_shown(void);
 void hist_timer(void);

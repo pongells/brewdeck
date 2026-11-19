@@ -18,7 +18,7 @@ int main(int argc, char **argv) {
   const bool verbose = argc > 1 && !strcmp(argv[1], "-v");
   for (int a = verbose ? 2 : 1; a < argc; a++) {
     const char *buf = slurp(argv[a]);
-    static ProfileShape s; static PvSeries o[PV_SERIES];
+    static bd_profile_shape s; static PvSeries o[PV_SERIES];
     if (!parse_profile_shape(buf, &s)) { printf("%s: parse failed\n", argv[a]); fail++; continue; }
     float tot = preview_build(&s, 336, 84, o);
     printf("%s: %d phases, weight %.1f, temp %.1f, est %.1f s, pts/seg P %d/%d p %d/%d F %d/%d f %d/%d\n   durations:",
@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
       if (q->nseg && q->seg[q->nseg] != q->n) { printf("   bad seg end\n"); fail++; } }
     if (verbose) plot(o);
     {   // planned rest: from the start it spans the whole estimate; from the middle it is shorter; time never goes back
-      static ShotPoint pl[400];
+      static bd_shot_point pl[400];
       const float wsave = s.stop_weight; s.stop_weight = 0;   // no stop weight: the whole estimate
       const int n0 = preview_plan(&s, 0, 0, 0, 0, 0, 0, pl, 400);
       if (n0 < 2 || abs((int)pl[n0 - 1].t - (int)(tot * 10 + 0.5f)) > 2) { printf("   plan from 0: %d pts, end %d vs %.1f s\n", n0, n0 ? pl[n0 - 1].t : 0, tot); fail++; }
@@ -46,9 +46,9 @@ int main(int argc, char **argv) {
     }
   }
   // truncated reply must fail cleanly
-  ProfileShape t; const char *trunc = "{\"name\":\"x\",\"phases\":[{\"type\":\"FLOW\",\"target\":{\"end\":3";
+  bd_profile_shape t; const char *trunc = "{\"name\":\"x\",\"phases\":[{\"type\":\"FLOW\",\"target\":{\"end\":3";
   if (parse_profile_shape(trunc, &t)) { printf("truncated accepted!\n"); fail++; }
-  static PvSeries o2[PV_SERIES]; ProfileShape e; memset(&e, 0, sizeof e);
+  static PvSeries o2[PV_SERIES]; bd_profile_shape e; memset(&e, 0, sizeof e);
   if (preview_build(&e, 336, 84, o2) != 0 || o2[0].n || o2[2].n) { printf("empty not empty\n"); fail++; }
   return report("preview_test");
 }
