@@ -45,6 +45,11 @@ extern "C" {
 
 #define BD_API_VERSION 1          // 1 = the first stable API
 
+// command limits (bd_set_stop_weight, bd_set_brew_temp); outside them a command is refused with BD_ERR_RANGE
+#define BD_STOP_WEIGHT_MAX 200    // g (0 = no stop weight)
+#define BD_BREW_TEMP_MIN 1        // degC (0 = heater off: never sent)
+#define BD_BREW_TEMP_MAX 105
+
 // ---- results ------------------------------------------------------------------------------------------------------
 typedef enum {
   BD_OK = 0,                // queued (the machine's answer: BD_EV_COMMAND)

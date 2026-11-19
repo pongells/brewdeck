@@ -9,7 +9,6 @@
 #include "net.h"
 #include "net_ws.h"
 #include "net_int.h"
-#define g_mtx g_net_mtx
 
 SemaphoreHandle_t g_net_mtx = NULL;
 
@@ -51,34 +50,34 @@ void data_init(void) {
 
 // ---- the network task's side ---------------------------------------------------------------------------------------
 void data_publish(const LiveData *d, int link) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   if (d) g_data = *d;
   g_link = link;
   g_seq++;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 
 void data_set_why(int why, IPAddress ip) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_why = why;
   snprintf(g_why_ip, sizeof g_why_ip, "%s", (uint32_t)ip ? ip.toString().c_str() : "");
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 
 void data_publish_profiles(const ProfileList *l) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_prof = *l;
   g_pseq++;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 
 void data_publish_shape(const ProfileShape *s) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   if (memcmp(&g_shape, s, sizeof *s) != 0) {        // only wake the UI when the graph really changes
     g_shape = *s;
     g_sseq++;
   }
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 
 bool data_index(WsShotIndex *out) {
@@ -95,16 +94,16 @@ uint32_t data_last_shot_ms(void) { return g_last_shot_ms; }
 
 // ---- the core loop's side (net.h) ----------------------------------------------------------------------------------
 int net_offline_reason(char *ip, size_t cap) {
-  if (!g_mtx) { if (cap) ip[0] = 0; return WHY_NONE; }
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  if (!g_net_mtx) { if (cap) ip[0] = 0; return WHY_NONE; }
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const int w = g_why;
   snprintf(ip, cap, "%s", g_why_ip);
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   return w;
 }
 
 bool net_get(LiveData *out, int *link) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   *out = g_data;
   *link = g_link;
   const uint32_t now = millis();
@@ -175,120 +174,120 @@ bool net_get(LiveData *out, int *link) {
     shown = *link;
   }
   g_seen = g_seq;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   return changed;
 }
 
 bool net_get_profiles(ProfileList *out) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   bool changed = g_pseq != g_pseen;
   if (changed) *out = g_prof;
   g_pseen = g_pseq;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   return changed;
 }
 
 bool net_get_shape(ProfileShape *out) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   bool changed = g_sseq != g_sseen;
   if (changed) *out = g_shape;
   g_sseen = g_sseq;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   return changed;
 }
 
 bool net_get_shot(WsShot *out) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const bool any = g_shot_r != g_shot_w;
   if (any) *out = g_shotq[g_shot_r++ % 32];
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   return any;
 }
 
 bool net_get_index(WsShotIndex *out) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const bool ch = g_index_ok && g_index_seq != g_index_seen;
   if (ch) { *out = *g_index; g_index_seen = g_index_seq; }
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   return ch;
 }
 
 // ---- the WebSocket task's side (net_ws.h) --------------------------------------------------------------------------
 void net_ws_sensor(const WsSensor *s) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_wss = *s;
   g_wss_ms = millis();
   g_wss_ok = true;
   g_seq++;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 void net_ws_system(const WsSystem *s) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_wsy = *s;
   g_wsy_ms = millis();
   g_wsy_ok = true;
   g_seq++;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 void net_ws_shot(const WsShot *s) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_shotq[g_shot_w++ % 32] = *s;
   g_last_shot_ms = millis();
   if (g_shot_w - g_shot_r > 32) g_shot_r = g_shot_w - 32;   // UI stalled: drop the oldest
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 void net_ws_act_profile(const char *name, float weight, float temp) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   if (g_act_w != weight || g_act_t != temp || strcmp(g_act_name, name) != 0) g_seq++;
   g_act_w = weight;
   g_act_t = temp;
   snprintf(g_act_name, sizeof g_act_name, "%s", name);
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 void net_ws_versions(const char *front, const char *stat) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   if (strcmp(g_front_ver, front) || strcmp(g_static_ver, stat)) g_seq++;
   snprintf(g_front_ver, sizeof g_front_ver, "%s", front);
   snprintf(g_static_ver, sizeof g_static_ver, "%s", stat);
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 void net_ws_steam_set(uint32_t deg) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   if (g_steam_set != deg) g_seq++;
   g_steam_set = deg;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 void net_ws_scale_cfg(const WsScaleCfg *c) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_scfg = *c;
   g_seq++;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 static WsNotif g_notif;
 static uint32_t g_notif_seq = 0, g_notif_seen = 0;
 void net_ws_notif(const WsNotif *n) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_notif = *n;
   g_notif_seq++;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 bool net_get_notif(WsNotif *out) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const bool ch = g_notif_seq != g_notif_seen;
   if (ch) { *out = g_notif; g_notif_seen = g_notif_seq; }
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   return ch;
 }
 void net_ws_lost(void) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_wss_ok = g_wsy_ok = false;
   g_seq++;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 
 void net_ws_index(const WsShotIndex *ix) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   if (g_index) { *g_index = *ix; g_index_ok = true; g_index_seq++; }
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 

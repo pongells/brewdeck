@@ -12,7 +12,7 @@
 #include "brewdeck_core.h"
 #include "core_internal.h"
 #include "core_state.h"
-#include "../board/common/board_internal.h"
+#include "board_core.h"
 #include "tlog.h"
 #include "net.h"
 #include "ws.h"
@@ -131,7 +131,7 @@ void bd_store_erase(const char *key) { if (g_store_ok && g_store.isKey(key)) g_s
 
 // One-time move of the per-profile originals from their old namespace ("orig", u32 values) into the UI's store.
 static void migrate_orig(void) {
-  if (bd_store_get_int("orig_moved", 0)) return;
+  if (strcmp(BD_UI.name, "screen") != 0 || bd_store_get_int("orig_moved", 0)) return;   // only Brewdeck's UI kept them
   nvs_iterator_t it = NULL;
   int moved = 0;
   esp_err_t e = nvs_entry_find(NVS_DEFAULT_PART_NAME, "orig", NVS_TYPE_U32, &it);
@@ -270,7 +270,7 @@ void bd_core_loop(void) {
   mem_watch("loop: UI drawing");
   uint32_t fus, fpx;
   bd_display_stats(&fus, &fpx, false);
-  // slow frames (debug, e.g. the brewing screen opening): how much of it was copying into the frame buffer
+  // slow frames (e.g. the brewing screen opening): how much of it was copying into the frame buffer
   if (dt >= 40) Log.printf("ui: slow frame %u ms: flush %u ms for %u px, layout + drawing %u ms\n", (unsigned)dt,
                            (unsigned)(fus / 1000), (unsigned)fpx, (unsigned)(dt - fus / 1000));
   if (pf_shots) { pf_n++; pf_sum += dt; if (dt > pf_max) pf_max = dt; }

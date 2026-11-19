@@ -47,6 +47,14 @@ static void skip(Rd *r, uint32_t wt) {
   r->p += n;
 }
 
+// printable ASCII only: the screen fonts have nothing else, and names are compared with the REST ones
+static void copy_ascii(const uint8_t *p, size_t l, char *o, size_t on) {
+  size_t k = 0;
+  for (size_t j = 0; j < l && k + 1 < on; j++)
+    if (p[j] >= 32 && p[j] < 127) o[k++] = (char)p[j];
+  o[k] = 0;
+}
+
 bool pb_envelope(const uint8_t *b, size_t n, char *act, size_t cap, const uint8_t **data, size_t *dlen) {
   Rd r = {b, b + n, true};
   uint32_t no, wt;
@@ -112,10 +120,7 @@ bool pb_notif(const uint8_t *b, size_t n, WsNotif *o) {
     else if (no == 2 && wt == 2) {
       const size_t l = (size_t)varint(&r);
       if (!r.ok || (size_t)(r.end - r.p) < l) return false;
-      size_t k = 0;
-      for (size_t j = 0; j < l && k + 1 < sizeof o->msg; j++)
-        if (r.p[j] >= 32 && r.p[j] < 127) o->msg[k++] = (char)r.p[j];
-      o->msg[k] = 0;
+      copy_ascii(r.p, l, o->msg, sizeof o->msg);
       r.p += l;
     } else skip(&r, wt);
   }
@@ -124,8 +129,7 @@ bool pb_notif(const uint8_t *b, size_t n, WsNotif *o) {
 }
 
 bool pb_system(const uint8_t *b, size_t n, WsSystem *o) {
-  memset(o, 0, sizeof *o);
-  o->mode = 0;                             // BREW_AUTO is 0 in the enum: absent field means BREW_AUTO
+  memset(o, 0, sizeof *o);                 // mode 0 = BREW_AUTO: an absent field means BREW_AUTO
   Rd r = {b, b + n, true};
   uint32_t no, wt;
   while (next(&r, &no, &wt)) {
@@ -198,10 +202,7 @@ bool pb_shot_index(const uint8_t *b, size_t n, WsShotIndex *o) {
         const size_t l = (size_t)varint(&s);
         if (!s.ok || (size_t)(s.end - s.p) < l) return false;
         rec.name_hash = shot_name_hash((const char *)s.p, l);
-        size_t k = 0;                                // printable ASCII only (the fonts have nothing else)
-        for (size_t j = 0; j < l && k + 1 < sizeof rec.name; j++)
-          if (s.p[j] >= 32 && s.p[j] < 127) rec.name[k++] = (char)s.p[j];
-        rec.name[k] = 0;
+        copy_ascii(s.p, l, rec.name, sizeof rec.name);
         s.p += l;
       } else skip(&s, wt);
     }
@@ -253,13 +254,6 @@ bool pb_scale_cfg(const uint8_t *b, size_t n, WsScaleCfg *o) {
     o->valid = true;
   }
   return r.ok && o->valid;
-}
-
-static void copy_ascii(const uint8_t *p, size_t l, char *o, size_t on) {
-  size_t k = 0;
-  for (size_t j = 0; j < l && k + 1 < on; j++)
-    if (p[j] >= 32 && p[j] < 127) o[k++] = (char)p[j];
-  o[k] = 0;
 }
 
 bool pb_versions(const uint8_t *b, size_t n, char *front, size_t fn, char *stat, size_t sn) {
@@ -321,11 +315,8 @@ bool pb_profile_info(const uint8_t *b, size_t n, uint32_t *id, char *name, size_
     if ((no == 1 || no == 3) && wt == 2) {
       const size_t len = (size_t)varint(&r);
       if (!r.ok || (size_t)(r.end - r.p) < len) return false;
-      if (no == 1 && ncap) {                        // printable ASCII only, like parse.cpp text(): the REST names
-        size_t j = 0;                               // are compared with these (a "Caf\xC3\xA9" profile never matched)
-        for (size_t i = 0; i < len && j + 1 < ncap; i++)
-          if (r.p[i] >= 32 && r.p[i] < 127) name[j++] = (char)r.p[i];
-        name[j] = 0;
+      if (no == 1 && ncap) {                        // as parse.cpp text(): the REST names are compared with these
+        copy_ascii(r.p, len, name, ncap);
       } else if (no == 3) {
         Rd g = {r.p, r.p + len, true};
         uint32_t gn, gw;
@@ -399,7 +390,7 @@ static size_t act_wrap(uint8_t *out, size_t hdr_max, size_t dlen) {
 }
 
 size_t pb_weight_cmd(const uint8_t *prof, size_t n, float weight, uint8_t *out, size_t cap) {
-  if (!(weight >= 0 && weight <= 200)) return 0;   // the API's range (bd_set_stop_weight; the web UI allows 300)
+  if (!(weight >= 0 && weight <= BD_STOP_WEIGHT_MAX)) return 0;   // the API's range (the web UI allows 300)
   // 1) patched profile into the tail of out, 2) envelope header in front of it
   static const char ACT[] = "c_upd_act_prof";
   const size_t hdr_max = 2 + (sizeof ACT - 1) + 1 + 5;   // action field + data key + length varint
@@ -442,8 +433,8 @@ size_t pb_weight_cmd(const uint8_t *prof, size_t n, float weight, uint8_t *out, 
 }
 
 size_t pb_temp_cmd(const uint8_t *prof, size_t n, float temp, uint8_t *out, size_t cap) {
-  if (!(temp >= 1 && temp <= 105)) return 0;        // 1-105 degC: low values are real profiles (a boiler-off test
-                                                    // profile at 1); 0 = heater off: never sent
+  // low values are real profiles (a boiler-off test profile at 1 degC); 0 = heater off: never sent
+  if (!(temp >= BD_BREW_TEMP_MIN && temp <= BD_BREW_TEMP_MAX)) return 0;
   static const char ACT[] = "c_upd_act_prof";
   const size_t hdr_max = 2 + (sizeof ACT - 1) + 1 + 5;
   if (cap < hdr_max + 16) return 0;

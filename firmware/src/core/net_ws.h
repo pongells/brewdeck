@@ -1,5 +1,5 @@
 #pragma once
-// Internal: ws.cpp hands decoded WebSocket data to net.cpp (which owns the merged LiveData and the mutex).
+// Internal: ws.cpp hands decoded WebSocket data to net_data.cpp (which keeps the merged LiveData under g_net_mtx).
 #include <IPAddress.h>
 #include "pb.h"
 

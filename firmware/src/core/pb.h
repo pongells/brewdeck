@@ -41,8 +41,8 @@ const char *ws_mode_name(int mode);   // "HOME", "BREW_AUTO", ... (the strings t
 extern const uint8_t PB_TARE_CMD[];
 extern const size_t PB_TARE_CMD_LEN;   // 17
 // Save: WebSocketMessageDto { action: "c_save_act_prof" } and nothing else, as the web UI's
-// persistActiveProfile(). Saves the ACTIVE profile's values into the stored profile (CONFIRMED 2026-11-16: active
-// 91 degC, stored 92 -> 91) and, by the web UI's wording ("Profile set as default"), makes it the boot profile.
+// persistActiveProfile(). Saves the ACTIVE profile's values into the stored profile and, by the web UI's wording
+// ("Profile set as default"), makes it the boot profile.
 extern const uint8_t PB_SAVE_PROF_CMD[];
 extern const size_t PB_SAVE_PROF_CMD_LEN;   // 17
 // Flush: WebSocketMessageDto { action: "c_opmode", data: UpdateSystemStateCommandDto

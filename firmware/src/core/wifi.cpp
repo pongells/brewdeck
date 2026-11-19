@@ -11,8 +11,7 @@
 #include "wifi_config.h"
 #include "net.h"
 #include "net_int.h"
-#include "../board/common/board_internal.h"
-#define g_mtx g_net_mtx
+#include "board_core.h"
 
 // Wi-Fi credentials in use: the network saved from the menu (NVS "wifi") if any, else the compiled-in one (none while
 // wifi_config.h still has the example's placeholder: the screen then asks for a network, "No Wi-Fi set up").
@@ -21,6 +20,11 @@
 static char g_ssid[33], g_pass[65];
 static bool g_saved_net = false, g_no_builtin = false;
 static volatile bool g_forget_req = false;
+static bool compiled_net(void) { return strcmp(WIFI_SSID, "YOUR_WIFI_NAME") != 0; }   // a network in wifi_config.h
+// local time for the idle clock (POSIX TZ string; wifi_config.h can set GAGGI_TZ): Central Europe with summer time
+#ifndef GAGGI_TZ
+#define GAGGI_TZ "CET-1CEST,M3.5.0,M10.5.0/3"
+#endif
 static void load_creds(void) {
   Preferences p;
   g_saved_net = false;
@@ -36,15 +40,14 @@ static void load_creds(void) {
       return;
     }
   }
-  if (g_no_builtin || !strcmp(WIFI_SSID, "YOUR_WIFI_NAME")) { g_ssid[0] = 0; g_pass[0] = 0; return; }
+  if (g_no_builtin || !compiled_net()) { g_ssid[0] = 0; g_pass[0] = 0; return; }
   snprintf(g_ssid, sizeof g_ssid, "%s", WIFI_SSID);
   snprintf(g_pass, sizeof g_pass, "%s", WIFI_PASS);
 }
-static bool compiled_net(void) { return strcmp(WIFI_SSID, "YOUR_WIFI_NAME") != 0; }   // a network in wifi_config.h
 
-static bool g_retry_req = false;                   // "Try again" on the offline screen (under g_mtx)
+static bool g_retry_req = false;                   // "Try again" on the offline screen (under g_net_mtx)
 static volatile bool g_roam_force = false;
-// scan / join requests from the UI task, results back to it (all under g_mtx)
+// scan / join requests from the UI task, results back to it (all under g_net_mtx)
 static bool g_scan_req = false, g_scanning = false;
 static WifiNet g_nets[MAX_NETS];
 static int g_nets_n = 0;
@@ -68,19 +71,19 @@ bool wifi_down_why(int *why) {
 }
 
 static void wifi_scan_step(void) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const bool req = g_scan_req;
   g_scan_req = false;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   if (req && WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
     WiFi.scanDelete();
     if (WiFi.scanNetworks(true /* async */, false /* no hidden */) == WIFI_SCAN_FAILED) {
       Log.println("wifi: scan failed to start");
     } else {
-      xSemaphoreTake(g_mtx, portMAX_DELAY);
+      xSemaphoreTake(g_net_mtx, portMAX_DELAY);
       g_scanning = true;
       g_nets_seq++;
-      xSemaphoreGive(g_mtx);
+      xSemaphoreGive(g_net_mtx);
     }
   }
   if (!g_scanning) return;
@@ -105,19 +108,19 @@ static void wifi_scan_step(void) {
     for (int b = a; b > 0 && nets[b].rssi > nets[b - 1].rssi; b--) { WifiNet t = nets[b]; nets[b] = nets[b - 1]; nets[b - 1] = t; }
   WiFi.scanDelete();
   Log.printf("wifi: scan found %d networks (%d names)\n", n < 0 ? 0 : n, k);
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   memcpy(g_nets, nets, sizeof nets);
   g_nets_n = k;
   g_scanning = false;
   g_nets_seq++;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 
 static void join_publish(int st) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_join_state = st;
   g_join_seq++;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 // ---- roaming between the access points of one network (mesh) -------------------------------------------------
 // The ESP32 picks an AP only when it joins and never roams: after some boots it sat on a far AP (-65..-70 dBm, the
@@ -143,10 +146,8 @@ static void roam_step(bool idle) {
   const uint32_t now = millis();
   if (WiFi.status() != WL_CONNECTED) {
     if (!g_down_ms) g_down_ms = stamp_nz(now);
-    // the first join after boot dropped: try again after 1 s, up to 3 times, instead of waiting 15 s. Seen on the
-    // ESP32-P4 board while its Wi-Fi chip (ESP32-C6) ran older ESP-Hosted firmware than the host side (2.3.2 vs
-    // 2.12.13): the first join dropped every boot (reason 8, ~3 s in), the next one worked. Updating the C6 fixed it;
-    // this stays for boards that still have the old firmware.
+    // the first join after boot dropped: try again after 1 s, up to 3 times, instead of waiting 15 s (an ESP32-P4
+    // board whose ESP32-C6 runs older ESP-Hosted firmware drops the first join at every boot)
     static uint8_t quick = 0;
     if (!g_ever_joined && g_disc_ms && now - g_disc_ms > 1000 && quick < 3 && g_ssid[0]) {
       quick++;
@@ -236,7 +237,7 @@ static void roam_step(bool idle) {
 
 static bool wifi_join_step(void) {
   static char ssid[33], pass[65];
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const bool req = g_join_req;
   if (req) {
     memcpy(ssid, g_join_ssid, sizeof ssid);
@@ -244,7 +245,7 @@ static bool wifi_join_step(void) {
     memset(g_join_pass, 0, sizeof g_join_pass);
     g_join_req = false;
   }
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   if (!req) return false;
   g_pinned = false;                                  // a new network: any of its APs
   join_publish(WIFI_JOIN_BUSY);
@@ -268,9 +269,9 @@ static bool wifi_join_step(void) {
     Preferences p;
     if (p.begin("wifi", false)) { p.putString("ssid", ssid); p.putString("pass", pass); p.remove("nobuiltin"); p.end(); }
     g_no_builtin = false;
-    xSemaphoreTake(g_mtx, portMAX_DELAY);           // g_ssid is read by the core loop (net_wifi_target)
+    xSemaphoreTake(g_net_mtx, portMAX_DELAY);           // g_ssid is read by the core loop (net_wifi_target)
     snprintf(g_ssid, sizeof g_ssid, "%s", ssid);
-    xSemaphoreGive(g_mtx);
+    xSemaphoreGive(g_net_mtx);
     snprintf(g_pass, sizeof g_pass, "%s", pass);
     g_saved_net = true;
     Log.printf("wifi: joined \"%s\" (saved), %d dBm\n", ssid, (int)WiFi.RSSI());
@@ -293,18 +294,18 @@ bool wifi_step(bool idle) {
   wifi_scan_step();
   if (wifi_join_step()) return true;
   bool restarted = false;
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const bool wreq = g_retry_req, joining = g_join_req;
   g_retry_req = false;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   if (g_forget_req) {
     g_forget_req = false;
     Preferences p;
     if (p.begin("wifi", false)) { p.remove("ssid"); p.remove("pass"); p.putBool("nobuiltin", true); p.end(); }
     Log.printf("wifi: forgot \"%s\" (saved password deleted, built-in network off)\n", g_ssid);
-    xSemaphoreTake(g_mtx, portMAX_DELAY);
+    xSemaphoreTake(g_net_mtx, portMAX_DELAY);
     g_ssid[0] = 0;
-    xSemaphoreGive(g_mtx);
+    xSemaphoreGive(g_net_mtx);
     memset(g_pass, 0, sizeof g_pass);
     g_saved_net = false;
     g_no_builtin = true;
@@ -327,9 +328,9 @@ bool wifi_step(bool idle) {
       millis() > 30000) {
     fell_back = true;
     Log.printf("wifi: saved network not joined, trying the built-in \"%s\"\n", WIFI_SSID);
-    xSemaphoreTake(g_mtx, portMAX_DELAY);
+    xSemaphoreTake(g_net_mtx, portMAX_DELAY);
     snprintf(g_ssid, sizeof g_ssid, "%s", WIFI_SSID);
-    xSemaphoreGive(g_mtx);
+    xSemaphoreGive(g_net_mtx);
     snprintf(g_pass, sizeof g_pass, "%s", WIFI_PASS);
     WiFi.disconnect(false);
     WiFi.begin(g_ssid, g_pass);
@@ -351,9 +352,6 @@ void wifi_setup(void) {
   WiFi.setSleep(false);   // no modem sleep: its beacon wake-ups add bursts of flash/PSRAM traffic that disturb the panel
   // local time for the idle screen's clock (NTP from the internet, nothing to/from the machine). Time zone: set
   // GAGGI_TZ in wifi_config.h to override (POSIX TZ string); default Central Europe with summer time.
-#ifndef GAGGI_TZ
-#define GAGGI_TZ "CET-1CEST,M3.5.0,M10.5.0/3"
-#endif
   configTzTime(GAGGI_TZ, "pool.ntp.org", "time.google.com");
   // several access points can share a network name: by default the ESP32 joins the FIRST one it finds (seen: -64 to
   // -70 dBm right next to an access point, with stalls); scan every channel and take the strongest instead
@@ -372,58 +370,58 @@ void net_wifi_forget(void) {
   net_wake();
 }
 void net_wifi_retry(void) {
-  if (!g_mtx) return;
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  if (!g_net_mtx) return;
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_retry_req = true;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 void net_wifi_target(char *out, size_t n) {
   if (!n) return;
   out[0] = 0;
-  if (!g_mtx) return;
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  if (!g_net_mtx) return;
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   snprintf(out, n, "%s", g_ssid);
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 void net_wifi_scan(void) {
-  if (!g_mtx) return;
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  if (!g_net_mtx) return;
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_scan_req = true;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 bool net_get_wifi_scan(WifiNet *out, int *n, bool *scanning) {
-  if (!g_mtx) return false;
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  if (!g_net_mtx) return false;
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const bool ch = g_nets_seq != g_nets_seen;
   g_nets_seen = g_nets_seq;
   memcpy(out, g_nets, sizeof g_nets);
   *n = g_nets_n;
   *scanning = g_scanning || g_scan_req;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   return ch;
 }
 void net_wifi_join(const char *ssid, const char *pass) {
-  if (!g_mtx) return;
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  if (!g_net_mtx) return;
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   snprintf(g_join_ssid, sizeof g_join_ssid, "%s", ssid);
   snprintf(g_join_pass, sizeof g_join_pass, "%s", pass);
   g_join_req = true;
   g_join_state = WIFI_JOIN_BUSY;
   g_join_seq++;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   net_wake();
 }
 bool net_get_wifi_join(int *state) {
-  if (!g_mtx) return false;
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  if (!g_net_mtx) return false;
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const bool ch = g_join_seq != g_join_seen;
   g_join_seen = g_join_seq;
   *state = g_join_state;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   return ch;
 }
 
-// the joined network, read by the network task (wifi_info_step), handed to the UI task under g_mtx
+// the joined network, read by the network task (wifi_info_step), handed to the UI task under g_net_mtx
 static struct { bool up; char ssid[33]; int8_t rssi; int channel; char ap[18]; char ip[16]; } g_winfo;
 void wifi_info_step(bool now) {   // now: read at once (a join started or ended), else at most once a second
   static uint32_t last = 0;
@@ -447,38 +445,38 @@ void wifi_info_step(bool now) {   // now: read at once (a join started or ended)
     last_log = stamp_nz(millis());
     Log.printf("wifi: reading the link status took %u ms\n", (unsigned)took);
   }
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_winfo.up = up;
   memcpy(g_winfo.ssid, ssid, sizeof ssid);
   g_winfo.rssi = rssi;
   g_winfo.channel = ch;
   memcpy(g_winfo.ap, ap, sizeof ap);
   memcpy(g_winfo.ip, ip, sizeof ip);
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 bool net_wifi_info(char *ssid, size_t scap, int8_t *rssi, int *channel, char *ap, size_t acap) {
-  if (!g_mtx) { if (scap) ssid[0] = 0; if (acap) ap[0] = 0; *rssi = 0; *channel = 0; return false; }
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  if (!g_net_mtx) { if (scap) ssid[0] = 0; if (acap) ap[0] = 0; *rssi = 0; *channel = 0; return false; }
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const bool up = g_winfo.up;
   snprintf(ssid, scap, "%s", up ? g_winfo.ssid : "");
   snprintf(ap, acap, "%s", up ? g_winfo.ap : "");
   *rssi = up ? g_winfo.rssi : 0;
   *channel = up ? g_winfo.channel : 0;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   return up;
 }
 
 bool net_wifi_up(int8_t *rssi) {
-  if (!g_mtx) return false;
+  if (!g_net_mtx) return false;
   NetLock l;
   if (rssi) *rssi = g_winfo.up ? g_winfo.rssi : 0;
   return g_winfo.up;
 }
 
 bool wifi_screen_ip(char *out, size_t cap) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const bool up = g_winfo.up;
   snprintf(out, cap, "%s", up ? g_winfo.ip : "");
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   return up;
 }

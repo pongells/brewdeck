@@ -7,7 +7,7 @@
 #include "soc/spi_mem_c_reg.h"
 #include "board.h"
 #include "../../core/brewdeck_core.h"
-#include "board_internal.h"
+#include "board_core.h"
 
 const char *board_hostname(void) { return "brewdeck-p4"; }   // brewdeck-p4.local: the S3 screen keeps "brewdeck"
 

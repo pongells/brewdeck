@@ -1,7 +1,7 @@
 // Guition JC4880P443 panel: Arduino_GFX's DSI driver (ST7701) and the backlight. Used by board_p4.cpp.
 #include "board.h"
 
-// panel timing from Arduino_GFX's JC4880P433 example (seen right on this board, 2026-11-18)
+// panel timing from Arduino_GFX's JC4880P433 example
 static Arduino_ESP32DSIPanel *bus = new Arduino_ESP32DSIPanel(
     12 /* hsync_pulse_width */, 42 /* hsync_back_porch */, 42 /* hsync_front_porch */,
     2 /* vsync_pulse_width */, 8 /* vsync_back_porch */, 166 /* vsync_front_porch */,

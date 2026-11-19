@@ -25,10 +25,7 @@ void cs_wifi_join(int state);                           // WIFI_JOIN_*
 
 // commands: each command's whole rule set (checks, range, then the answer watched), shared by the device core and the
 // emulator's fake core, so the emulator runs the screen's rules. BD_OK = send it; else refused, nothing to send.
-// The ranges are also the last check where the message is built (pb.cpp).
-#define CS_WEIGHT_MAX 200.0f   // g (0 = no stop weight)
-#define CS_TEMP_MIN 1          // degC (0 = heater off: never)
-#define CS_TEMP_MAX 105
+// The ranges (BD_STOP_WEIGHT_MAX, BD_BREW_TEMP_MIN / MAX) are also the last check where the message is built (pb.cpp).
 bd_result cs_cmd_select(int id, const char **name);                    // name: the profile to watch / save
 bd_result cs_cmd_weight(int profile_id, float grams, int *w10, const char **name);
 bd_result cs_cmd_temp(int profile_id, int deg, const char **name);

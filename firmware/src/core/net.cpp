@@ -17,12 +17,11 @@
 #include <stdlib.h>
 #include "wifi_config.h"
 #include "net.h"
-#include "../board/common/board_internal.h"
+#include "board_core.h"
 #include "net_ws.h"
 #include "parse.h"
 #include "net_int.h"
 #include <Preferences.h>
-#define g_mtx g_net_mtx
 
 static int g_select_req = 0;          // profile id to select (0 = none), set by the UI task
 static uint32_t g_select_ms = 0;      // when it was asked for: dropped after 5 s (the core answers
@@ -195,21 +194,21 @@ static void profiles_step(const IPAddress &ip, char *buf, size_t cap, const Live
 }
 
 static void prev_publish(int state) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_prev_state = state;
   g_prev_seq++;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 
 // After a shot: find the previous shot of the same profile and load it. The newest stored shot must be newer than
 // g_before_id (the shot just shown); until the machine has stored it and re-sent the index, retry on the next cycles.
 // If nothing new is stored by the last try, the machine did not keep the shot: take the newest of the profile.
 static void prev_step(const IPAddress &ip, const LiveData *d) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const int tries = g_prev_tries;
-  if (tries <= 0) { xSemaphoreGive(g_mtx); return; }   // nothing asked for: no copy of the index
+  if (tries <= 0) { xSemaphoreGive(g_net_mtx); return; }   // nothing asked for: no copy of the index
   const uint32_t hash = g_prev_hash, dur = g_prev_dur10;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   static WsShotIndex *ixp = NULL;
   if (!ixp) ixp = (WsShotIndex *)heap_caps_malloc(sizeof *ixp, MALLOC_CAP_SPIRAM);
   const bool have_ix = data_index(ixp);
@@ -221,9 +220,9 @@ static void prev_step(const IPAddress &ip, const LiveData *d) {
   const WsShotIndex &ix = *ixp;
   bool last_try = false;
   auto retry = [&](const char *why) {
-    xSemaphoreTake(g_mtx, portMAX_DELAY);
+    xSemaphoreTake(g_net_mtx, portMAX_DELAY);
     const int left = --g_prev_tries;
-    xSemaphoreGive(g_mtx);
+    xSemaphoreGive(g_net_mtx);
     Log.printf("previous shot: %s%s\n", why, left > 0 ? ", retrying" : ", giving up");
     if (left <= 0) prev_publish(PREV_FAILED);
   };
@@ -247,9 +246,9 @@ static void prev_step(const IPAddress &ip, const LiveData *d) {
                   (unsigned)(ix.r[at].dur10 / 10), (unsigned)(ix.r[at].dur10 % 10), (unsigned)(dur / 10), (unsigned)(dur % 10));
   int prev = -1;
   for (int i = from; i < ix.n; i++) if (ix.r[i].name_hash == hash) { prev = i; break; }
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_prev_tries = 0;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   if (prev < 0) { Log.printf("previous shot: none for this profile in the last %d\n", ix.n); prev_publish(PREV_MISSING); return; }
   char path[32];
   snprintf(path, sizeof path, "/api/shots/%u", (unsigned)ix.r[prev].id);
@@ -263,19 +262,19 @@ static void prev_step(const IPAddress &ip, const LiveData *d) {
 // Shot history: the tapped shot (+ its profile, for the targets and the planned rest) and the next older stored shot of
 // the same profile. Only while idle; one answer for both.
 static void hist_publish(int st, int pst) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_hist_state = st;
   g_hist_prev_state = pst;
   g_hist_seq++;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 static void hist_step(const IPAddress &ip, const LiveData *d) {
   static WsShotIndex *ixp = NULL;
   if (!ixp) ixp = (WsShotIndex *)heap_caps_malloc(sizeof *ixp, MALLOC_CAP_SPIRAM);
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const uint32_t id = g_hist_req;
   g_hist_req = 0;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   const bool have_ix = id && data_index(ixp);
   if (!id) return;
   if (d->brew_active || d->steam_active || d->hot_water_active) {
@@ -327,11 +326,11 @@ bool net_stored_profile(int id, float *weight, float *temp) {
 
 // Sends a queued profile select, re-checking on the status just read that the machine is idle in HOME.
 static void select_step(const IPAddress &ip, char *buf, size_t cap, const LiveData *d) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const int id = g_select_req;
   const uint32_t at = g_select_ms;
   g_select_req = 0;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   if (id <= 0) return;
   if (millis() - at > 5000) { Log.printf("select %d dropped (request too old)\n", id); return; }
   const bool idle = !d->brew_active && !d->steam_active && !d->hot_water_active && strcmp(d->mode, "HOME") == 0;
@@ -344,18 +343,18 @@ static void select_step(const IPAddress &ip, char *buf, size_t cap, const LiveDa
 }
 
 void net_set_machine(const char *host) {
-  if (!g_mtx || !host[0]) return;
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  if (!g_net_mtx || !host[0]) return;
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   snprintf(g_mhost_new, sizeof g_mhost_new, "%s", host);
   g_mhost_req = true;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   net_wake();
 }
 void net_get_machine(char *out, size_t cap) {
-  if (!g_mtx) { snprintf(out, cap, "%s", ""); return; }
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  if (!g_net_mtx) { snprintf(out, cap, "%s", ""); return; }
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   snprintf(out, cap, "%s", g_mhost);
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
 }
 static void task(void *) {
   static char buf[8192];   // a full profile is ~0.7-3 KB, the status ~1 KB
@@ -367,26 +366,26 @@ static void task(void *) {
   for (;;) {
     {
       static bool rest_idle = true;                 // from the last status reply
-      xSemaphoreTake(g_mtx, portMAX_DELAY);
+      xSemaphoreTake(g_net_mtx, portMAX_DELAY);
       const bool idle = rest_idle && g_prev_tries <= 0 && millis() - data_last_shot_ms() > 90000;
-      xSemaphoreGive(g_mtx);
+      xSemaphoreGive(g_net_mtx);
       if (wifi_step(idle)) { have_ip = false; fails = 0; continue; }
       rest_idle = !d.brew_active && !d.steam_active && !d.hot_water_active;
     }
     {
-      xSemaphoreTake(g_mtx, portMAX_DELAY);
+      xSemaphoreTake(g_net_mtx, portMAX_DELAY);
       const bool hreq = g_mhost_req;
       char nh[64];
       memcpy(nh, g_mhost_new, sizeof nh);
       g_mhost_req = false;
-      xSemaphoreGive(g_mtx);
+      xSemaphoreGive(g_net_mtx);
       if (hreq) {
         Preferences p;
         if (p.begin("machine", false)) { p.putString("host", nh); p.end(); }
-        xSemaphoreTake(g_mtx, portMAX_DELAY);
+        xSemaphoreTake(g_net_mtx, portMAX_DELAY);
         snprintf(g_mhost, sizeof g_mhost, "%s", nh);
         g_have_ip = false;
-        xSemaphoreGive(g_mtx);
+        xSemaphoreGive(g_net_mtx);
         g_last_ip = IPAddress();
         have_ip = false;
         fails = 0;
@@ -416,14 +415,14 @@ static void task(void *) {
       if (have_ip) {
         g_last_ip = ip;
         Log.printf("machine at %s\n", ip.toString().c_str());
-        xSemaphoreTake(g_mtx, portMAX_DELAY);
+        xSemaphoreTake(g_net_mtx, portMAX_DELAY);
         g_ip = ip;
         g_have_ip = true;
-        xSemaphoreGive(g_mtx);
+        xSemaphoreGive(g_net_mtx);
       }
       else {
         static uint32_t t_log;
-        if (!t_log || millis() - t_log > 30000) {    // was silent: the log looked as if the task had stopped
+        if (!t_log || millis() - t_log > 30000) {    // every 30 s, so the log shows the task is still trying
           t_log = stamp_nz(millis());
           Log.printf("net: \"%s\" not found (mDNS), retrying\n", g_mhost);
         }
@@ -452,9 +451,9 @@ static void task(void *) {
       select_step(ip, buf, sizeof buf, &d);
       {   // remember the newest stored shot while idle and no lookup is pending (see g_before_id)
         const uint32_t newest = data_newest_shot();
-        xSemaphoreTake(g_mtx, portMAX_DELAY);
+        xSemaphoreTake(g_net_mtx, portMAX_DELAY);
         if (!d.brew_active && g_prev_tries <= 0 && newest) g_before_id = newest;
-        xSemaphoreGive(g_mtx);
+        xSemaphoreGive(g_net_mtx);
       }
       prev_step(ip, &d);
       hist_step(ip, &d);
@@ -485,7 +484,7 @@ void net_begin(void) {
 }
 
 void net_addr_info(char *screen, size_t scap, char *machine, size_t mcap) {
-  if (g_mtx) wifi_screen_ip(screen, scap);
+  if (g_net_mtx) wifi_screen_ip(screen, scap);
   else snprintf(screen, scap, "%s", "");
   IPAddress ip;
   if (net_machine_ip(&ip)) { snprintf(machine, mcap, "%s", ip.toString().c_str()); return; }
@@ -495,42 +494,42 @@ void net_addr_info(char *screen, size_t scap, char *machine, size_t mcap) {
 
 void net_select_profile(int id) {
   if (id <= 0) return;
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_select_req = id;
   g_select_ms = millis();
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   net_wake();
 }
 
 // ---- WebSocket hand-over (net_ws.h), called from the ws task ----
 bool net_machine_ip(IPAddress *ip) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const bool ok = g_have_ip;
   if (ok) *ip = g_ip;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   return ok;
 }
 void net_request_prev(const char *profile, int dur10) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_prev_hash = shot_name_hash(profile, strlen(profile));
   g_prev_dur10 = dur10 < 0 ? 0 : (uint32_t)dur10;
   g_prev_tries = 8;                   // ~8 s for the machine to store the shot
   g_prev_state = PREV_LOADING;
   g_prev_seq++;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   net_wake();
 }
 
 void net_request_hist(uint32_t id) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_hist_req = id;
   g_hist_state = PREV_LOADING;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   net_wake();
 }
 
 int net_get_hist(ShotTrace *shot, ProfileShape *shape, ShotTrace *prev, int *prev_state, bool *changed) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const int st = g_hist_state;
   *changed = g_hist_seq != g_hist_seen;
   *prev_state = g_hist_prev_state;
@@ -540,17 +539,17 @@ int net_get_hist(ShotTrace *shot, ProfileShape *shape, ShotTrace *prev, int *pre
     if (g_hist_prev_state == PREV_READY) memcpy(prev, g_hist_prev, sizeof *prev);
   }
   g_hist_seen = g_hist_seq;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   return st;
 }
 
 int net_get_prev(ShotTrace *out, bool *changed) {
-  xSemaphoreTake(g_mtx, portMAX_DELAY);
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const int st = g_prev_state;
   *changed = g_prev_seq != g_prev_seen;
   if (*changed && st == PREV_READY && g_prev && out) memcpy(out, g_prev, sizeof *out);
   g_prev_seen = g_prev_seq;
-  xSemaphoreGive(g_mtx);
+  xSemaphoreGive(g_net_mtx);
   return st;
 }
 

@@ -6,7 +6,7 @@
 #include "board.h"
 #include "touch_gt911.h"
 #include "../../core/brewdeck_core.h"
-#include "board_internal.h"
+#include "board_core.h"
 
 bool board_begin(void) {
   board_init();

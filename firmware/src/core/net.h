@@ -18,7 +18,8 @@ void net_select_profile(int id);
 // Next shot snapshot from the WebSocket (~7/s during a shot), oldest first; false when none is waiting.
 bool net_get_shot(WsShot *out);
 // Shot review: ask for the previous stored shot of this profile (the shot just made: its profile name and duration).
-enum { PREV_NONE = 0, PREV_LOADING, PREV_READY, PREV_MISSING, PREV_FAILED };
+enum { PREV_NONE = BD_LOAD_NONE, PREV_LOADING = BD_LOAD_LOADING, PREV_READY = BD_LOAD_OK, PREV_MISSING = BD_LOAD_MISSING,
+       PREV_FAILED = BD_LOAD_FAILED };
 void net_request_prev(const char *profile, int dur10);
 // Current state (PREV_*); *changed is true once per change, and on PREV_READY the shot is copied to out then.
 int  net_get_prev(ShotTrace *out, bool *changed);

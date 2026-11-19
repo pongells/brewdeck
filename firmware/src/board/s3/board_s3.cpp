@@ -5,7 +5,7 @@
 #include "board.h"
 #include "soc/spi_mem_reg.h"
 #include "../../core/brewdeck_core.h"
-#include "board_internal.h"
+#include "board_core.h"
 
 void board_serial_begin(void) { Serial.begin(115200); }   // UART0 through the board's USB-serial chip
 const char *board_hostname(void) { return "brewdeck"; }

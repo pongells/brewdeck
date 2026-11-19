@@ -8,10 +8,7 @@
 #include "net.h"
 #include "stamp.h"
 
-// stored shots, profile shapes and Wi-Fi networks are the API's own types (live.h): handed over without copying
-static_assert(LINK_ONLINE == (int)BD_LINK_ONLINE && WHY_NO_REPLY == (int)BD_WHY_NO_REPLY &&
-              SCALE_PREDICTIVE == (int)BD_SCALE_PREDICTIVE && PREV_FAILED == (int)BD_LOAD_FAILED &&
-              WIFI_JOIN_FAILED == (int)BD_JOIN_FAILED, "enum values");
+// stored shots, profile shapes, Wi-Fi networks and the enum values are the API's own (live.h): handed over as they are
 
 static bd_machine g_m;
 static bd_network g_net;
@@ -293,7 +290,7 @@ bd_result cs_cmd_select(int id, const char **name) {
 bd_result cs_cmd_weight(int profile_id, float grams, int *w10, const char **name) {
   bd_result r = cs_check_idle();
   if (r != BD_OK) return r;
-  if (!(grams >= 0.0f && grams <= CS_WEIGHT_MAX)) return BD_ERR_RANGE;   // 0 = no stop weight
+  if (!(grams >= 0.0f && grams <= BD_STOP_WEIGHT_MAX)) return BD_ERR_RANGE;   // 0 = no stop weight
   if ((r = cs_check_active(profile_id)) != BD_OK) return r;
   *w10 = (int)(grams * 10.0f + 0.5f);
   *name = cs_profile_name(profile_id);
@@ -303,7 +300,7 @@ bd_result cs_cmd_weight(int profile_id, float grams, int *w10, const char **name
 bd_result cs_cmd_temp(int profile_id, int deg, const char **name) {
   bd_result r = cs_check_idle();
   if (r != BD_OK) return r;
-  if (deg < CS_TEMP_MIN || deg > CS_TEMP_MAX) return BD_ERR_RANGE;   // 0 = heater off: never
+  if (deg < BD_BREW_TEMP_MIN || deg > BD_BREW_TEMP_MAX) return BD_ERR_RANGE;   // 0 = heater off: never
   if ((r = cs_check_active(profile_id)) != BD_OK) return r;
   *name = cs_profile_name(profile_id);
   cs_watch_temp(deg);

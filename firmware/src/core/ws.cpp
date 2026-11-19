@@ -215,7 +215,7 @@ static void save_step(WiFiClient &c) {
     return;
   }
   if (g_seen_brew || g_seen_mode != PB_MODE_HOME) {            // busy (a shot right after the change): save once idle again,
-    // within 15 min (dropping it after 10 s lost the change at the next machine restart)
+    // within 15 min (a change not saved is lost at the next machine restart)
     if (millis() - g_save_set > 15u * 60u * 1000u) { g_save_due = 0; Log.println("ws: save dropped (machine busy)"); }
     return;
   }
@@ -369,16 +369,6 @@ static void tare_step(WiFiClient &c) {
   Log.println("ws: tare sent");
 }
 
-static void handle_frame(const uint8_t *f, size_t n, uint32_t *cnt);
-static void handle(const uint8_t *f, size_t n, uint32_t *cnt) {
-  handle_frame(f, n, cnt);
-#ifdef BREWDECK_DEBUG_HTTP
-  char act[24];                                     // where the internal-RAM low point moved (mem_watch, debug)
-  const uint8_t *d;
-  size_t dl;
-  if (pb_envelope(f, n, act, sizeof act, &d, &dl)) mem_watch("ws", act);
-#endif
-}
 static void handle_frame(const uint8_t *f, size_t n, uint32_t *cnt) {
   char act[24];
   const uint8_t *d;
@@ -549,7 +539,7 @@ static void session(WiFiClient &c) {
       asm_n += (size_t)len;
     }
     if (fin) {
-      if (!asm_drop && asm_n) handle(g_rx, asm_n, cnt);
+      if (!asm_drop && asm_n) handle_frame(g_rx, asm_n, cnt);
       asm_n = 0;
       asm_drop = false;
     }

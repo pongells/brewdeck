@@ -29,4 +29,3 @@
 extern Arduino_RGB_Display *gfx;
 void board_init();
 void board_backlight(int pct);          // 0-100 %; PWM on PIN_BL (100 = fully on, as after board_init)
-void board_backlight_hz(uint32_t hz);   // PWM frequency for dimming (debug, see panel.cpp)

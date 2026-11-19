@@ -7,11 +7,10 @@
 #include <esp_flash.h>
 #include <esp_heap_caps.h>
 #include <string.h>
-#include "board.h"
 #include "debug_http.h"
+#include "board_core.h"
 #include "net.h"
 #include "tlog.h"
-#include "../board/common/board_internal.h"
 
 static WiFiServer g_srv(80);
 // the UI's own debug route (bd_debug_route)
@@ -29,15 +28,15 @@ static void put16(uint8_t *p, uint16_t v) { p[0] = v; p[1] = v >> 8; }
 static void put32(uint8_t *p, uint32_t v) { for (int i = 0; i < 4; i++) p[i] = v >> (8 * i); }
 
 static void send_bmp(WiFiClient &c) {
-  const uint32_t row = SCREEN_W * 2, img = row * SCREEN_H, off = 14 + 40 + 12;
+  const uint32_t row = (int)bd_display()->width * 2, img = row * (int)bd_display()->height, off = 14 + 40 + 12;
   uint8_t h[off];
   memset(h, 0, sizeof h);
   h[0] = 'B'; h[1] = 'M';
   put32(h + 2, off + img);
   put32(h + 10, off);
   put32(h + 14, 40);                                // BITMAPINFOHEADER
-  put32(h + 18, SCREEN_W);
-  put32(h + 22, (uint32_t)(-(int32_t)SCREEN_H));    // negative height: rows top-down, as in the frame buffer
+  put32(h + 18, (int)bd_display()->width);
+  put32(h + 22, (uint32_t)(-(int32_t)(int)bd_display()->height));    // negative height: rows top-down, as in the frame buffer
   put16(h + 26, 1);
   put16(h + 28, 16);
   put32(h + 30, 3);                                 // BI_BITFIELDS: RGB565 masks follow
@@ -48,8 +47,8 @@ static void send_bmp(WiFiClient &c) {
   c.write(h, sizeof h);
   // from the board's frame buffer in PSRAM (S3: straight from it; lwIP copies into its own buffers): no internal-RAM
   // staging buffer
-  const size_t CH = SCREEN_W * 2 * 8;               // 8 rows per write
-  for (int y = 0; y < SCREEN_H; y += 8) {
+  const size_t CH = (int)bd_display()->width * 2 * 8;               // 8 rows per write
+  for (int y = 0; y < (int)bd_display()->height; y += 8) {
     const uint8_t *chunk = (const uint8_t *)board_screen_rows(y, 8);
     if (!chunk) return;
     size_t sent = 0;
@@ -104,10 +103,10 @@ static void rec_capture(void) {
   uint8_t *const base = g_rec + g_rec_len, *out = base + HDR, *const end = g_rec + g_rec_cap;
   if (out >= end) { rec_stop("memory full"); return; }
   uint16_t cur = 0, run = 0;
-  for (int y = 0; y < SCREEN_H; y += 8) {
+  for (int y = 0; y < (int)bd_display()->height; y += 8) {
     const uint16_t *px = board_screen_rows(y, 8);
     if (!px) { rec_stop("no frame buffer"); return; }
-    for (int i = 0; i < SCREEN_W * 8; i++) {
+    for (int i = 0; i < (int)bd_display()->width * 8; i++) {
       if (run && px[i] == cur && run < 0xFFFF) { run++; continue; }
       if (run) {
         if (out + 4 > end) { rec_stop("memory full"); return; }
@@ -121,7 +120,7 @@ static void rec_capture(void) {
   memcpy(base, "BDRF", 4);
   put32(base + 4, now - g_rec_t0);
   put32(base + 8, (uint32_t)(out - base - HDR));
-  put16(base + 12, SCREEN_W); put16(base + 14, SCREEN_H);
+  put16(base + 12, (int)bd_display()->width); put16(base + 14, (int)bd_display()->height);
   g_rec_len = out - g_rec;
   g_rec_n++;
   g_rec_us = micros() - t0;
@@ -236,7 +235,7 @@ static void task(void *) {
     } else if (strncmp(line, "GET /bl?", 8) == 0) {   // backlight test (debug): /bl?pct=50&hz=1000
       const char *ph = strstr(line, "hz="), *pp = strstr(line, "pct=");
       if (ph) board_backlight_hz((uint32_t)atoi(ph + 3));
-      if (pp) board_backlight(atoi(pp + 4));
+      if (pp) bd_set_backlight(atoi(pp + 4));
       c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nok\n");
     } else {
       c.print("HTTP/1.0 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nGET /screen.bmp, /rec?every=ms[&max=n], /rec, /rec/stop, /rec.bin, /rec/free, /heap, /tasks, /flash, /roam, /touch?x=&y=&ms=, /bl?pct=&hz=\n");

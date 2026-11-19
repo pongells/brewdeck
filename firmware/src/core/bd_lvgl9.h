@@ -46,7 +46,7 @@ static bool bd_lvgl9_setup(void) {
   const bd_display_info *di = bd_display();
   const uint32_t bytes = (uint32_t)di->width * (uint32_t)di->draw_lines * 2;
   lv_init();
-  void *b1 = bd_alloc(bytes, BD_MEM_INTERNAL), *b2 = NULL;
+  void *b1 = bd_alloc(bytes, BD_MEM_INTERNAL);
   const bool ok = b1 != NULL;
   if (!ok) {
     b1 = bd_alloc(bytes, BD_MEM_PSRAM);
@@ -54,7 +54,7 @@ static bool bd_lvgl9_setup(void) {
   }
   bd_lv_disp = lv_display_create(di->width, di->height);
   lv_display_set_color_format(bd_lv_disp, LV_COLOR_FORMAT_RGB565);
-  lv_display_set_buffers(bd_lv_disp, b1, b2, bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
+  lv_display_set_buffers(bd_lv_disp, b1, NULL, bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
   lv_display_set_flush_cb(bd_lv_disp, bd_lv_flush);
   lv_indev_t *in = lv_indev_create();
   lv_indev_set_type(in, LV_INDEV_TYPE_POINTER);

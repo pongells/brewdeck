@@ -24,8 +24,8 @@ void board_init() {
   digitalWrite(PIN_BL, HIGH);
 }
 
-// Backlight dimming: PWM on PIN_BL. 20 kHz gave a black panel at 90 % on this board (2026-11-05), 1 kHz works (CONFIRMED
-// 2026-11-05). Debug: GET /bl?pct=50&hz=1000 on the screen. 100 % = plain HIGH.
+// Backlight dimming: PWM on PIN_BL at 1 kHz (20 kHz gives a black panel at 90 % on this board). 100 % = plain HIGH.
+// Debug: GET /bl?pct=50&hz=1000 on the screen.
 static uint32_t g_bl_hz = 1000;
 static bool g_bl_pwm = false;
 void board_backlight_hz(uint32_t hz) {

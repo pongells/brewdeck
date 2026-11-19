@@ -1,7 +1,7 @@
+#pragma once
 // Serial log with a time in front of every line: "14:02:43.512 " once NTP has set the clock (CET/CEST,
 // as the idle clock), "up 63.204 " (seconds since boot) before that. Use Log.printf / Log.println instead of Serial.
 // Lines of the Arduino core itself ("[2471610][E][...]") keep their own milliseconds-since-boot stamp.
-#pragma once
 #include <Arduino.h>
 
 class TsLog : public Print {

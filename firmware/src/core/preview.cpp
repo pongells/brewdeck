@@ -20,7 +20,7 @@ float preview_phase_secs(const PhaseShape *p) {
   if (p->stop_ms) c = fmin2(c, p->stop_ms / 1000.0f);
   if (p->stop_water > 0) {
     // expected pump flow: the flow target on a flow phase; on a pressure phase the restriction is only a ceiling
-    // (measured 2026-11-04: 1.0 ml/s under a 1.5 limit), so 0.7 x the limit (capped at 2), else a typical 1.5 ml/s
+    // (measured: 1.0 ml/s under a 1.5 limit), so 0.7 x the limit (capped at 2), else a typical 1.5 ml/s
     float f = p->type == PHASE_FLOW ? fmax2(p->end, 0.3f)
                                     : (p->limit > 0 ? 0.7f * fmin2(p->limit, 2.0f) : 1.5f);
     c = fmin2(c, p->stop_water / f);

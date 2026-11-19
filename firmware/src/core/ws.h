@@ -3,7 +3,7 @@
 // sends are tare (c_tare_pend), the stop weight and the brew temperature (c_upd_act_prof, one field each), the save
 // (c_save_act_prof) and the flush modes (c_opmode), besides the protocol's pong and close.
 // Holds 1 of the machine's 3 slots.
-void ws_begin(void);   // starts the task (after net_begin); no-op without Wi-Fi config
+void ws_begin(void);   // starts the task (after net_begin); it waits for Wi-Fi and the machine
 // flush: mode PB_MODE_FLUSH / PB_MODE_FLUSH_AUTO (only idle in HOME) or PB_MODE_HOME (only from
 // a flush mode); anything else is refused (pb_opmode_cmd builds only these three)
 void ws_flush(int mode);

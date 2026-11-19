@@ -1,7 +1,7 @@
 #pragma once
 // Guition JC4880P443 (ESP32-P4 rev 3): 480x800 portrait MIPI-DSI panel (ST7701) shown as the UI's 800x480
 // landscape, GT911 touch, Wi-Fi through the on-board ESP32-C6. Panel settings from Arduino_GFX's JC4880P433 example;
-// touch pins from the first hardware test (2026-11-18): raw touch coordinates = portrait panel pixels.
+// raw touch coordinates are portrait panel pixels.
 #include <Arduino.h>
 #include <Arduino_GFX_Library.h>
 
@@ -33,4 +33,3 @@
 extern Arduino_DSI_Display *gfx;
 void board_init();
 void board_backlight(int pct);          // 0-100 %; PWM on PIN_BL (100 = fully on, as after board_init)
-void board_backlight_hz(uint32_t hz);   // PWM frequency for dimming (debug, see panel.cpp)
