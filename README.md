@@ -192,7 +192,7 @@ How the parts fit together (board, core, UI, the network tasks, the emulator): [
 | Path | What |
 |---|---|
 | `firmware/src/core/` | the core: `brewdeck_core.h` (the API a UI is built on), `core.cpp` (setup, loop, settings), `core_state.cpp` (machine state, events, the command rules), the network task (`net.cpp`: finding the machine, REST; `wifi.cpp`: the screen's Wi-Fi; `net_data.cpp`: hand-over to the loop), the WebSocket (`ws.cpp`, decoder `pb.cpp`), REST parsers (`parse.cpp`), profile previews (`preview.cpp`), the debug web server (`debug_http.cpp`) |
-| `firmware/src/board/` | the board layer: `common/` (start-up, GT911 touch, memory: shared by both boards), `s3/` (the Sunton ESP32-S3 RGB panel), `p4/` (the Guition ESP32-P4 DSI panel); each board folder has its `board.h` (pins) |
+| `firmware/src/board/` | the board layer: `common/` (start-up, GT911 touch, backlight, memory: shared by both boards; `board_core.h` is what the core uses), `s3/` (the Sunton ESP32-S3 RGB panel), `p4/` (the Guition ESP32-P4 DSI panel); each board folder has its `board.h` (pins) |
 | `firmware/src/ui_minimal/` | an example UI on the core API alone, to start your own from ([writing your own UI](docs/custom-ui.md)) |
 | `firmware/src/touchtest/`, `firmware/src/c6update/` | one-off firmware: a raw touch test (S3), the P4 board's Wi-Fi chip updater |
 | `firmware/src/ui/` | Brewdeck's UI: `ui_bridge.cpp` (the core's `bd_ui_*` entry points), screens (`screens/`, one file per screen; `ui.cpp` starts them and takes the live data; `ui_int.h` is what they share; design tokens in `theme.h`) |

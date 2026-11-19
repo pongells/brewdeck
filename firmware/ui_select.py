@@ -9,7 +9,8 @@ Import("env")
 
 ui = os.environ.get("BREWDECK_UI", "").strip().strip("/") or "ui"
 src = env.subst("$PROJECT_SRC_DIR")
-if ui in ("core", "board", "touchtest") or not os.path.isdir(os.path.join(src, ui)):
+NOT_UIS = ("core", "board", "touchtest", "c6update")   # the other folders under src/
+if "/" in ui or ui.startswith(".") or ui in NOT_UIS or not os.path.isdir(os.path.join(src, ui)):
     raise SystemExit("BREWDECK_UI=%s: no such UI folder in %s" % (ui, src))
 board = env.GetProjectOption("custom_board", "s3")
 if board not in ("s3", "p4"):
