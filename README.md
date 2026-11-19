@@ -197,10 +197,10 @@ How the parts fit together (board, core, UI, the network tasks, the emulator): [
 | `sim/` | emulator, renderer and recorded machine data |
 | `tests/` | host unit tests |
 | `docs/` | the [user manual](docs/manual.md) and its animations, the [architecture](docs/architecture.md), [writing your own UI](docs/custom-ui.md), the [design system](docs/design-system.md), machine API notes, the WebSocket protocol |
-| `tools/` | release packaging (`make_release.sh`), protocol listener and extractor, manual recorder, screenshot helper, offline cup picture (`gen_cup.py`), a fake machine from the community profiles (`community_profiles.py`), font edge contrast (`font_contrast.py`) |
+| `tools/` | release packaging (`make_release.sh`), protocol listener and extractor, manual recorder, screenshot and screen recorder helpers, offline cup picture (`gen_cup.py`), a fake machine from the community profiles (`community_profiles.py`), font edge contrast (`font_contrast.py`) |
 
 For development, `./build-pio.sh ui-debug` adds a small web server on the screen (`http://brewdeck.local`: screenshots
-for `tools/screenshot.sh`, memory, Wi-Fi details, and remote touch). It has no password and anyone on your network can
+for `tools/screenshot.sh`, a recorder that keeps frames in the screen's memory during a shot for `tools/record.sh`, memory, Wi-Fi details, and remote touch). It has no password and anyone on your network can
 press the screen through it, so use debug builds only for development, on a network you trust; release builds (`ui`)
 leave it out.
 

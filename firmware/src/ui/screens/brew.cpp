@@ -25,7 +25,7 @@ static const int RV_X = BR_X, RV_Y = BR_Y, RV_W = BR_W, RV_H = BR_H;
 static const int RV_PW = BR_W;                                      // plot width
 static const int RV_BASE = CH_BASE;
 ShotPoint *g_br;                          // SHOT_MAX points (11.5 KB) in PSRAM: internal RAM is for Wi-Fi
-int g_br_n = 0, g_br_step = 1, g_br_skip = 0, g_br_tmax = 25, g_br_lastx = -1;
+int g_br_n = 0, g_br_step = 1, g_br_skip = 0, g_br_tmax = 30, g_br_lastx = -1;
 int g_br_state = 0;                       // 0 hidden, 1 brewing, 2 done, 3 review
 bool g_br_seen_brew = false, g_live_brew = false;
 static uint32_t g_br_last_ms = 0, g_br_done_ms = 0;
@@ -276,7 +276,7 @@ static void br_start(void) {
   g_br_n = 0;
   g_br_step = 1;
   g_br_skip = 0;
-  g_br_tmax = 25;
+  g_br_tmax = 30;
   g_br_lastx = -1;
   g_br_seen_brew = false;
   g_br_state = 1;
@@ -504,9 +504,10 @@ void ui_shot(const WsShot *s) {
     b->tp = (uint16_t)s->target_pressure10; b->tf = (uint16_t)s->target_flow10;
     b->ph = (uint8_t)(s->phase > 255 ? 255 : s->phase);
   }
-  // time axis: grows by 10 s when the shot gets near the end of it
+  // time axis: 30 s, grows by 15 s when the shot gets near the end of it. Each step squeezes and redraws the whole
+  // chart in one frame (~100-140 ms), so few, larger steps: most shots fit in 30 or 45 s
   if ((int)s->time10 > (g_br_tmax - 1) * 10) {
-    while ((int)s->time10 > (g_br_tmax - 1) * 10) g_br_tmax += 10;
+    while ((int)s->time10 > (g_br_tmax - 1) * 10) g_br_tmax += 15;
     g_br_lastx = -1;
   }
   const ChartMap m = br_map();

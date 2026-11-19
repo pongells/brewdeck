@@ -1,6 +1,7 @@
 #pragma once
 // Debug web server (debug builds only), port 80, no password: GET /screen.bmp (what the panel shows, 800x480 BMP,
-// RGB565, 768 KB; tools/screenshot.sh), /heap, /tasks, /flash, /roam, /touch?x=&y=&ms= (a remote press),
+// RGB565, 768 KB; tools/screenshot.sh), /rec* (records the panel into PSRAM every N ms, then one download;
+// tools/record.sh), /heap, /tasks, /flash, /roam, /touch?x=&y=&ms= (a remote press),
 // /bl?pct=&hz= (backlight), plus one route of the UI's (bd_debug_route). Sends nothing to the machine.
 void shot_begin(void);   // call after board_begin() (needs the panel's frame buffer)
 // One extra GET path answered by the UI (bd_debug_route): the request is handed to the UI task, which runs it in
