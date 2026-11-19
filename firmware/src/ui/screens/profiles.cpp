@@ -3,7 +3,7 @@
 
 // ---- profile picker (a full page) -----------------------------------------------------------------------------------
 // The active profile first, then recently used (newest shot of each profile in the machine's shot index, the newest
-// 50 shots), then the rest by name. A tap selects the profile with bd_select_profile (only while online and idle in
+// 50 shots, or when it last became active, whichever is later), then the rest by name. A tap selects the profile with bd_select_profile (only while online and idle in
 // HOME; otherwise the tap only closes the page); the header and the check mark follow once the machine reports it.
 // one profile per row in columns (x on the screen): name 24..400, stop weight right at 476, temperature right at 540,
 // last used right at 676, Restore / the active check 688..776. Header row at 96, the list scrolls below it.
@@ -27,10 +27,48 @@ static const bd_profile *prof_by_id(int id) {
   for (int i = 0; i < g_profiles.count; i++) if (g_profiles.p[i].id == id) return &g_profiles.p[i];
   return NULL;
 }
-// when a profile was last used (the core works it out from the shot history), 0 = not in it
-static uint32_t prof_last_used(const char *name) {
-  for (int i = 0; i < g_profiles.count; i++) if (!strcmp(g_profiles.p[i].name, name)) return g_profiles.p[i].last_used;
+// When each profile last became active (picked here or in the machine's web UI), kept in the UI's storage: a pick
+// counts as a use as much as a shot does. Noted only on a change between two known profiles, with the clock set.
+struct Pick { char name[48]; uint32_t ts; };
+static Pick g_picks[BD_MAX_PROFILES];
+static bool g_picks_loaded = false;
+static size_t (*g_picks_load)(void *, size_t) = NULL;
+static void (*g_picks_save)(const void *, size_t) = NULL;
+static int g_act_prev = 0;                 // the active profile as the machine last reported it
+void ui_on_picks(size_t (*load)(void *, size_t), void (*save)(const void *, size_t)) {
+  g_picks_load = load;
+  g_picks_save = save;
+}
+static void picks_load(void) {
+  if (g_picks_loaded) return;
+  g_picks_loaded = true;
+  if (!g_picks_load || g_picks_load(g_picks, sizeof g_picks) != sizeof g_picks) memset(g_picks, 0, sizeof g_picks);
+}
+static uint32_t pick_ts(const char *name) {
+  picks_load();
+  for (const Pick &p : g_picks) if (p.ts && !strcmp(p.name, name)) return p.ts;
   return 0;
+}
+static void pick_note(const char *name) {
+  const uint32_t now = (uint32_t)time(NULL);
+  if (now < CLOCK_SET_TS || !name[0]) return;
+  picks_load();
+  Pick *slot = &g_picks[0];                // this profile's entry, else an empty one, else the oldest
+  for (Pick &p : g_picks) {
+    if (p.ts && !strcmp(p.name, name)) { slot = &p; break; }
+    if (p.ts < slot->ts) slot = &p;
+  }
+  snprintf(slot->name, sizeof slot->name, "%s", name);
+  slot->ts = now;
+  if (g_picks_save) g_picks_save(g_picks, sizeof g_picks);
+}
+// when a profile was last used: its newest stored shot (the core works it out from the shot history) or when it last
+// became active, whichever is later; 0 = neither
+static uint32_t prof_last_used(const char *name) {
+  uint32_t shot = 0;
+  for (int i = 0; i < g_profiles.count; i++) if (!strcmp(g_profiles.p[i].name, name)) shot = g_profiles.p[i].last_used;
+  const uint32_t pick = pick_ts(name);
+  return pick > shot ? pick : shot;
 }
 
 void picker_close(void) { lv_obj_set_hidden(g_pick, true); }
@@ -476,6 +514,10 @@ void build_picker(lv_obj_t *scr) {
 
 void ui_set_profiles(const bd_profiles *l) {
   g_profiles = *l;
+  int act = 0;                                     // the machine's active profile (before a pending pick is shown)
+  for (int i = 0; i < l->count; i++) if (l->p[i].active) act = l->p[i].id;
+  if (act && g_act_prev && act != g_act_prev) pick_note(prof_by_id(act)->name);
+  if (act) g_act_prev = act;
   snap_capture();                                  // new profiles' stored values become their snapshots
   if (g_pend_id)                                 // a select is in flight: keep showing the choice
     for (int i = 0; i < g_profiles.count; i++) g_profiles.p[i].active = g_profiles.p[i].id == g_pend_id;

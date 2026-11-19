@@ -20,6 +20,8 @@ void ui_shot_end(void);                          // the shot ended (BD_EV_SHOT_E
 // Profiles page. load: false if none kept; save: keep these as the profile's original
 void ui_on_originals(bool (*load)(const char *profile, int *w10, int *deg),
                      void (*save)(const char *profile, int w10, int deg));
+// when each profile last became active (the UI's storage, one blob): load fills buf, returns the stored size (0 = none)
+void ui_on_picks(size_t (*load)(void *buf, size_t cap), void (*save)(const void *buf, size_t n));
 void ui_set_clock(int h, int m);                          // local time for the idle screen (-1: not known yet)
 // the menu changed a screen setting (to be saved). bounce: the idle clock bounces around instead of standing still;
 // splash: show the boot splash at start

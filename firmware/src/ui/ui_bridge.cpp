@@ -18,6 +18,9 @@ static void orig_key(const char *n, char *k, size_t kn) {
   for (; *n; n++) { h ^= (uint8_t)*n; h *= 16777619u; }
   snprintf(k, kn, "p%08x", (unsigned)h);
 }
+// when each profile last became active (screens/profiles.cpp): one blob
+static size_t picks_load(void *buf, size_t cap) { return bd_store_get_blob("picks", buf, cap); }
+static void picks_save(const void *buf, size_t n) { bd_store_set_blob("picks", buf, n); }
 static bool orig_load(const char *p, int *w10, int *deg) {
   char k[12];
   orig_key(p, k, sizeof k);
@@ -82,6 +85,7 @@ void bd_ui_init(void) {
   bd_lvgl9_flush_filter = ui_flush_filter;   // the pressure-release glow lies over everything
   ui_init();
   ui_on_originals(orig_load, orig_save);
+  ui_on_picks(picks_load, picks_save);
   g_bright = bd_store_get_int("bright", 100);
   g_idle = bd_store_get_int("idle", 10);
   g_bounce = bd_store_get_int("bounce", 0) != 0;
