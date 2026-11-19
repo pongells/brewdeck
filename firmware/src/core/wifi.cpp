@@ -468,6 +468,13 @@ bool net_wifi_info(char *ssid, size_t scap, int8_t *rssi, int *channel, char *ap
   return up;
 }
 
+bool net_wifi_up(int8_t *rssi) {
+  if (!g_mtx) return false;
+  NetLock l;
+  if (rssi) *rssi = g_winfo.up ? g_winfo.rssi : 0;
+  return g_winfo.up;
+}
+
 bool wifi_screen_ip(char *out, size_t cap) {
   xSemaphoreTake(g_mtx, portMAX_DELAY);
   const bool up = g_winfo.up;

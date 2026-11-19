@@ -56,9 +56,10 @@ static ChartMap br_map(void) {   // 752x288: plot 0..752, baseline 261, 261 px /
   ChartMap m = {0, CH_BASE, 75.2f / g_br_tmax, 2.088f, 0.245f, 17.96f / target_g()};
   return m;
 }
-static ChartMap rv_map(void) {   // X = t*RV_PW/axis; y exactly as br_map
+static ChartMap rv_map(void) {   // X = t*RV_PW/axis; y as br_map, weight scaled to the reviewed shot's stop weight
   ChartMap m = br_map();
   m.kx = RV_PW / 10.0f / g_rv_tmax;
+  if (g_rv_hist && g_rv_tw10 > 0) m.kw = 17.96f / (g_rv_tw10 / 10.0f);
   return m;
 }
 static int cm_x(const ChartMap *m, int t10) { return m->ox + (int)(t10 * m->kx + 0.5f); }
@@ -539,8 +540,9 @@ void build_brew(lv_obj_t *scr) {
   g_br = (ShotPoint *)bd_alloc(sizeof(ShotPoint) * SHOT_MAX, BD_MEM_PSRAM);   // the shot being drawn (~11.5 KB)
   g_rv_prev = (ShotTrace *)bd_alloc(sizeof(ShotTrace), BD_MEM_PSRAM);
   g_rv_shape = (ProfileShape *)bd_alloc(sizeof(ProfileShape), BD_MEM_PSRAM);
-  if (g_rv_prev) memset(g_rv_prev, 0, sizeof *g_rv_prev);
-  if (g_rv_shape) memset(g_rv_shape, 0, sizeof *g_rv_shape);
+  if (!g_br || !g_rv_prev || !g_rv_shape) { bd_log("ui: no PSRAM for the brewing screen\n"); abort(); }
+  memset(g_rv_prev, 0, sizeof *g_rv_prev);
+  memset(g_rv_shape, 0, sizeof *g_rv_shape);
   g_brew = box(scr, 0, 0, 800, 480, COL_BG, 0);
   lv_obj_set_clickable(g_brew, true);
   lv_obj_add_event_cb(g_brew, on_brew_tap, LV_EVENT_CLICKED, NULL);

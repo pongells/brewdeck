@@ -474,7 +474,7 @@ static void task(void *) {
   }
 }
 
-void net_wake(void) { net_wake(); }
+void net_wake(void) { if (g_task) xTaskNotifyGive(g_task); }
 
 void net_begin(void) {
   data_init();
@@ -488,8 +488,9 @@ void net_addr_info(char *screen, size_t scap, char *machine, size_t mcap) {
   if (g_mtx) wifi_screen_ip(screen, scap);
   else snprintf(screen, scap, "%s", "");
   IPAddress ip;
-  if (net_machine_ip(&ip)) snprintf(machine, mcap, "%s", ip.toString().c_str());
-  else snprintf(machine, mcap, "%s", g_mhost);
+  if (net_machine_ip(&ip)) { snprintf(machine, mcap, "%s", ip.toString().c_str()); return; }
+  NetLock l;   // the network task rewrites the name when the address is changed
+  snprintf(machine, mcap, "%s", g_mhost);
 }
 
 void net_select_profile(int id) {

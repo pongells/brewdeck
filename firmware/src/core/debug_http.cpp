@@ -1,17 +1,16 @@
-// Debug web server (see shot.h), only in debug builds (env ui-debug, -DBREWDECK_DEBUG_HTTP: no
-// open port in release builds). Screenshot server: reads the panel's frame buffer in PSRAM (board_screen_rows), i.e.
-// exactly what is on the glass.
+// Debug web server (see debug_http.h), only in debug builds (-DBREWDECK_DEBUG_HTTP: no open port in release builds).
+// Screenshots and the recorder read the panel's frame buffer (board_screen_rows), i.e. exactly what is on the glass.
 // While a download runs (~1-3 s) the extra PSRAM reads may disturb the picture briefly: debug use only.
 #include <Arduino.h>
 #ifdef BREWDECK_DEBUG_HTTP
-#include "tlog.h"
 #include <WiFi.h>
-#include <string.h>
-#include <esp_heap_caps.h>
 #include <esp_flash.h>
+#include <esp_heap_caps.h>
+#include <string.h>
 #include "board.h"
-#include "net.h"
 #include "debug_http.h"
+#include "net.h"
+#include "tlog.h"
 #include "../board/common/board_internal.h"
 
 static WiFiServer g_srv(80);
@@ -151,10 +150,11 @@ static void send_rec(WiFiClient &c) {
 }
 
 static void task(void *) {
-  while (WiFi.status() != WL_CONNECTED) delay(500);
+  char ip[16] = "", machine[64];
+  while (!net_wifi_up(NULL)) delay(500);
+  net_addr_info(ip, sizeof ip, machine, sizeof machine);
   g_srv.begin();
-  Log.printf("screenshots: http://%s.local/screen.bmp (http://%s/screen.bmp)\n", board_hostname(),
-             WiFi.localIP().toString().c_str());
+  Log.printf("screenshots: http://%s.local/screen.bmp (http://%s/screen.bmp)\n", board_hostname(), ip);
   for (;;) {
     WiFiClient c = g_srv.available();
     if (!c) { rec_step(); delay(20); continue; }
@@ -190,14 +190,17 @@ static void task(void *) {
       heap_caps_free(g_rec);
       g_rec = NULL; g_rec_cap = g_rec_len = 0; g_rec_n = 0;
       c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nfreed\n");
-    } else if (strncmp(line, "GET /heap ", 10) == 0) {   // memory check (debug)
+    } else if (strncmp(line, "GET /heap ", 10) == 0) {   // memory and Wi-Fi link
+      char ssid[33], ap[18];
+      int8_t rssi;
+      int ch;
+      net_wifi_info(ssid, sizeof ssid, &rssi, &ch, ap, sizeof ap);
       c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n"
                "internal free %u, largest block %u, lowest since boot %u\npsram free %u\nwifi rssi %d dBm, channel %d, ap %s\n",
                (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
                (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
                (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
-               (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), (int)WiFi.RSSI(), (int)WiFi.channel(),
-               WiFi.BSSIDstr().c_str());
+               (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), (int)rssi, ch, ap);
     } else if (strncmp(line, "GET /flash ", 11) == 0) {   // flash read mode + raw read speed (debug)
       uint32_t ctrl = 0;
       const char *mode = board_flash_mode(&ctrl);   // chip-specific registers: the board layer reads them

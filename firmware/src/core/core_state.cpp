@@ -6,6 +6,7 @@
 #include <string.h>
 #include <time.h>
 #include "net.h"
+#include "stamp.h"
 
 // stored shots, profile shapes and Wi-Fi networks are the API's own types (live.h): handed over without copying
 static_assert(LINK_ONLINE == (int)BD_LINK_ONLINE && WHY_NO_REPLY == (int)BD_WHY_NO_REPLY &&
@@ -139,7 +140,7 @@ void cs_take_profiles(const ProfileList *l) {
     p->phases = q->phases;
     p->stop_weight = q->weight;
     p->brew_temp = q->temp;
-    if (q->selected) g_m.profile_id = q->id;
+    if (q->selected && g_m.profile_id != q->id) { g_m.profile_id = q->id; g_seq_m++; }
   }
   last_used_all();
   g_seq_pl++;
@@ -343,13 +344,13 @@ void cs_answer(bd_command cmd, bd_answer a) {
 }
 static void watch(bool *on, const char *want, const char *now_is, uint32_t *t, uint32_t now, bd_command cmd) {
   if (!*on) return;
-  if (!*t) *t = now ? now : 1;                    // the clock starts at the first pass after the command
+  if (!*t) *t = stamp_nz(now);                    // the clock starts at the first pass after the command
   if (!strcmp(now_is, want)) { *on = false; cs_answer(cmd, BD_ANSWER_OK); }
   else if (now - *t > ANSWER_MS) { *on = false; cs_answer(cmd, BD_ANSWER_NOT_TAKEN); }
 }
 static void watch_n(bool *on, bool done, uint32_t *t, uint32_t now, uint32_t limit, bd_command cmd) {
   if (!*on) return;
-  if (!*t) *t = now ? now : 1;
+  if (!*t) *t = stamp_nz(now);
   if (done) { *on = false; cs_answer(cmd, BD_ANSWER_OK); }
   else if (now - *t > limit) { *on = false; cs_answer(cmd, BD_ANSWER_NOT_TAKEN); }
 }
@@ -362,7 +363,7 @@ void cs_tick(uint32_t now) {
           BD_CMD_BREW_TEMP);
   watch_n(&g_w_tare.on, fabsf(g_m.weight) < 0.3f, &g_w_tare.t, now, ANSWER_MS, BD_CMD_TARE);
   if (g_shot_on && g_shot_rx) {                   // a shot that stopped sending points: ended
-    if (g_shot_rx != g_shot_seen_rx || !g_shot_seen_t) { g_shot_seen_rx = g_shot_rx; g_shot_seen_t = now ? now : 1; }
+    if (g_shot_rx != g_shot_seen_rx || !g_shot_seen_t) { g_shot_seen_rx = g_shot_rx; g_shot_seen_t = stamp_nz(now); }
     else if (now - g_shot_seen_t > 3000) shot_end();
   }
 }

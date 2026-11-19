@@ -83,10 +83,9 @@ bool touch_raw(int16_t *rx, int16_t *ry) {
         g_down = false;
       }
       reg_write(0x814E, 0);
-    } else if (g_down && (millis() - g_last_ready) > 120) {
-      g_down = false;   // no new report for a while: finger must have lifted
     }
   }
+  if (g_down && millis() - g_last_ready > 120) g_down = false;   // no report for a while (or the bus failing): lifted
   if (g_down) {
     *rx = g_rx;
     *ry = g_ry;

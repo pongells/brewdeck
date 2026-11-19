@@ -1,17 +1,23 @@
-#include "stamp.h"
-#include <esp_heap_caps.h>
-// See ws.h. Minimal RFC 6455 client: handshake, unmasked server frames in; masked pong / close and the commands (ws.h) out.
-// Decoded values go to net.cpp (net_ws_*), which overlays them on the REST data while they are fresh.
+// See ws.h. Minimal RFC 6455 client: handshake, unmasked server frames in; masked pong / close and the commands (ws.h)
+// out. Decoded values go to net_data.cpp (net_ws_*), which overlays them on the REST data while they are fresh.
 #include <Arduino.h>
-#include "tlog.h"
 #include <WiFi.h>
+#include <esp_heap_caps.h>
 #include <esp_random.h>
-#include <string.h>
 #include <math.h>
+#include <string.h>
 #include "net.h"
 #include "net_ws.h"
 #include "pb.h"
+#include "stamp.h"
+#include "tlog.h"
 #include "ws.h"
+
+static int wifi_rssi(void) {   // the network task's reading: asking Wi-Fi from here would block on the ESP32-P4
+  int8_t r = 0;
+  net_wifi_up(&r);
+  return r;
+}
 
 static uint8_t g_rx[4096];   // one frame; bigger ones (shot history index ~2.2 KB is the largest seen) are skipped
 
@@ -498,7 +504,7 @@ static void session(WiFiClient &c) {
                       (unsigned)cnt[0], (unsigned)cnt[1], (unsigned)cnt[2],
                       (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
                       (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
-                      (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL), (int)WiFi.RSSI());
+                      (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL), wifi_rssi());
         cnt[0] = cnt[1] = cnt[2] = 0;
         t_log = millis();
       }
@@ -554,7 +560,7 @@ static void task(void *) {
   uint32_t backoff = 2000;
   for (;;) {
     IPAddress ip;
-    if (WiFi.status() != WL_CONNECTED || !net_machine_ip(&ip)) { delay(1000); continue; }
+    if (!net_wifi_up(NULL) || !net_machine_ip(&ip)) { delay(1000); continue; }
     WiFiClient c;
     if (c.connect(ip, 80, 3000) && handshake(c, ip)) {
       c.setNoDelay(true);
@@ -563,7 +569,7 @@ static void task(void *) {
       g_sess_ip = ip;
       session(c);
       Log.printf("ws: disconnected after %u ms, %u frames, %u bytes; rssi %d dBm\n", (unsigned)(millis() - g_t_conn),
-                    (unsigned)g_frames, (unsigned)g_bytes, (int)WiFi.RSSI());
+                    (unsigned)g_frames, (unsigned)g_bytes, wifi_rssi());
     } else {
       backoff = backoff < 30000 ? backoff * 2 : 30000;   // machine off, rebooting, or all slots taken
     }

@@ -2,9 +2,10 @@
 # Main build (macOS / Linux): pioarduino with the custom sdkconfig in platformio.ini, then flash.
 #   ./build-pio.sh ui            build only
 #   ./build-pio.sh ui --flash    build, then flash (encrypted or plain, as the chip needs; needs a 16 MB backup)
-#   ./build-pio.sh ui-debug ...  the same plus the debug web server (screenshots for tools/screenshot.sh, /heap)
+#   ./build-pio.sh ui-debug ...  the same plus the debug web server (docs/development.md: screenshots, recorder, ...)
 #   ./build-pio.sh ui-p4 ...     the Guition ESP32-P4 board (ui-p4-debug: with the debug web server)
 #   ./build-pio.sh p4-c6-update --flash   P4 board: update its Wi-Fi chip's firmware (src/c6update), then flash ui-p4
+#   ./build-pio.sh touchtest --flash      S3: raw touch test (src/touchtest)
 #   UI=ui_minimal ./build-pio.sh ui   another UI folder under src/ (default: ui, Brewdeck's own)
 # Env: PORT=/dev/cu.usbserial-XXXX (default: esptool auto-detect)  GAGGI_BACKUP=path to the 16 MB backup
 #      FLASH_ENC=encrypted|plain|auto (what you expect; checked against the chip)  NO_BACKUP=1 (plain boards only)
@@ -13,7 +14,9 @@
 # (encrypted: Gaggiuino Gen 3 screen, backup required; plain: a Sunton board bought on its own). Never use
 # `pio run -t upload`: it ignores all this.
 set -euo pipefail
-TARGET="${1:-ui}"; FLASH=0; [[ "${2:-}" == "--flash" ]] && FLASH=1
+TARGET="${1:-ui}"; FLASH=0
+case "${2:-}" in "") ;; --flash) FLASH=1 ;; *) echo "unknown option '$2' (only --flash)" >&2; exit 2 ;; esac
+[[ "$TARGET" == -* ]] && { echo "first argument is the env (ui, ui-debug, ui-p4, ...), then --flash" >&2; exit 2; }
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$HERE"
 
