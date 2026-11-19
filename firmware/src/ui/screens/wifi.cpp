@@ -139,6 +139,9 @@ void ui_set_wifi_join(int state) {
   g_wj_state = state;
   if (state == BD_JOIN_OK) {
     memset(g_pw, 0, sizeof g_pw);
+    // opened from the offline screen ("Choose network"): done, close the menu (then "Looking for your machine" and
+    // Ready follow by themselves); from Menu > Wi-Fi: back to the list
+    if (g_menu_entry == MP_WIFI && (g_menu_cur == MP_PASSWORD || g_menu_cur == MP_WIFI)) { menu_close(); return; }
     if (g_menu_cur == MP_PASSWORD) menu_show_page(MP_WIFI);
     bd_wifi_scan();
   }
