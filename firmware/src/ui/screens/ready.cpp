@@ -357,7 +357,6 @@ static void on_tare(lv_event_t *e) { (void)e; if (g_can_tare) bd_tare(); }
 // one word. Holding fills it from the left in LVGL's long-press time (400 ms), then the timed flush starts; flush mode
 // and the timed flush = dark blue button, blue text ("Flush mode on" / "Flushing N s", counting up: the machine's
 // duration is in d_settings, not read, so no draining fill).
-static const lv_color_t FL_DARK = LV_COLOR_MAKE(0x0F, 0x22, 0x33);
 static int fl_cur(void) { return g_fl_want >= 0 ? g_fl_want : g_fl_mode; }
 void fl_show(void) {
   if (!g_fl_btn) return;
@@ -370,7 +369,7 @@ void fl_show(void) {
   set_text(g_fl_lbl, aut ? t : on ? "Flush mode on" : "Flush");
   set_tc(g_fl_lbl, !usable ? COL_OUTLINE : on || aut ? COL_BLUE : COL_TEXT);
   set_line_c(g_fl_drop, usable ? COL_BLUE : COL_OUTLINE);
-  set_bg(g_fl_btn, on || aut ? FL_DARK : COL_CARD);
+  set_bg(g_fl_btn, on || aut ? COL_BLUE_BG : COL_CARD);
   lv_obj_set_style_bg_color(g_fl_btn, on || aut ? lv_color_hex(0x16304A) : COL_CARD_PR, LV_STATE_PRESSED);
 }
 static void fl_ask(int to) {

@@ -59,7 +59,6 @@ static const int OFF_TILE = 112, OFF_TILE_X = 344, OFF_TILE_Y = 72, OFF_ANIM_MS 
 static lv_obj_t *g_off_badge, *g_off_badge_dot, *g_off_badge_l;
 static int g_off_icon_kind = -1;
 static lv_image_dsc_t g_cup_img[2];
-static const lv_color_t OFF_GREY = lv_color_hex(0x3A3A40);
 
 static float ease(float u) { return u * u * (3 - 2 * u); }   // ease-in-out between two keyframes
 // a wisp of the logo (an S standing on y0, h tall) on the 96 grid, k px per unit, faded by `opa` into the tile's
@@ -102,7 +101,7 @@ static void off_icon_draw(lv_event_t *e) {
     lv_draw_rect_dsc_t dot;
     lv_draw_rect_dsc_init(&dot);
     dot.radius = LV_RADIUS_CIRCLE;
-    dot.bg_color = kind == OI_WIFI_TRY ? COL_BLUE : OFF_GREY;
+    dot.bg_color = kind == OI_WIFI_TRY ? COL_BLUE : COL_BORDER;
     const int dr = (int)(5.5f * k + 0.5f);
     const lv_area_t da = {(int32_t)(c.x - dr), (int32_t)(c.y - dr), (int32_t)(c.x + dr), (int32_t)(c.y + dr)};
     lv_draw_rect(ctx, &dot, &da);
@@ -111,11 +110,11 @@ static void off_icon_draw(lv_event_t *e) {
       lv_draw_arc_dsc_init(&d);
       d.width = (int32_t)(6 * k + 0.5f);
       d.rounded = 1;
-      d.color = OFF_GREY;
+      d.color = COL_BORDER;
       if (kind == OI_WIFI_TRY) {                    // 1.8 s cycle, each arc 0.3 s after the one inside it
         const float u = (float)((t + 1800 - i * 300) % 1800) / 1800;
         const float on = u < 0.15f ? 0 : u < 0.30f ? (u - 0.15f) / 0.15f : u < 0.70f ? 1 : u < 0.85f ? (0.85f - u) / 0.15f : 0;
-        d.color = lv_color_mix(COL_BLUE, OFF_GREY, (uint8_t)(on * 255));
+        d.color = lv_color_mix(COL_BLUE, COL_BORDER, (uint8_t)(on * 255));
       }
       darc(ctx, &d, &c, (int)((15 + i * 15) * k + 0.5f), 225, 315);
     }

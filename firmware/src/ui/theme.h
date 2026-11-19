@@ -35,6 +35,8 @@ LV_FONT_DECLARE(it_200_64);    // only "B r e w d c k" (the splash's name)
 #define COL_CARD    lv_color_hex(0x1A1A1D)   // surfaces: buttons, cards
 #define COL_CARD_PR lv_color_hex(0x2A2A2F)   // pressed
 #define COL_LINE    lv_color_hex(0x1E1E21)   // dividers, chart baseline
+#define COL_BORDER  lv_color_hex(0x3A3A40)   // card / field borders, the review's scrubber, idle parts of offline icons
+#define COL_WELL    lv_color_hex(0x121214)   // behind toggles and text fields
 #define COL_GOLD    lv_color_hex(0xF5C04A)
 #define COL_GOLD_PR lv_color_hex(0xD9A93C)
 #define COL_BLUE    lv_color_hex(0x7CC4FF)
@@ -49,6 +51,8 @@ LV_FONT_DECLARE(it_200_64);    // only "B r e w d c k" (the splash's name)
 #define COL_WARN    lv_color_hex(0xFFA94D)
 #define COL_BREW_BG lv_color_hex(0x3A2E10)   // Brewing pill
 #define COL_BREW_TX lv_color_hex(0xFFDD8A)
+#define COL_BLUE_BG lv_color_hex(0x0F2233)   // busy pills (Brewing aside), Steam pill, flush mode on
+#define COL_PALE_TX lv_color_hex(0xC8C8CE)   // neutral pills (Standby, Waiting, Cooling), the bell
 // a toggle's selected segment (review, Display page), the selected profile row, tags
 #define COL_PK_BTN  lv_color_hex(0x26262A)
 #define COL_PK_SEL  lv_color_hex(0x202024)

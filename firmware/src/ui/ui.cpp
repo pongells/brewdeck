@@ -189,13 +189,13 @@ void ui_set_live(const LiveData *d, int link) {
   snprintf(g_idle_temp, sizeof g_idle_temp, "%.1f", d->temperature);
   g_can_tare = g_can_select && d->scales_present;
   set_tc(g_tare_lbl, g_can_tare ? COL_TEXT : COL_OUTLINE);
-  if (busy) set_pill(lv_color_hex(0x0F2233), COL_BLUE, COL_BLUE, state);
+  if (busy) set_pill(COL_BLUE_BG, COL_BLUE, COL_BLUE, state);
   else if (heating) set_pill(lv_color_hex(0x2A2210), COL_GOLD, COL_GOLD, (heating_now ? rd : s_hold_rd) == 1 ? "Warming up" : "Heating");
-  else if (rd == 4) set_pill(COL_CARD, COL_MUTED, lv_color_hex(0xC8C8CE), "Standby");
-  else if (rd == 0) set_pill(COL_CARD, COL_MUTED, lv_color_hex(0xC8C8CE), "Waiting");
-  else if (rd == 7) set_pill(lv_color_hex(0x0F2233), COL_BLUE, COL_BLUE, "Maintenance");
+  else if (rd == 4) set_pill(COL_CARD, COL_MUTED, COL_PALE_TX, "Standby");
+  else if (rd == 0) set_pill(COL_CARD, COL_MUTED, COL_PALE_TX, "Waiting");
+  else if (rd == 7) set_pill(COL_BLUE_BG, COL_BLUE, COL_BLUE, "Maintenance");
   else if (cooling)   // after steam
-    set_pill(COL_CARD, COL_BLUE, lv_color_hex(0xC8C8CE), "Cooling");
+    set_pill(COL_CARD, COL_BLUE, COL_PALE_TX, "Cooling");
   else set_pill(COL_PILL_BG, COL_GREEN, COL_PILL_TX, "Ready");
 
   // temperature (the state is the pill's job)

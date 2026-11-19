@@ -220,7 +220,7 @@ static void rv_draw(lv_event_t *e) {
   const int x = ox + cm_x(&m, s->t);
   lv_draw_line_dsc_t d;
   lv_draw_line_dsc_init(&d);
-  d.color = lv_color_hex(0x3A3A40);
+  d.color = COL_BORDER;
   d.width = 2;
   lv_point_t p1 = {(int32_t)x, (int32_t)(oy + RV_AT_H + 4)}, p2 = {(int32_t)x, (int32_t)(oy + RV_BASE)};
   dl(ctx, &d, &p1, &p2);
@@ -611,7 +611,7 @@ void build_brew(lv_obj_t *scr) {
   lv_obj_set_style_pad_all(tg, 3, 0);
   lv_obj_set_style_radius(tg, RAD_CTRL, 0);
   lv_obj_set_style_bg_opa(tg, LV_OPA_COVER, 0);
-  lv_obj_set_style_bg_color(tg, lv_color_hex(0x121214), 0);
+  lv_obj_set_style_bg_color(tg, COL_WELL, 0);
   static const char *tog[] = {"Target", "Previous"};
   for (int i = 0; i < 2; i++) {
     g_rv_tog[i] = flex(tg, LV_FLEX_FLOW_ROW, 0);

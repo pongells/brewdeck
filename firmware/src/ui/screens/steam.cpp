@@ -192,7 +192,7 @@ void build_steam(lv_obj_t *scr) {
   lv_obj_t *pill = pill_row(hl);
   lv_obj_set_style_pad_left(pill, 16, 0);
   lv_obj_set_style_pad_right(pill, 16, 0);
-  lv_obj_set_style_bg_color(pill, lv_color_hex(0x0F2233), 0);
+  lv_obj_set_style_bg_color(pill, COL_BLUE_BG, 0);
   box(pill, 0, 0, 10, 10, COL_BLUE, 5);
   label(pill, "Steam", F_TEXT_B, COL_BLUE);
   // water (the level adds nothing here): only an orange "Refill N%" pill below 20 %, like the

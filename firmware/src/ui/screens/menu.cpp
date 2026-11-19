@@ -207,7 +207,7 @@ static void disp_toggle_row(lv_obj_t *c, int t, const char *title, const char *a
   lv_obj_set_style_pad_all(tg, 3, 0);
   lv_obj_set_style_radius(tg, RAD_CTRL, 0);
   lv_obj_set_style_bg_opa(tg, LV_OPA_COVER, 0);
-  lv_obj_set_style_bg_color(tg, lv_color_hex(0x121214), 0);
+  lv_obj_set_style_bg_color(tg, COL_WELL, 0);
   const char *const T[2] = {a, b};
   for (int i = 0; i < 2; i++) {
     lv_obj_t *o = g_disp_tog[t][i] = flex(tg, LV_FLEX_FLOW_ROW, 0);

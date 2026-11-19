@@ -208,7 +208,7 @@ void build_idle(lv_obj_t *scr) {
   lv_obj_t *col = g_idle_col = flex(g_idle, LV_FLEX_FLOW_COLUMN, 14);
   lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_align(col, LV_ALIGN_CENTER, 0, 0);      // placed when shown (still, or bouncing)
-  g_idle_clock = label(col, "07:52", F_HERO, lv_color_hex(0x6A6A72));
+  g_idle_clock = label(col, "07:52", F_HERO, lv_color_hex(IDLE_TINTS[0]));
   lv_obj_t *row = flex(col, LV_FLEX_FLOW_ROW, 10);
   g_idle_dot = box(row, 0, 0, 8, 8, COL_GREEN, 4);
   lv_obj_set_style_bg_opa(g_idle_dot, LV_OPA_80, 0);

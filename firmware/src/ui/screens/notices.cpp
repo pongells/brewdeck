@@ -8,6 +8,9 @@
 static const int NB_Y = 38;   // the banner's y off Ready (= the status pills' y)
 #define NTC_MAX 10   // the list scrolls
 struct Notice { char t[64]; uint8_t type; char when[8]; bool unread; };
+// colours per notice type (BD_NOTICE_*: info, success, warn, error): banner background, dot, banner text
+static const struct { uint32_t bg, dot, tx; } NTC_COL[4] = {
+    {0x1A1A1D, 0x7CC4FF, 0xF2F2F3}, {0x10291A, 0x4ADE80, 0x7EE2A8}, {0x33200F, 0xFFA94D, 0xFFC089}, {0x3A1416, 0xE5484D, 0xFF9EA1}};
 
 // ---- machine notifications (d_notif): a banner in the status pill's place on Ready, centred elsewhere, ~5 s --------------------
 // Pill like the status pills (dot, no icon), colour by type; on the top layer (over every screen, never takes taps).
@@ -199,7 +202,6 @@ static int g_ntc_n = 0;
 static bool g_ntc_unread = false;
 static lv_obj_t *g_ntc_btn, *g_ntc_badge, *g_ntc_back, *g_ntc_card, *g_ntc_row[NTC_MAX], *g_ntc_dot[NTC_MAX],
     *g_ntc_txt[NTC_MAX], *g_ntc_when[NTC_MAX];
-static const uint32_t NTC_DOT[4] = {0x7CC4FF, 0x4ADE80, 0xFFA94D, 0xE5484D};   // info, success, warn, error
 static void ntc_close(void) {
   if (g_ntc_back) lv_obj_set_hidden(g_ntc_back, true);
   if (g_ntc_btn) set_bg(g_ntc_btn, COL_CARD);
@@ -217,7 +219,7 @@ static void ntc_refresh(void) {
   for (int i = 0; i < NTC_MAX; i++) {
     set_hidden(g_ntc_row[i], i >= g_ntc_n);
     if (i >= g_ntc_n) continue;
-    set_bg(g_ntc_dot[i], lv_color_hex(NTC_DOT[g_ntc[i].type & 3]));
+    set_bg(g_ntc_dot[i], lv_color_hex(NTC_COL[g_ntc[i].type & 3].dot));
     set_text(g_ntc_txt[i], g_ntc[i].t);
     set_text(g_ntc_when[i], g_ntc[i].when);
     lv_obj_set_style_border_width(g_ntc_row[i], i == g_ntc_n - 1 ? 0 : 1, 0);
@@ -259,7 +261,7 @@ void ntc_build_btn(lv_obj_t *scr, int32_t x) {
   g_ntc_btn = box(scr, x, 24, 52, 52, COL_CARD, RAD_CTRL);
   make_button(g_ntc_btn, COL_CARD_PR);
   lv_obj_add_event_cb(g_ntc_btn, on_ntc_btn, LV_EVENT_CLICKED, NULL);
-  lv_obj_center(line_icon(g_ntc_btn, IC_BELL, 24, lv_color_hex(0xC8C8CE)));
+  lv_obj_center(line_icon(g_ntc_btn, IC_BELL, 24, COL_PALE_TX));
   g_ntc_badge = box(g_ntc_btn, 30, 11, 11, 11, COL_BLUE, 6);   // unread: blue dot, ringed in the button's colour
   lv_obj_set_style_border_width(g_ntc_badge, 2, 0);
   lv_obj_set_style_border_color(g_ntc_badge, COL_CARD, 0);
@@ -280,7 +282,7 @@ void ntc_build_btn(lv_obj_t *scr, int32_t x) {
   lv_obj_set_style_bg_color(g_ntc_card, COL_CARD, 0);
   lv_obj_set_style_bg_opa(g_ntc_card, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(g_ntc_card, 1, 0);
-  lv_obj_set_style_border_color(g_ntc_card, lv_color_hex(0x3A3A40), 0);
+  lv_obj_set_style_border_color(g_ntc_card, COL_BORDER, 0);
   lv_obj_set_clickable(g_ntc_card, true);   // taps on the card do not close it
   // at most down to the 24 px margin above the bottom edge; scrolls, the cut-off row hints it
   lv_obj_set_style_max_height(g_ntc_card, 480 - 92 - 16, 0);
@@ -319,17 +321,15 @@ static void nb_place(int k, const char *msg, bool shown) {
   if (msg != g_nb_txt) snprintf(g_nb_txt, sizeof g_nb_txt, "%s", msg);
   g_nb_k = k;
   msg = g_nb_txt;
-  static const uint32_t BG[4] = {0x1A1A1D, 0x10291A, 0x33200F, 0x3A1416};   // info, success, warn, error
-  static const uint32_t DOT[4] = {0x7CC4FF, 0x4ADE80, 0xFFA94D, 0xE5484D};
-  static const uint32_t TX[4] = {0xF2F2F3, 0x7EE2A8, 0xFFC089, 0xFF9EA1};
   const bool ready = nb_on_ready();
   // in the status pill, info is blue-tinted like the busy pills (card grey would read as Standby)
-  const uint32_t bg = ready && k == 0 ? 0x0F2233 : BG[k], tx = ready && k == 0 ? 0xCFE8FF : TX[k];
-  set_bg(g_nb, lv_color_hex(bg));
-  lv_obj_set_style_border_color(g_nb, lv_color_mix(lv_color_hex(DOT[k]), lv_color_hex(bg), 70), 0);
+  const lv_color_t bg = ready && k == 0 ? COL_BLUE_BG : lv_color_hex(NTC_COL[k].bg);
+  const lv_color_t tx = lv_color_hex(ready && k == 0 ? 0xCFE8FF : NTC_COL[k].tx), dot = lv_color_hex(NTC_COL[k].dot);
+  set_bg(g_nb, bg);
+  lv_obj_set_style_border_color(g_nb, lv_color_mix(dot, bg, 70), 0);
   lv_obj_set_style_border_width(g_nb, ready ? 0 : 1, 0);
-  set_bg(g_nb_dot, lv_color_hex(DOT[k]));
-  set_tc(g_nb_lbl, lv_color_hex(tx));
+  set_bg(g_nb_dot, dot);
+  set_tc(g_nb_lbl, tx);
   set_text(g_nb_lbl, msg);
   // width: up to the header's buttons on Ready ("..." past them), the text's own width elsewhere
   lv_point_t sz;

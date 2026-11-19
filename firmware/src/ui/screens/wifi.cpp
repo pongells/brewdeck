@@ -296,16 +296,16 @@ void build_wifi(lv_obj_t *m) {
 
   // password page
   pg = g_menu_page[5] = g_menu_page[6] = box(m, 24, 90, 752, 366, COL_BG, 0);
-  lv_obj_t *f = box(pg, 0, 0, 752, 56, lv_color_hex(0x121214), RAD_CTRL);
+  lv_obj_t *f = box(pg, 0, 0, 752, 56, COL_WELL, RAD_CTRL);
   lv_obj_set_style_border_width(f, 1, 0);
-  lv_obj_set_style_border_color(f, lv_color_hex(0x3A3A40), 0);
+  lv_obj_set_style_border_color(f, COL_BORDER, 0);
   lv_obj_t *fl = g_pw_field_l = label(f, "Password", F_TEXT, COL_MUTED);
   lv_obj_align(fl, LV_ALIGN_LEFT_MID, 18, 0);
   lv_obj_t *fr = flex(f, LV_FLEX_FLOW_ROW, 2);
   lv_obj_align(fr, LV_ALIGN_LEFT_MID, 116, 0);
   g_pw_txt = label(fr, "", F_ROW, COL_TEXT);
   g_pw_cur = box(fr, 0, 0, 2, 24, COL_GOLD, 0);
-  g_pw_eye = box(f, 696, 8, 40, 40, lv_color_hex(0x121214), 10);
+  g_pw_eye = box(f, 696, 8, 40, 40, COL_WELL, 10);
   make_button(g_pw_eye, COL_CARD);
   {
     static const lv_point_t top[] = {{2, 11}, {6, 6}, {11, 4}, {16, 6}, {20, 11}};

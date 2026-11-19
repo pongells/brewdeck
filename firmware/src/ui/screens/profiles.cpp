@@ -205,7 +205,7 @@ static void snap_build(void) {
   lv_obj_set_style_bg_color(c, COL_CARD, 0);
   lv_obj_set_style_bg_opa(c, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(c, 1, 0);
-  lv_obj_set_style_border_color(c, lv_color_hex(0x3A3A40), 0);
+  lv_obj_set_style_border_color(c, COL_BORDER, 0);
   lv_obj_set_clickable(c, true);                   // taps on the card do not close it
   lv_obj_center(c);
   g_rs_title = label(c, "", F_ROW_B, COL_TEXT);
