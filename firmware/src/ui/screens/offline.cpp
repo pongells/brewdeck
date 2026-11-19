@@ -12,7 +12,8 @@ enum { OI_WIFI_TRY = 0, OI_WIFI_FAIL, OI_WIFI_NONE, OI_CUP_TRY, OI_CUP_FAIL };
 // do not flash it), at once while booting; never over a shot in progress or the shot review (they work from the
 // data already here). Hidden as soon as the machine answers.
 static const uint32_t OFF_DELAY_MS = 5000;
-lv_obj_t *g_off, *g_off_title, *g_off_body, *g_off_detail, *g_off_icon;
+lv_obj_t *g_off;
+static lv_obj_t *g_off_title, *g_off_body, *g_off_detail, *g_off_icon;
 int g_off_link = LINK_CONNECTING;
 uint32_t g_off_since;          // lv_tick when the link was last lost (5 s delay before the screen shows)
 uint32_t g_off_phase;          // lv_tick when the current state began (joining Wi-Fi / looking for the machine)
@@ -24,19 +25,14 @@ char g_off_sip[20] = "", g_off_mach[40] = "";
 //   no Wi-Fi set up / joining Wi-Fi (< 20 s) / not connected to Wi-Fi (>= 20 s, the screen keeps retrying quietly)
 //   looking for the machine (< 20 s after Wi-Fi is up) / machine not found (>= 20 s: name or IP can be changed)
 static const uint32_t OFF_GIVE_UP_MS = 20000;
-char g_wifi_ssid[33] = "", g_wifi_ap[20] = "";   // network the screen is on (menu > Wi-Fi), "" = none
 static lv_obj_t *g_off_btn[2], *g_off_btn_l[2];
 static int g_off_btn_act[2];                   // what each button does: OFF_ACT_*
-char g_wifi_target[33] = "";           // network the screen tries to join ("" = none set up)
-char g_mach_host[64] = "gaggiuino.local";   // configured machine address
 static int g_off_why = WHY_NONE;               // WHY_* (live.h), from the core
 static char g_off_why_ip[16] = "";
 void ui_set_offline_reason(int why, const char *ip) {
   g_off_why = why;
   snprintf(g_off_why_ip, sizeof g_off_why_ip, "%s", ip);
 }
-void ui_set_wifi_target(const char *ssid) { snprintf(g_wifi_target, sizeof g_wifi_target, "%s", ssid); }
-void ui_set_machine_host(const char *host) { snprintf(g_mach_host, sizeof g_mach_host, "%s", host); }
 
 static int off_state(void) {
   const bool late = lv_tick_elaps(g_off_phase) >= OFF_GIVE_UP_MS;
@@ -226,7 +222,6 @@ static void off_text(void) {
   }
 }
 
-bool g_in_wifi_pages = false;    // menu open on Wi-Fi list / details / password / address: offline screen away
 static void on_off_btn(lv_event_t *e) {
   const int i = (int)(intptr_t)lv_event_get_user_data(e);
   switch (g_off_btn_act[i]) {

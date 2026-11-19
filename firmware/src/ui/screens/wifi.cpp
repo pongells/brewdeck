@@ -9,6 +9,11 @@
 enum { K_SHIFT = 19, K_BS = 27, K_LAYER = 28, K_SPACE = 29, K_DOT = 30, K_JOIN = 31 };
 
 // ---- Wi-Fi join --------------------------------------------
+char g_wifi_ssid[33] = "", g_wifi_ap[20] = "";   // network the screen is on, "" = none
+int g_wifi_rssi = 0, g_wifi_ch = 0;
+char g_wifi_target[33] = "";                     // network the screen tries to join ("" = none set up)
+char g_mach_host[64] = "gaggiuino.local";        // configured machine address
+char g_wj_ssid[33] = "";                         // network being joined (password page title)
 static WifiNet g_nets[MAX_NETS];
 static int g_nets_n = 0;
 static bool g_nets_scanning = false;
@@ -31,6 +36,16 @@ static const char *const KL[3][3] = {
   {"1234567890", "@#$%&*-+=", "!?/_\"':"},
   {"1234567890", "()[]{}<>~", ",;\\|^`."}};
 
+void ui_set_wifi(const char *ssid, int rssi, int channel, const char *ap) {
+  const bool changed = strcmp(g_wifi_ssid, ssid) != 0;
+  snprintf(g_wifi_ssid, sizeof g_wifi_ssid, "%s", ssid);
+  snprintf(g_wifi_ap, sizeof g_wifi_ap, "%s", ap);
+  g_wifi_rssi = rssi;
+  g_wifi_ch = channel;
+  if (changed) wifi_refresh();
+}
+void ui_set_wifi_target(const char *ssid) { snprintf(g_wifi_target, sizeof g_wifi_target, "%s", ssid); }
+void ui_set_machine_host(const char *host) { snprintf(g_mach_host, sizeof g_mach_host, "%s", host); }
 void ui_set_wifi_scan(const WifiNet *n, int count, bool scanning) {
   g_nets_n = count < 0 ? 0 : count > MAX_NETS ? MAX_NETS : count;
   memcpy(g_nets, n, sizeof(WifiNet) * g_nets_n);

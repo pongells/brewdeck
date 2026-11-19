@@ -5,6 +5,8 @@
 // The newest 50 stored shots from the machine's WebSocket index (no request): day headers, then time, profile and
 // duration per row (grams once that shot was opened in this session). A tap loads the shot and the next older one of
 // its profile (bd_load_stored_shot, sent once the machine is idle) and opens the shot review on it.
+WsShotIndex *g_hx;                         // the machine's index of stored shots (PSRAM)
+bool g_hx_ok = false;                      // g_hx holds an index
 static lv_obj_t *g_hl_list;
 static EmptyState g_hl_empty;
 static uint32_t g_hl_ids[WS_SHOT_INDEX_MAX];

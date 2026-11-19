@@ -8,7 +8,8 @@
 // the brewing chart's full-width box: temperature red with the dashed set point (labelled), pressure blue, since steam
 // started; one values row under it (temperature / set point, pressure).
 static const int ST_CX = 24, ST_CY = 96, ST_CW = 752, ST_CH = 288;    // chart box = the brewing chart's (BR_*), full width
-lv_obj_t *g_st, *g_st_temp, *g_st_setl, *g_st_chart, *g_st_clock, *g_st_p;
+lv_obj_t *g_st;
+static lv_obj_t *g_st_temp, *g_st_setl, *g_st_chart, *g_st_clock, *g_st_p;
 static lv_obj_t *g_st_tank, *g_st_tank_pct, *g_st_wt;
 static int16_t g_st_s[ST_PTS];                      // temperature x10
 static int16_t g_st_ps[ST_PTS];                     // pressure x100

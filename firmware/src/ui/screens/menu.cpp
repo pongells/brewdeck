@@ -1,31 +1,27 @@
 // The menu (its layer, header and list) and its Display, Scale and About pages.
 #include "../ui_int.h"
 
-// ---- menu -----------------------------------------------------------------------
+// ---- menu ----
+// One column of rows that open a page; profiles and maintenance are left to the machine's web UI (one line under the
+// list). Display: this screen's settings (saved by ui_bridge.cpp through ui_on_settings). Scale / Wi-Fi / About:
+// status pages.
 lv_obj_t *g_menu;              // the menu layer
-lv_obj_t *g_menu_title, *g_menu_back, *g_menu_main, *g_menu_page[MENU_PAGES];
+static lv_obj_t *g_menu_title, *g_menu_back, *g_menu_main;
+lv_obj_t *g_menu_page[MENU_PAGES];
 int g_menu_cur = -1;           // the page shown, -1 = the menu list
 int g_menu_entry = -1;         // page opened straight from the offline screen: its Back returns there
-lv_obj_t *g_mrow_val[7];                    // value text of each main row
-lv_obj_t *g_info[MENU_PAGES][7];            // status page values: [page][row]
-lv_obj_t *g_disp_val[2];                    // Display page: brightness, idle time
-static lv_obj_t *g_disp_tog[2][2], *g_disp_tog_l[2][2];   // Display page toggles: [0] idle clock Still / Bouncing,
-                                                          // [1] splash at start On / Off
+bool g_in_wifi_pages = false;  // menu open on Wi-Fi list / details / password / address: offline screen away
+static lv_obj_t *g_mrow_val[7];                    // value text of each main row
+static lv_obj_t *g_info[MENU_PAGES][7];            // status page values: [page][row]
+static lv_obj_t *g_disp_val[2];                    // Display page: brightness, idle time
+// Display page toggles: [0] idle clock Still / Bouncing, [1] splash at start On / Off
+static lv_obj_t *g_disp_tog[2][2], *g_disp_tog_l[2][2];
 static void (*g_settings_cb)(int bright, int idle_min, bool bounce, bool splash) = NULL;
 LiveData g_menu_live;
 int g_menu_link = LINK_CONNECTING;
-int g_wifi_rssi = 0, g_wifi_ch = 0;
 static char g_sys_txt[3][64] = {"", "", ""};   // build, uptime (+ restart reason), memory
 static const int IDLE_OPTS[] = {0, 1, 2, 5, 10, 20, 30, 60};
 static const char *const PAGE_NAMES[] = {"Display", "Scale", "Wi-Fi", "About", "", "", "Machine address", "Shot history"};
-WsShotIndex *g_hx;                          // shot index for the history list (PSRAM)
-bool g_hx_ok = false;
-uint32_t prof_last_used(const char *name) {   // the core works it out from the shot history
-  const bd_profiles *l = bd_profile_list();
-  for (int i = 0; i < l->count; i++) if (!strcmp(l->p[i].name, name)) return l->p[i].last_used;
-  return 0;
-}
-char g_wj_ssid[33] = "";                    // network being joined (password page title)
 
 void ui_on_settings(void (*cb)(int bright, int idle_min, bool bounce, bool splash)) { g_settings_cb = cb; }
 void ui_set_settings(int bright, int idle_min, bool bounce, bool splash) {
@@ -34,14 +30,6 @@ void ui_set_settings(int bright, int idle_min, bool bounce, bool splash) {
   if (idle_min >= 0 && idle_min <= 60) g_idle_min = idle_min;
   g_idle_bounce = bounce;
   bl_set(g_bright);
-}
-void ui_set_wifi(const char *ssid, int rssi, int channel, const char *ap) {
-  const bool changed = strcmp(g_wifi_ssid, ssid) != 0;
-  snprintf(g_wifi_ssid, sizeof g_wifi_ssid, "%s", ssid);
-  snprintf(g_wifi_ap, sizeof g_wifi_ap, "%s", ap);
-  g_wifi_rssi = rssi;
-  g_wifi_ch = channel;
-  if (changed) wifi_refresh();
 }
 void ui_set_sysinfo(const char *build, const char *uptime, const char *memory) {
   // the compiler's "Nov  5 2026 00:40:12" as "5 Nov 2026, 00:40"
@@ -168,14 +156,14 @@ void menu_close(void) {
   g_menu_cur = g_menu_entry = -1;
   if (g_off) on_off_timer(NULL);        // offline screen back in the same frame (else Ready flashes for ~200 ms)
 }
-void on_menu_close(lv_event_t *e) { (void)e; menu_close(); }
-void on_menu_back(lv_event_t *e) {
+static void on_menu_close(lv_event_t *e) { (void)e; menu_close(); }
+static void on_menu_back(lv_event_t *e) {
   (void)e;
   if (g_menu_cur >= 0 && g_menu_cur == g_menu_entry) { menu_close(); return; }   // back to the offline screen
   menu_show_page(g_menu_cur == 4 || g_menu_cur == 5 ? 2 : g_menu_cur == 6 ? 4 : -1);
 }
-void on_menu_row(lv_event_t *e) { menu_show_page((int)(intptr_t)lv_event_get_user_data(e)); }
-void menu_timer(lv_timer_t *t) {
+static void on_menu_row(lv_event_t *e) { menu_show_page((int)(intptr_t)lv_event_get_user_data(e)); }
+static void menu_timer(lv_timer_t *t) {
   (void)t;
   hist_timer();
   if (!lv_obj_is_hidden(g_menu)) menu_refresh();
@@ -211,7 +199,7 @@ static void on_disp_tog(lv_event_t *e) {          // user data: toggle * 2 + opt
   settings_changed();
 }
 // a Display row with a two-option toggle (idle clock, splash at start)
-void disp_toggle_row(lv_obj_t *c, int t, const char *title, const char *a, const char *b) {
+static void disp_toggle_row(lv_obj_t *c, int t, const char *title, const char *a, const char *b) {
   lv_obj_t *r = box(c, 0, 0, 752, 80, COL_BG, 0);
   hairline(r, LV_BORDER_SIDE_BOTTOM);
   lv_obj_align(label(r, title, F_ROW, COL_TEXT), LV_ALIGN_LEFT_MID, 0, 0);
@@ -235,7 +223,7 @@ void disp_toggle_row(lv_obj_t *c, int t, const char *title, const char *a, const
 }
 
 // a row: label left, value (+ chevron when it opens a page) right; bottom hairline
-lv_obj_t *menu_row(lv_obj_t *col, const char *name, lv_obj_t **val, bool opens, bool grey) {
+static lv_obj_t *menu_row(lv_obj_t *col, const char *name, lv_obj_t **val, bool opens, bool grey) {
   lv_obj_t *r = box(col, 0, 0, 356, 72, COL_BG, 0);
   hairline(r, LV_BORDER_SIDE_BOTTOM);
   lv_obj_t *l = label(r, name, F_ROW, grey ? COL_OUTLINE : COL_TEXT);
@@ -249,13 +237,13 @@ lv_obj_t *menu_row(lv_obj_t *col, const char *name, lv_obj_t **val, bool opens, 
   }
   return r;
 }
-lv_obj_t *menu_column(lv_obj_t *p, int x) {
+static lv_obj_t *menu_column(lv_obj_t *p, int x) {
   lv_obj_t *c = flex(p, LV_FLEX_FLOW_COLUMN, 0);
   lv_obj_set_pos(c, x, 0);
   hairline(c, LV_BORDER_SIDE_TOP);
   return c;
 }
-lv_obj_t *small_btn(lv_obj_t *p, bool plus, int k) {
+static lv_obj_t *small_btn(lv_obj_t *p, bool plus, int k) {
   lv_obj_t *b = box(p, 0, 0, 52, 52, COL_CARD, RAD_CTRL);
   make_button(b, COL_CARD_PR);
   stepper_part(b);                                // part of a stepper card (like Ready's)

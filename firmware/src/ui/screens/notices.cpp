@@ -5,6 +5,7 @@
 // a blue dot while one arrived without being shown (asleep); a tap opens the list under it, a tap anywhere else closes it. The pressure
 // release ("Dropping beats" / "Releasing pressure") is NOT kept here (it lights the screen up when it
 // happens: glow + banner). The update notice is kept with the screen's own text. Read-only, sends nothing.
+static const int NB_Y = 38;   // the banner's y off Ready (= the status pills' y)
 #define NTC_MAX 10   // the list scrolls
 struct Notice { char t[64]; uint8_t type; char when[8]; bool unread; };
 
@@ -12,7 +13,8 @@ struct Notice { char t[64]; uint8_t type; char when[8]; bool unread; };
 // Pill like the status pills (dot, no icon), colour by type; on the top layer (over every screen, never takes taps).
 // Wakes the screen (screen off / idle clock) so "Releasing pressure!" is seen. "Fill the water tank!" is left out:
 // the machine repeats it ~1.4/s (a Gaggiuino quirk) and the water pill shows it already. A repeat of the shown text keeps it up.
-lv_obj_t *g_nb, *g_nb_dot, *g_nb_lbl;
+static lv_obj_t *g_nb, *g_nb_dot, *g_nb_lbl;
+static int g_nb_pill_max = 392;   // Ready: the banner in the pill's place ends before the header's buttons
 static uint32_t g_nb_ms = 0;
 static bool g_nb_lit = false;                     // backlight raised for a banner over the idle clock
 // On Ready the message takes the status pill's place for 5 s (the pill is hidden under it; up to the header's buttons,
@@ -48,7 +50,7 @@ static void nb_slide(bool in) {
 static int g_nb_k;
 static char g_nb_txt[96];
 static void nb_place(int k, const char *msg, bool shown);
-void on_nb_timer(lv_timer_t *t) {
+static void on_nb_timer(lv_timer_t *t) {
   (void)t;
   // in the status pill but another screen opened on top (menu, picker, ...): it would sit over that screen's title
   ntc_close_if_covered();

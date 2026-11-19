@@ -25,20 +25,24 @@ static const int RV_X = BR_X, RV_Y = BR_Y, RV_W = BR_W, RV_H = BR_H;
 static const int RV_PW = BR_W;                                      // plot width
 static const int RV_BASE = CH_BASE;
 ShotPoint *g_br;                          // SHOT_MAX points (11.5 KB) in PSRAM: internal RAM is for Wi-Fi
-int g_br_n = 0, g_br_step = 1, g_br_skip = 0, g_br_tmax = 30, g_br_lastx = -1;
+int g_br_n = 0;
+static int g_br_step = 1, g_br_skip = 0, g_br_tmax = 30, g_br_lastx = -1;
 int g_br_state = 0;                       // 0 hidden, 1 brewing, 2 done, 3 review
 bool g_br_seen_brew = false, g_live_brew = false;
 static uint32_t g_br_last_ms = 0, g_br_done_ms = 0;
 static WsShot g_br_cur;
-lv_obj_t *g_brew, *g_br_chart, *g_br_pill, *g_br_dot, *g_br_pill_lbl, *g_br_prof, *g_br_clock;
+lv_obj_t *g_brew;
+static lv_obj_t *g_br_chart, *g_br_pill, *g_br_dot, *g_br_pill_lbl, *g_br_prof, *g_br_clock;
 static lv_obj_t *g_br_w, *g_br_target, *g_br_p, *g_br_f, *g_br_temp;
 // review
 static ShotTrace *g_rv_prev;                     // previous shot (PSRAM)
 int g_rv_prev_state = 0;                  // PREV_* from net.h (0 none, 1 loading, 2 ready, 3 missing, 4 failed)
-int g_rv_mode = 0, g_rv_i = 0, g_rv_tmax = 25;
+int g_rv_mode = 0, g_rv_i = 0;
+static int g_rv_tmax = 25;
 static uint32_t g_rv_touch_ms = 0;
 static const uint32_t RV_CLOSE_MS = 60000;
-lv_obj_t *g_rv, *g_rv_chart, *g_rv_res_w, *g_rv_res_t, *g_rv_close_t, *g_rv_tog[2], *g_rv_tog_l[2];
+lv_obj_t *g_rv, *g_rv_chart;
+static lv_obj_t *g_rv_res_w, *g_rv_res_t, *g_rv_close_t, *g_rv_tog[2], *g_rv_tog_l[2];
 static lv_obj_t *g_rv_v[4][2];
 // "vs Profile target": the profile's planned rest after the shot stopped (estimated, preview_plan), drawn dimmer
 static ShotPoint g_rv_plan[240];
@@ -136,26 +140,6 @@ static void ch_dot(lv_layer_t *ctx, int x, int y, int r, lv_color_t col) {
   d.bg_opa = LV_OPA_COVER;
   lv_area_t a = {(int32_t)(x - r), (int32_t)(y - r), (int32_t)(x + r), (int32_t)(y + r)};
   lv_draw_rect(ctx, &d, &a);
-}
-void ch_hline(lv_layer_t *ctx, int x1, int x2, int y, lv_color_t col) {
-  lv_draw_line_dsc_t d;
-  lv_draw_line_dsc_init(&d);
-  d.color = col;
-  d.width = 1;
-  lv_point_t a = {(int32_t)x1, (int32_t)y}, b = {(int32_t)x2, (int32_t)y};
-  dl(ctx, &d, &a, &b);
-}
-// text at (x, y top); align: LV_TEXT_ALIGN_LEFT (x = left), CENTER (x = middle), RIGHT (x = right edge)
-void ch_text_c(lv_layer_t *ctx, int x, int y, const char *s, lv_text_align_t align, lv_color_t col) {
-  lv_draw_label_dsc_t d;
-  lv_draw_label_dsc_init(&d);
-  d.font = F_SMALL;
-  d.color = col;
-  d.align = align;
-  const int w = 200;
-  const int x1 = align == LV_TEXT_ALIGN_LEFT ? x : (align == LV_TEXT_ALIGN_CENTER ? x - w / 2 : x - w);
-  lv_area_t a = {(int32_t)x1, (int32_t)y, (int32_t)(x1 + w - 1), (int32_t)(y + 16)};
-  dlabel(ctx, &d, &a, s);
 }
 // the scrub time above the scrubber: F_TEXT_B, centred on it, kept inside the chart (ox..ox+w)
 static const int RV_AT_H = 22, RV_AT_HW = 30;      // label height, half width (fits "1:05.0")

@@ -10,6 +10,30 @@
 static const int PK_HDR = 96, PK_HDR_H = 28, PK_Y = PK_HDR + PK_HDR_H, PK_RH = 56, PK_W = 752;
 static const int PK_NAME_W = 376, PK_STOP_R = 476, PK_TEMP_R = 540, PK_USED_R = 676, PK_ACT_X = 688, PK_ACT_W = 88;
 
+lv_obj_t *g_pick;                          // full-screen page
+static lv_obj_t *g_pick_list;
+static lv_obj_t *g_pick_sub;               // the page's subtitle ("Active, then recently used")
+ProfileList g_profiles;
+// profile select in flight: shown at once, until the machine reports it or the core answers that it was not taken
+int g_pend_id = 0;
+char g_pend_name[48];
+
+// the machine's id of a profile named as the status names it
+int prof_id(const char *name) {
+  for (int i = 0; i < g_profiles.count; i++) if (!strcmp(g_profiles.p[i].name, name)) return g_profiles.p[i].id;
+  return 0;
+}
+static const ProfileInfo *prof_by_id(int id) {
+  for (int i = 0; i < g_profiles.count; i++) if (g_profiles.p[i].id == id) return &g_profiles.p[i];
+  return NULL;
+}
+// when a profile was last used (the core works it out from the shot history), 0 = not in it
+static uint32_t prof_last_used(const char *name) {
+  const bd_profiles *l = bd_profile_list();
+  for (int i = 0; i < l->count; i++) if (!strcmp(l->p[i].name, name)) return l->p[i].last_used;
+  return 0;
+}
+
 void picker_close(void) { lv_obj_set_hidden(g_pick, true); }
 void picker_open(void) {
   picker_rebuild();                                // only if what the rows show has changed (picker_sig)
@@ -25,6 +49,12 @@ static void on_pick_close(lv_event_t *e) { (void)e; picker_close(); }
 // in the UI's storage, key = the profile name). While a value differs from it, Ready says "Brew temp - edited" /
 // "Stop weight - edited", the keypad has "Reset to <original>", and on the Profiles page the edited values are
 // blue with a Restore button (a long press on the row too), which offers Restore original / Keep current (snap_*). The snapshot is never dropped.
+static bool (*g_orig_load)(const char *profile, int *w10, int *deg) = NULL;
+static void (*g_orig_save)(const char *profile, int w10, int deg) = NULL;
+static void (*g_orig_drop)(const char *profile) = NULL;
+static char g_orig_name[48] = "\x01";     // profile the cache below is for (never a real name at start)
+bool g_orig_have = false;
+int g_orig_w10 = -1, g_orig_deg = -1;
 void ui_on_originals(bool (*load)(const char *, int *, int *), void (*save)(const char *, int, int),
                      void (*drop)(const char *)) { g_orig_load = load; g_orig_save = save; g_orig_drop = drop; }
 void orig_sync(void) {
@@ -123,10 +153,6 @@ void snap_apply(void) {
 static lv_obj_t *g_rs_back, *g_rs_title, *g_rs_orig, *g_rs_now, *g_rs_note;
 static int g_rs_id = 0;
 static void snap_close(void) { if (g_rs_back) lv_obj_set_hidden(g_rs_back, true); g_rs_id = 0; }
-static const ProfileInfo *prof_by_id(int id) {
-  for (int i = 0; i < g_profiles.count; i++) if (g_profiles.p[i].id == id) return &g_profiles.p[i];
-  return NULL;
-}
 static void on_rs_restore(lv_event_t *e) {
   (void)e;
   const ProfileInfo *p = prof_by_id(g_rs_id);

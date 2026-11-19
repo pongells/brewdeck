@@ -2,21 +2,72 @@
 // button) and the keypad for both values.
 #include "../ui_int.h"
 
-// ---- weight handling ---------------------------------------------------------------------------
+static const int PV_W = 344, PV_H = 100;         // profile preview box (fits the 24 px screen margin)
+// drop centred in a 24 px box (a 4.5 px radius drop from y 5.7 to 18)
+static const lv_point_t FL_DROP[] = {{12,6},{13,6},{14,8},{16,11},{16,14},{16,16},{15,17},{14,18},{12,18},{10,18},{9,17},{8,16},{8,14},{8,11},{10,8},{11,6},{12,6}};
+
+// ---- state ----
+int g_weight10 = 210;                      // stop weight in tenths of a gram (0 = none)
+char g_cur_profile[48] = "";               // machine's active profile (raw name from the status)
+bool g_can_select = false;                 // online, idle, mode HOME (set by ui_set_live)
+int g_tset = -1;                           // shown brew temperature, -1 = not known yet
+int g_act_temp = -1;                       // last active-profile temperature taken over
+lv_timer_t *g_temp_tm;                     // user data 1 while a change waits to be sent
+lv_timer_t *g_weight_tm;                   // user data 1 while a -/+ change waits to be sent
+int g_act_weight10 = -1;                   // last active-profile weight taken over
+bool g_can_tare = false;
+int g_fl_mode = -1;            // machine's mode: 2 FLUSH, 5 FLUSH_AUTO, 7 HOME, other / -1 = busy or offline
+bool g_fl_idle = false;        // online, HOME, nothing running
+int g_fl_want = -1;            // mode asked for, until the machine reports it (or the core says it did not take it)
+static uint32_t g_fl_auto_ms = 0;          // FLUSH_AUTO seen since
+// header and live values
+lv_obj_t *g_pill, *g_pill_dot, *g_pill_lbl;      // state pill
+lv_obj_t *g_prof_lbl;                      // active profile's name
+lv_obj_t *g_hdr_left;                      // header, left (pill + profile name): its width follows the bell
+int32_t g_hdr_btn_x = 0;                   // x of the leftmost header button (bell when shown, else Profiles)
+lv_obj_t *g_menu_btn;                      // header cog (opens the menu)
+lv_obj_t *g_temp_lbl;                      // boiler temperature
+lv_obj_t *g_tt_lbl, *g_tw_lbl;             // "Brew temp" / "Stop weight"
+static lv_obj_t *g_tset_lbl;               // brew temperature value
+static lv_obj_t *g_value_lbl;              // stop weight value
+static lv_obj_t *g_value_unit;             // "g" after the stop weight (hidden for no stop weight)
+// footer
+lv_obj_t *g_tank, *g_tank_fill, *g_tank_lbl, *g_tank_pct;
+lv_obj_t *g_scale_lbl;
+lv_obj_t *g_sc_ic[4], *g_scale_name, *g_scale_pill;   // icons: 0 Bluetooth, 1 scale, 2+3 predictive waves
+lv_obj_t *g_pr_pill, *g_pr_ic[2], *g_pr_name, *g_pr_lbl;   // pressure pill (gauge arc + needle, "Pressure 0.2 bar")
+lv_obj_t *g_tare_lbl;
+static lv_obj_t *g_fl_btn, *g_fl_lbl, *g_fl_drop, *g_fl_fill;
+// profile preview: one colour per value (blue pressure, gold flow); bright 3 px = what the phase drives, dim 2 px =
+// only a limit
+static lv_obj_t *g_chart;                  // the preview's box
+lv_obj_t *g_pv_msg;                        // "Loading..." / "No phases"
+static lv_obj_t *g_pv_line[PV_SERIES][PV_MAX_SEG];
+static lv_point_t g_pv_pts[PV_SERIES][PV_MAX_PTS];   // lv_line keeps a pointer: must stay alive
+bool g_shape_loaded = false;
+ProfileShape g_last_shape;                 // last one from the machine (to restore after a failed select)
+int g_shape_id = -1;                       // last profile / target weight taken from the machine
+static int g_shape_weight10 = -1;
+// keypad
+lv_obj_t *g_editor;                        // full-screen keypad
+lv_obj_t *g_cursor;
+bool g_cursor_on = true;
+static lv_obj_t *g_entry_lbl;              // typed digits
+static lv_obj_t *g_unit_lbl;               // "g" after the cursor
+static lv_obj_t *g_was_lbl;                // "Was 21.0 g"
+static lv_obj_t *g_ed_prof_lbl;            // profile name
+static lv_obj_t *g_ed_title, *g_key_dot, *g_key_dot_lbl;
+static lv_obj_t *g_reset_btn, *g_reset_lbl;   // "Reset to ..."
+static char g_entry[8];
+static bool g_ed_temp;                     // false: stop weight, true: brew temperature
+static char g_ed_was[24] = "";
+static char g_ed_cur[8] = "";              // the value when the keypad opened (shown grey until the first key)
+
+// ---- stop weight -----
 void format_weight(char *out, size_t n, int tenths) {
   snprintf(out, n, "%d.%d", tenths / 10, tenths % 10);
 }
 
-// originals and "edited" marks: see orig_note (profiles.cpp)
-bool (*g_orig_load)(const char *profile, int *w10, int *deg) = NULL;
-void (*g_orig_save)(const char *profile, int w10, int deg) = NULL;
-void (*g_orig_drop)(const char *profile) = NULL;
-char g_orig_name[48] = "\x01";            // profile the cache below is for (never a real name at start)
-bool g_orig_have = false;
-int g_orig_w10 = -1, g_orig_deg = -1;
-lv_obj_t *g_tt_lbl, *g_tw_lbl;              // "Brew temp" / "Stop weight" on Ready
-lv_obj_t *g_reset_btn, *g_reset_lbl;        // keypad: "Reset to ..."
-static lv_obj_t *g_value_unit;          // "g" after the stop weight (hidden for no stop weight)
 void refresh_value(void) {
   char buf[12];
   if (g_weight10 <= 0) snprintf(buf, sizeof buf, "\xE2\x88\x9E");   // no stop weight: infinity (U+221E)
@@ -26,7 +77,27 @@ void refresh_value(void) {
   orig_paint();
 }
 
-bool g_can_select = false;       // online, idle, mode HOME (set by ui_set_live)
+// Stop weight: a new value from the keypad (Done) or 1 s after the last -/+ goes to the machine with
+// bd_set_stop_weight (only that field of the active profile). Only while online and idle in HOME; the core checks again.
+void weight_commit(lv_timer_t *t) {
+  (void)t;
+  if (g_weight_tm) { lv_timer_pause(g_weight_tm); lv_timer_set_user_data(g_weight_tm, NULL); }
+  // sent: keep it (the machine reports it ~1 s later); refused by the core (offline, range, unknown profile) or not
+  // sendable (busy / offline): back to the machine's value
+  if (g_can_select && g_cur_profile[0] && bd_set_stop_weight(prof_id(g_cur_profile), g_weight10 / 10.0f, true) == BD_OK) orig_note();
+  else if (g_act_weight10 >= 0 && g_weight10 != g_act_weight10) {   // not sent: back to the machine's
+    g_weight10 = clamp_w10(g_act_weight10);
+    refresh_value();                                                // value (the screen showed a
+  }                                                                 // stop weight the machine never got)
+}
+static void weight_changed(bool now) {
+  if (now) { weight_commit(NULL); return; }
+  if (!g_weight_tm) g_weight_tm = lv_timer_create(weight_commit, 1000, NULL);
+  lv_timer_set_user_data(g_weight_tm, (void *)1);
+  lv_timer_reset(g_weight_tm);
+  lv_timer_resume(g_weight_tm);
+}
+
 void step_weight(int delta10) {
   if (!g_can_select) return;            // like step_temp: nothing to change while busy / offline
   if (g_weight10 <= 0 && delta10 < 0) return;      // no stop weight: nothing below it
@@ -43,10 +114,6 @@ static void on_minus(lv_event_t *e) { (void)e; step_weight(-W_STEP10); }
 static void on_plus(lv_event_t *e)  { (void)e; step_weight(+W_STEP10); }
 
 // ---- brew temperature ------------------------------------------------------------
-static lv_obj_t *g_tset_lbl;
-int g_tset = -1;                 // shown target, -1 = not known yet
-int g_act_temp = -1;             // last active-profile temperature taken over
-lv_timer_t *g_temp_tm;           // user data 1 while a change waits to be sent
 void refresh_tset(void) {
   char buf[8];
   if (g_tset < 0) snprintf(buf, sizeof buf, "0"); else snprintf(buf, sizeof buf, "%d", g_tset);
@@ -82,10 +149,6 @@ static void on_t_plus(lv_event_t *e)  { (void)e; step_temp(+1); }
 // ---- editor ---------------------------------------------------------------------------------
 // One full-screen keypad for both targets: weight in g with one decimal, or the brew
 // temperature in whole degC (the "." key is greyed). Done sends the value at once (weight_changed / temp_commit).
-static bool g_ed_temp;                 // false: target weight, true: brew temperature
-static char g_ed_was[24] = "";
-lv_obj_t *g_ed_title, *g_key_dot, *g_key_dot_lbl;
-static char g_ed_cur[8] = "";          // the value when the keypad opened (shown grey until the first key)
 static void editor_layout(void) {
   // empty field = the current value in grey with the cursor in front of it (the first key
   // replaces it) and the accepted range below; while typing the cursor follows the digits and "Was ..." is shown
@@ -198,7 +261,7 @@ void editor_done(void) {
   editor_close();
 }
 
-void on_reset(lv_event_t *e) {             // back to the profile's value from before the first change here
+static void on_reset(lv_event_t *e) {             // back to the profile's value from before the first change here
   (void)e;
   orig_sync();
   if (!g_orig_have) { editor_close(); return; }
@@ -209,11 +272,11 @@ void on_reset(lv_event_t *e) {             // back to the profile's value from b
 }                                                  // (the profile's snapshot) stays
 static void on_open_editor(lv_event_t *e) { (void)e; editor_open(false); }
 static void on_open_temp_editor(lv_event_t *e) { (void)e; editor_open(true); }
-void on_cancel(lv_event_t *e)      { (void)e; editor_close(); }
-void on_done(lv_event_t *e)        { (void)e; editor_done(); }
-void on_key(lv_event_t *e)         { editor_key((char)(intptr_t)lv_event_get_user_data(e)); }
+static void on_cancel(lv_event_t *e)      { (void)e; editor_close(); }
+static void on_done(lv_event_t *e)        { (void)e; editor_done(); }
+static void on_key(lv_event_t *e)         { editor_key((char)(intptr_t)lv_event_get_user_data(e)); }
 
-void on_blink(lv_timer_t *t) {
+static void on_blink(lv_timer_t *t) {
   (void)t;
   if (lv_obj_is_hidden(g_editor)) return;
   g_cursor_on = !g_cursor_on;
@@ -278,6 +341,76 @@ void show_profile(const char *raw) {      // header + editor label (without the 
   set_text(g_prof_lbl, b);
   set_text(g_ed_prof_lbl, b);
   orig_paint();
+}
+
+// ---- footer: Tare and the flush button ----------------------
+// Tare (button hidden: the machine tares at the start of a shot, and the scale has its own button; clear its hidden
+// flag in ready.cpp to bring it back): bd_tare, only with a scale connected while idle in HOME.
+static void on_tare(lv_event_t *e) { (void)e; if (g_can_tare) bd_tare(); }
+
+// Flush button: a tap turns
+// the machine's FLUSH mode on (the brew switch then flushes) or off (-> HOME); a long press asks for FLUSH_AUTO (the
+// machine's timed flush, "Auto Flush Duration"). On only while online and idle in HOME; off only from a flush mode.
+// The button follows the mode the machine reports; a tap shows the new state at once and reverts after 5 s if the
+// machine does not report it.
+// Look (interactive elements look different from the info pills, and nothing is circular): a rounded button like Menu / -/+ (48 tall, radius 14), drop +
+// one word. Holding fills it from the left in LVGL's long-press time (400 ms), then the timed flush starts; flush mode
+// and the timed flush = dark blue button, blue text ("Flush mode on" / "Flushing N s", counting up: the machine's
+// duration is in d_settings, not read, so no draining fill).
+static const lv_color_t FL_DARK = LV_COLOR_MAKE(0x0F, 0x22, 0x33);
+static int fl_cur(void) { return g_fl_want >= 0 ? g_fl_want : g_fl_mode; }
+void fl_show(void) {
+  if (!g_fl_btn) return;
+  const int m = fl_cur();
+  const bool on = m == 2, aut = m == 5, usable = on || aut || g_fl_idle;
+  if (aut && !g_fl_auto_ms) g_fl_auto_ms = stamp_nz(lv_tick_get());
+  if (!aut) g_fl_auto_ms = 0;
+  char t[24];
+  if (aut) snprintf(t, sizeof t, "Flushing %u s", (unsigned)(lv_tick_elaps(g_fl_auto_ms) / 1000 + 1));
+  set_text(g_fl_lbl, aut ? t : on ? "Flush mode on" : "Flush");
+  set_tc(g_fl_lbl, !usable ? COL_OUTLINE : on || aut ? COL_BLUE : COL_TEXT);
+  set_line_c(g_fl_drop, usable ? COL_BLUE : COL_OUTLINE);
+  set_bg(g_fl_btn, on || aut ? FL_DARK : COL_CARD);
+  lv_obj_set_style_bg_color(g_fl_btn, on || aut ? lv_color_hex(0x16304A) : COL_CARD_PR, LV_STATE_PRESSED);
+}
+static void fl_ask(int to) {
+  g_fl_want = to;
+  if (bd_flush_mode(to == 2 ? BD_FLUSH_ON : to == 5 ? BD_FLUSH_TIMED : BD_FLUSH_OFF) != BD_OK) g_fl_want = -1;   // refused
+  fl_show();
+}
+static void fl_fill_cb(void *o, int32_t v) {
+  lv_obj_set_width((lv_obj_t *)o, (int32_t)(lv_obj_get_width(g_fl_btn) * v / 100));
+}
+static void on_flush_press(lv_event_t *e) {
+  if (lv_event_get_code(e) == LV_EVENT_PRESSED) {
+    if (!(fl_cur() == 7 && g_fl_idle)) return;      // a tap turns it off: no fill
+    lv_obj_set_hidden(g_fl_fill, false);
+    lv_anim_t an;                                  // fills in the long-press time, then LONG_PRESSED starts it
+    lv_anim_init(&an);
+    lv_anim_set_var(&an, g_fl_fill);
+    lv_anim_set_exec_cb(&an, fl_fill_cb);
+    lv_anim_set_values(&an, 0, 100);
+    lv_anim_set_duration(&an, LV_INDEV_DEF_LONG_PRESS_TIME);
+    lv_anim_start(&an);
+  } else {                                         // RELEASED / PRESS_LOST
+    lv_anim_delete(g_fl_fill, fl_fill_cb);
+    lv_obj_set_hidden(g_fl_fill, true);
+    lv_obj_set_width(g_fl_fill, 0);
+  }
+}
+static void on_flush_tap(lv_event_t *e) {          // SHORT_CLICKED: not sent after a long press
+  (void)e;
+  const int m = fl_cur();
+  if (m == 2 || m == 5) fl_ask(7);
+  else if (g_fl_idle) fl_ask(2);
+}
+static void on_flush_hold(lv_event_t *e) {
+  (void)e;
+  if (fl_cur() == 7 && g_fl_idle) fl_ask(5);
+}
+static void on_fl_timer(lv_timer_t *t) {
+  (void)t;
+  if (fl_cur() == 5) fl_show();                    // seconds count
 }
 
 // ---- Ready screen ---------------------------------------------------------------------------
@@ -557,108 +690,6 @@ void build_ready(lv_obj_t *scr) {
   lv_timer_create(on_fl_timer, 250, NULL);
   fl_show();
   lv_obj_align(fb, LV_ALIGN_TOP_RIGHT, -24, 406);
-}
-
-// ---- the stop weight's commit, the footer's scale / pressure items, Tare and the flush button ----------------------
-// Tare (button hidden: the machine tares at the start of a shot, and the scale has its own button; clear its hidden
-// flag in ready.cpp to bring it back): bd_tare, only with a scale connected while idle in HOME.
-bool g_can_tare = false;
-lv_obj_t *g_tare_lbl;
-lv_obj_t *g_sc_ic[4], *g_scale_name, *g_scale_pill;   // icons: 0 Bluetooth, 1 scale, 2+3 predictive waves
-lv_obj_t *g_pr_pill, *g_pr_ic[2], *g_pr_name, *g_pr_lbl;   // pressure pill (gauge arc + needle, "Pressure 0.2 bar")
-// Stop weight: a new value from the keypad (Done) or 1 s after the last -/+ goes to the machine with
-// bd_set_stop_weight (only that field of the active profile). Only while online and idle in HOME; the core checks again.
-lv_timer_t *g_weight_tm;      // user data 1 while a +/- change waits to be sent
-int g_act_weight10 = -1;       // last active-profile weight taken over
-void weight_commit(lv_timer_t *t) {
-  (void)t;
-  if (g_weight_tm) { lv_timer_pause(g_weight_tm); lv_timer_set_user_data(g_weight_tm, NULL); }
-  // sent: keep it (the machine reports it ~1 s later); refused by the core (offline, range, unknown profile) or not
-  // sendable (busy / offline): back to the machine's value
-  if (g_can_select && g_cur_profile[0] && bd_set_stop_weight(prof_id(g_cur_profile), g_weight10 / 10.0f, true) == BD_OK) orig_note();
-  else if (g_act_weight10 >= 0 && g_weight10 != g_act_weight10) {   // not sent: back to the machine's
-    g_weight10 = clamp_w10(g_act_weight10);
-    refresh_value();                                                // value (the screen showed a
-  }                                                                 // stop weight the machine never got)
-}
-void weight_changed(bool now) {
-  if (now) { weight_commit(NULL); return; }
-  if (!g_weight_tm) g_weight_tm = lv_timer_create(weight_commit, 1000, NULL);
-  lv_timer_set_user_data(g_weight_tm, (void *)1);
-  lv_timer_reset(g_weight_tm);
-  lv_timer_resume(g_weight_tm);
-}
-
-void on_tare(lv_event_t *e) { (void)e; if (g_can_tare) bd_tare(); }
-
-// Flush button: a tap turns
-// the machine's FLUSH mode on (the brew switch then flushes) or off (-> HOME); a long press asks for FLUSH_AUTO (the
-// machine's timed flush, "Auto Flush Duration"). On only while online and idle in HOME; off only from a flush mode.
-// The button follows the mode the machine reports; a tap shows the new state at once and reverts after 5 s if the
-// machine does not report it.
-// Look (interactive elements look different from the info pills, and nothing is circular): a rounded button like Menu / -/+ (48 tall, radius 14), drop +
-// one word. Holding fills it from the left in LVGL's long-press time (400 ms), then the timed flush starts; flush mode
-// and the timed flush = dark blue button, blue text ("Flush mode on" / "Flushing N s", counting up: the machine's
-// duration is in d_settings, not read, so no draining fill).
-lv_obj_t *g_fl_btn, *g_fl_lbl, *g_fl_drop, *g_fl_fill;
-int g_fl_mode = -1;            // machine's mode: 2 FLUSH, 5 FLUSH_AUTO, 7 HOME, other / -1 = busy or offline
-bool g_fl_idle = false;        // online, HOME, nothing running
-int g_fl_want = -1;            // mode asked for, until the machine reports it (or the core says it did not take it)
-static uint32_t g_fl_auto_ms = 0;     // FLUSH_AUTO seen since
-static const lv_color_t FL_DARK = LV_COLOR_MAKE(0x0F, 0x22, 0x33);
-static int fl_cur(void) { return g_fl_want >= 0 ? g_fl_want : g_fl_mode; }
-void fl_show(void) {
-  if (!g_fl_btn) return;
-  const int m = fl_cur();
-  const bool on = m == 2, aut = m == 5, usable = on || aut || g_fl_idle;
-  if (aut && !g_fl_auto_ms) g_fl_auto_ms = stamp_nz(lv_tick_get());
-  if (!aut) g_fl_auto_ms = 0;
-  char t[24];
-  if (aut) snprintf(t, sizeof t, "Flushing %u s", (unsigned)(lv_tick_elaps(g_fl_auto_ms) / 1000 + 1));
-  set_text(g_fl_lbl, aut ? t : on ? "Flush mode on" : "Flush");
-  set_tc(g_fl_lbl, !usable ? COL_OUTLINE : on || aut ? COL_BLUE : COL_TEXT);
-  set_line_c(g_fl_drop, usable ? COL_BLUE : COL_OUTLINE);
-  set_bg(g_fl_btn, on || aut ? FL_DARK : COL_CARD);
-  lv_obj_set_style_bg_color(g_fl_btn, on || aut ? lv_color_hex(0x16304A) : COL_CARD_PR, LV_STATE_PRESSED);
-}
-static void fl_ask(int to) {
-  g_fl_want = to;
-  if (bd_flush_mode(to == 2 ? BD_FLUSH_ON : to == 5 ? BD_FLUSH_TIMED : BD_FLUSH_OFF) != BD_OK) g_fl_want = -1;   // refused
-  fl_show();
-}
-static void fl_fill_cb(void *o, int32_t v) {
-  lv_obj_set_width((lv_obj_t *)o, (int32_t)(lv_obj_get_width(g_fl_btn) * v / 100));
-}
-void on_flush_press(lv_event_t *e) {
-  if (lv_event_get_code(e) == LV_EVENT_PRESSED) {
-    if (!(fl_cur() == 7 && g_fl_idle)) return;      // a tap turns it off: no fill
-    lv_obj_set_hidden(g_fl_fill, false);
-    lv_anim_t an;                                  // fills in the long-press time, then LONG_PRESSED starts it
-    lv_anim_init(&an);
-    lv_anim_set_var(&an, g_fl_fill);
-    lv_anim_set_exec_cb(&an, fl_fill_cb);
-    lv_anim_set_values(&an, 0, 100);
-    lv_anim_set_duration(&an, LV_INDEV_DEF_LONG_PRESS_TIME);
-    lv_anim_start(&an);
-  } else {                                         // RELEASED / PRESS_LOST
-    lv_anim_delete(g_fl_fill, fl_fill_cb);
-    lv_obj_set_hidden(g_fl_fill, true);
-    lv_obj_set_width(g_fl_fill, 0);
-  }
-}
-void on_flush_tap(lv_event_t *e) {          // SHORT_CLICKED: not sent after a long press
-  (void)e;
-  const int m = fl_cur();
-  if (m == 2 || m == 5) fl_ask(7);
-  else if (g_fl_idle) fl_ask(2);
-}
-void on_flush_hold(lv_event_t *e) {
-  (void)e;
-  if (fl_cur() == 7 && g_fl_idle) fl_ask(5);
-}
-void on_fl_timer(lv_timer_t *t) {
-  (void)t;
-  if (fl_cur() == 5) fl_show();                    // seconds count
 }
 
 // ---- the keypad (stop weight / brew temperature) ---------------------------------------------------------------------

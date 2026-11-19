@@ -8,11 +8,19 @@
 #define SCREEN_OFF_MIN 30
 #define SCREEN_OFF_OFFLINE_MS 120000
 
+// with the Display setting "Idle clock: Bouncing" the clock block bounces around the screen like the DVD logo; it also
+// does the job of the anti-retention shift used when it stands still. 1 px per 40 ms on each axis (25 px/s, 45
+// degrees); each wall it hits gives the clock the next muted tint (all as dim as the grey: it is a night screen). Only
+// the block's strip is redrawn per step (~350x190 px).
+static const uint32_t IDLE_BOUNCE_MS = 40;
+static const int IDLE_EDGE = 24;                  // the screens' margin
+
 // ---- idle screen ----------------------------------------------------------------
 // After g_idle_min minutes without a touch, while nothing runs: a quiet clock + temperature on black, backlight dimmed.
 // The first touch only wakes it (taps do not reach the buttons below); a shot or steam wakes it too.
 int g_idle_min = 10, g_bright = 100, g_idle_bright = 50;   // menu changes the first two; idle: 20 % looked off
-lv_obj_t *g_idle, *g_idle_clock, *g_idle_dot, *g_idle_txt, *g_idle_col;
+lv_obj_t *g_idle;
+static lv_obj_t *g_idle_clock, *g_idle_dot, *g_idle_txt, *g_idle_col;
 static bool g_blank_on_flag(void);
 void bl_set(int pct) { bd_set_backlight(g_blank_on_flag() ? 0 : pct); }   // off while the screen is off
 int g_clock_h = -1, g_clock_m = -1;
@@ -110,7 +118,8 @@ void on_idle_timer(lv_timer_t *t) {
 }
 // ---- screen off (against image retention) ---------------------------------------------------------
 lv_obj_t *g_blank;
-bool g_blank_on = false, g_blank_offline = false, g_blank_force = false;
+bool g_blank_on = false, g_blank_offline = false;
+static bool g_blank_force = false;
 static uint32_t g_off_shown_ms = 0;              // when the offline screen appeared (0 = not shown)
 static void screen_wake(void) {
   if (!g_blank_on) return;

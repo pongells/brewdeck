@@ -18,49 +18,8 @@ void dlabel(lv_layer_t *L, lv_draw_label_dsc_t *d, const lv_area_t *a, const cha
   lv_draw_label(L, d, a);
 }
 
-// ---- state ---------------------------------------------------------------------------------
-int g_weight10 = 210;          // target weight in tenths of a gram
+// the profile name shown until the machine names one
 const char *PROFILE_NAME = "Leva 9 SINGLE v0.9";
-
-lv_obj_t *g_value_lbl;         // "21.0" on the Ready screen
-lv_obj_t *g_editor;            // full-screen editor overlay
-lv_obj_t *g_entry_lbl;         // typed digits
-lv_obj_t *g_cursor;
-lv_obj_t *g_unit_lbl;          // "g" after the cursor
-lv_obj_t *g_was_lbl;           // "Was 21.0 g"
-// live-data widgets
-lv_obj_t *g_pill, *g_pill_dot, *g_pill_lbl;      // state pill
-lv_obj_t *g_tank, *g_tank_fill, *g_tank_lbl, *g_tank_pct;
-lv_obj_t *g_prof_lbl, *g_ed_prof_lbl;
-lv_obj_t *g_temp_lbl, *g_scale_lbl;
-char g_entry[8];
-bool g_cursor_on = true;
-// profile picker
-lv_obj_t *g_pick;              // full-screen page
-lv_obj_t *g_pick_list;
-lv_obj_t *g_pick_sub;          // the page's subtitle ("Active, then recently used")
-ProfileList g_profiles;
-char g_cur_profile[48] = "";   // machine's active profile (raw name from the status)
-int prof_id(const char *name) {          // the machine's id of a profile named as the status names it
-  for (int i = 0; i < g_profiles.count; i++) if (!strcmp(g_profiles.p[i].name, name)) return g_profiles.p[i].id;
-  return 0;
-}
-int g_nb_pill_max = 392;      // Ready: the notice banner in the pill's place ends before the header's buttons
-lv_obj_t *g_hdr_left;          // Ready header, left (pill + profile name): its width follows the bell
-int32_t g_hdr_btn_x = 0;    // x of the leftmost header button (bell when shown, else Profiles)
-lv_obj_t *g_menu_btn;          // header cog (opens the menu)
-
-// one colour per value (blue pressure, gold flow); bright 3 px = what the phase drives, dim 2 px = only a limit.
-// (Dashed means "compared with" on the brewing and review charts.)
-lv_obj_t *g_chart, *g_pv_msg;             // box, "Loading..." / "No phases" text
-lv_obj_t *g_pv_line[PV_SERIES][PV_MAX_SEG];
-lv_point_t g_pv_pts[PV_SERIES][PV_MAX_PTS];   // lv_line keeps a pointer: must stay alive
-bool g_shape_loaded = false;
-ProfileShape g_last_shape;                // last one from the machine (to restore after a failed select)
-// profile select in flight: shown at once, until the machine reports it or the core answers that it was not taken
-int g_pend_id = 0;
-char g_pend_name[48];
-int g_shape_weight10 = -1, g_shape_id = -1;   // last target weight taken from the machine
 
 // ---- small helpers ---------------------------------------------------------------------------
 lv_obj_t *box(lv_obj_t *p, int x, int y, int w, int h, lv_color_t bg, int r) {
@@ -402,6 +361,26 @@ void icon_backspace(lv_obj_t *p, lv_color_t col) {
 }
 
 // ---- chart helpers shared by the brewing, review and steam screens -------------------------------------------------
+void ch_hline(lv_layer_t *ctx, int x1, int x2, int y, lv_color_t col) {
+  lv_draw_line_dsc_t d;
+  lv_draw_line_dsc_init(&d);
+  d.color = col;
+  d.width = 1;
+  lv_point_t a = {(int32_t)x1, (int32_t)y}, b = {(int32_t)x2, (int32_t)y};
+  dl(ctx, &d, &a, &b);
+}
+// text at (x, y top); align: LV_TEXT_ALIGN_LEFT (x = left), CENTER (x = middle), RIGHT (x = right edge)
+void ch_text_c(lv_layer_t *ctx, int x, int y, const char *s, lv_text_align_t align, lv_color_t col) {
+  lv_draw_label_dsc_t d;
+  lv_draw_label_dsc_init(&d);
+  d.font = F_SMALL;
+  d.color = col;
+  d.align = align;
+  const int w = 200;
+  const int x1 = align == LV_TEXT_ALIGN_LEFT ? x : (align == LV_TEXT_ALIGN_CENTER ? x - w / 2 : x - w);
+  lv_area_t a = {(int32_t)x1, (int32_t)y, (int32_t)(x1 + w - 1), (int32_t)(y + 16)};
+  dlabel(ctx, &d, &a, s);
+}
 // time labels under a chart's baseline: every step_s, "N s" under a minute, then "m:ss" / "N min", the span at the end
 void axis_time(lv_layer_t *ctx, int x0, int w, int y, int span_s, int step_s) {
   char t[16];

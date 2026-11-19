@@ -3,6 +3,9 @@
 // (ui_set_live); each screen is in screens/, what they share in ui_int.h.
 #include "ui_int.h"
 
+static const float PRESS_ON = 0.8f;          // bar: the pressure pill turns orange while it reads above 0.8
+static const uint32_t PRESS_OFF_MS = 2000;   // reads 0.8 or less this long -> off (no flicker between 0.8 and 0.9)
+
 void ui_init(void) {
   lv_obj_t *scr = lv_screen_active();
   lv_obj_remove_style_all(scr);

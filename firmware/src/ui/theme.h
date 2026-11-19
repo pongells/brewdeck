@@ -54,6 +54,7 @@ LV_FONT_DECLARE(it_200_64);    // only "B r e w d c k" (the splash's name)
 #define COL_PK_SEL  lv_color_hex(0x202024)
 #define COL_PK_TAG  lv_color_hex(0x2C2C31)
 #define COL_IDLE_TX lv_color_hex(0x7A7A82)   // idle clock line (dimmed screen; the clock itself takes IDLE_TINTS)
+#define COL_GRID    lv_color_hex(0x161618)   // chart grid hairlines (brewing, review, steam)
 
 // ---- radii ----
 #define RAD_CTRL  14                  // buttons and other controls
