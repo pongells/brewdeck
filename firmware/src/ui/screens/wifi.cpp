@@ -6,6 +6,8 @@
 // widget: the keys match the design system). The password lives only here and in the join request; never logged.
 #define NET_ROWS 8                                 // rows on the list page (the rest of the scan is cut)
 #define KEYS 32
+static const uint32_t DOUBLE_TAP_MS = 400;          // shift tapped twice within this: caps lock
+static const uint32_t FORGET_ARM_MS = 3000;         // "Tap again to forget" waits this long
 enum { K_SHIFT = 19, K_BS = 27, K_LAYER = 28, K_SPACE = 29, K_DOT = 30, K_JOIN = 31 };
 
 // ---- Wi-Fi join --------------------------------------------
@@ -136,36 +138,36 @@ void ui_set_wifi_join(int state) {
   g_wj_state = state;
   if (state == WIFI_JOIN_OK) {
     memset(g_pw, 0, sizeof g_pw);
-    if (g_menu_cur == 5) menu_show_page(2);
+    if (g_menu_cur == MP_PASSWORD) menu_show_page(MP_WIFI);
     bd_wifi_scan();
   }
-  if (g_menu_cur == 5) pw_refresh();
+  if (g_menu_cur == MP_PASSWORD) pw_refresh();
   wifi_refresh();
 }
 
 static void on_net_row(lv_event_t *e) {
   const int k = (int)(intptr_t)lv_event_get_user_data(e);
-  if (k == 0 && g_wifi_ssid[0]) { menu_show_page(4); return; }
+  if (k == 0 && g_wifi_ssid[0]) { menu_show_page(MP_WIFI_DETAILS); return; }
   const WifiNet *n = &g_nets[g_wl_idx[k]];
   snprintf(g_wj_ssid, sizeof g_wj_ssid, "%s", n->ssid);
   if (!n->locked) { wifi_join_now(n->ssid, ""); return; }
   memset(g_pw, 0, sizeof g_pw);
   g_wj_state = WIFI_JOIN_IDLE;
   g_layer = 0; g_shift = g_caps = false; g_pw_show = true;
-  menu_show_page(5);
+  menu_show_page(MP_PASSWORD);
 }
 static void on_scan(lv_event_t *e) { (void)e; g_nets_scanning = true; wifi_refresh(); bd_wifi_scan(); }
 void wifi_page_shown(int k) {
-  set_hidden(g_wl_note, k != 2);
-  set_hidden(g_wl_scan, k != 2);
-  if (k == 2) { wifi_refresh(); if (!g_nets_scanning) { g_nets_scanning = true; bd_wifi_scan(); } wifi_refresh(); }
-  if (k == 5 || k == 6) { g_kb_addr = k == 6; pw_refresh(); }
+  set_hidden(g_wl_note, k != MP_WIFI);
+  set_hidden(g_wl_scan, k != MP_WIFI);
+  if (k == MP_WIFI) { wifi_refresh(); if (!g_nets_scanning) { g_nets_scanning = true; bd_wifi_scan(); } wifi_refresh(); }
+  if (k == MP_PASSWORD || k == MP_ADDRESS) { g_kb_addr = k == MP_ADDRESS; pw_refresh(); }
 }
 void open_address_page(void) {
   on_menu_open(NULL);
   snprintf(g_pw, sizeof g_pw, "%s", g_mach_host);
   g_layer = 0; g_shift = g_caps = false;
-  menu_show_page(6);
+  menu_show_page(MP_ADDRESS);
 }
 void on_addr_row(lv_event_t *e) { (void)e; open_address_page(); }
 // "Forget this network" (details page): first tap arms it (orange, "Tap again to forget") for 3 s, second tap forgets
@@ -184,11 +186,11 @@ void on_forget(lv_event_t *e) {
   forget_paint();
   bd_wifi_forget();
   g_wifi_target[0] = 0;                             // until the core reports it: no network chosen
-  menu_show_page(2);                                // the list: tap a network to join it again
+  menu_show_page(MP_WIFI);                          // the list: tap a network to join it again
 }
 void forget_refresh(void) {
   if (!g_fg_btn) return;
-  if (g_fg_armed && lv_tick_elaps(g_fg_armed) > 3000) { g_fg_armed = 0; forget_paint(); }
+  if (g_fg_armed && lv_tick_elaps(g_fg_armed) > FORGET_ARM_MS) { g_fg_armed = 0; forget_paint(); }
   set_hidden(g_fg_btn, !g_wifi_target[0]);
 }
 static void on_eye(lv_event_t *e) { (void)e; g_pw_show = !g_pw_show; pw_refresh(); }
@@ -216,7 +218,7 @@ static void on_kb_key(lv_event_t *e) {
     else {
       const uint32_t now = lv_tick_get();
       if (g_caps) { g_caps = false; g_shift = false; }
-      else if (g_shift && now - g_shift_ms < 400) { g_caps = true; g_shift = false; }
+      else if (g_shift && now - g_shift_ms < DOUBLE_TAP_MS) { g_caps = true; g_shift = false; }
       else g_shift = !g_shift;
       g_shift_ms = now;
     }
@@ -259,7 +261,7 @@ void build_wifi(lv_obj_t *m) {
   g_wl_note = label(m, "2.4 GHz only", F_TEXT, COL_MUTED);
   lv_obj_align(g_wl_note, LV_ALIGN_TOP_RIGHT, -164, 42);
 
-  lv_obj_t *pg = g_menu_page[2] = box(m, 24, 96, 752, 360, COL_BG, 0);
+  lv_obj_t *pg = g_menu_page[MP_WIFI] = box(m, 24, 96, 752, 360, COL_BG, 0);
   lv_obj_t *c = flex(pg, LV_FLEX_FLOW_COLUMN, 0);
   hairline(c, LV_BORDER_SIDE_TOP);
   for (int k = 0; k < NET_ROWS; k++) {
@@ -295,7 +297,7 @@ void build_wifi(lv_obj_t *m) {
   g_wl_empty = empty_state(pg, IC_WIFI);
 
   // password page
-  pg = g_menu_page[5] = g_menu_page[6] = box(m, 24, 90, 752, 366, COL_BG, 0);
+  pg = g_menu_page[MP_PASSWORD] = g_menu_page[MP_ADDRESS] = box(m, 24, 90, 752, 366, COL_BG, 0);
   lv_obj_t *f = box(pg, 0, 0, 752, 56, COL_WELL, RAD_CTRL);
   lv_obj_set_style_border_width(f, 1, 0);
   lv_obj_set_style_border_color(f, COL_BORDER, 0);

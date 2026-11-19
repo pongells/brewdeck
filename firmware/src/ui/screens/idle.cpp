@@ -14,6 +14,8 @@
 // the block's strip is redrawn per step (~350x190 px).
 static const uint32_t IDLE_BOUNCE_MS = 40;
 static const int IDLE_EDGE = 24;                  // the screens' margin
+static const uint32_t SHIFT_MS = 180000;          // still clock: moves to its next place this often
+static const uint32_t BREW_WAKE_MS = 2000;        // a brew keeps the clock up at most this long for its screen
 
 // ---- idle screen ----------------------------------------------------------------
 // After g_idle_min minutes without a touch, while nothing runs: a quiet clock + temperature on black, backlight dimmed.
@@ -74,15 +76,15 @@ static void on_idle_touch(lv_event_t *e) { (void)e; idle_hide(); }
 void on_idle_timer(lv_timer_t *t) {
   (void)t;
   const bool hidden = lv_obj_is_hidden(g_idle);
-  const bool want = g_idle_min > 0 && !g_idle_busy && g_br_state == 0 &&
+  const bool want = g_idle_min > 0 && !g_idle_busy && g_br_state == BR_HIDDEN &&
                     (g_idle_force || lv_display_get_inactive_time(NULL) >= (uint32_t)g_idle_min * 60000u);
   // a brew wakes the clock: keep it until the brewing screen opens on the first snapshot (br_start hides it in the
   // same frame), at most 2 s: hiding it first, then opening the brewing screen, cost two full redraws.
   static uint32_t busy_since = 0;
   if (!g_idle_busy) busy_since = 0;
   else if (!busy_since) busy_since = stamp_nz(lv_tick_get());
-  const bool wait_brew = g_live_brew && g_br_state == 0 && busy_since && lv_tick_elaps(busy_since) < 2000;
-  if (!want) { if (!hidden && (g_idle_busy || g_br_state != 0) && !wait_brew) idle_hide(); return; }
+  const bool wait_brew = g_live_brew && g_br_state == BR_HIDDEN && busy_since && lv_tick_elaps(busy_since) < BREW_WAKE_MS;
+  if (!want) { if (!hidden && (g_idle_busy || g_br_state != BR_HIDDEN) && !wait_brew) idle_hide(); return; }
   char b[48];
   if (g_clock_h >= 0) snprintf(b, sizeof b, "%02d:%02d", g_clock_h, g_clock_m);
   else snprintf(b, sizeof b, "%s", g_idle_temp[0] ? g_idle_temp : "0.0");   // no time yet: the temperature
@@ -98,7 +100,7 @@ void on_idle_timer(lv_timer_t *t) {
   set_bg(g_idle_dot, st == 1 ? COL_GOLD : st == 2 ? COL_BLUE : st == 3 ? COL_WARN : COL_GREEN);
   if (!g_idle_bounce) {   // against image retention: the block moves a few px every 3 min (8 places, <= 12 px from the centre)
     static const int8_t DX[8] = {0, 10, -8, 12, -12, 6, -4, 8}, DY[8] = {0, -6, 8, 4, -8, 10, -10, -2};
-    const int k = (int)(lv_tick_get() / 180000u) % 8;
+    const int k = (int)(lv_tick_get() / SHIFT_MS) % 8;
     if (hidden || k != g_idle_shift) {
       g_idle_shift = k;
       lv_obj_set_style_text_color(g_idle_clock, lv_color_hex(IDLE_TINTS[0]), 0);
@@ -138,11 +140,11 @@ static void on_blank_timer(lv_timer_t *t) {
   else if (!g_off_shown_ms) g_off_shown_ms = stamp_nz(lv_tick_get());
   const uint32_t inact = lv_display_get_inactive_time(NULL);
   if (g_blank_on) {
-    if (g_idle_busy || g_br_state != 0 || (g_blank_offline && !off_shown)) screen_wake();
+    if (g_idle_busy || g_br_state != BR_HIDDEN || (g_blank_offline && !off_shown)) screen_wake();
     else lv_obj_move_to_index(g_blank, -1);          // stays on top of layers shown later (no-op when it is already)
     return;
   }
-  if (g_idle_busy || g_br_state != 0 || g_in_wifi_pages) { g_blank_force = false; return; }
+  if (g_idle_busy || g_br_state != BR_HIDDEN || g_in_wifi_pages) { g_blank_force = false; return; }
   const uint32_t idle_ms = (uint32_t)(g_idle_min > SCREEN_OFF_MIN ? g_idle_min : SCREEN_OFF_MIN) * 60000u;
   const bool by_idle = g_idle_min > 0 && inact >= idle_ms;
   const bool by_offline = off_shown && lv_tick_elaps(g_off_shown_ms) >= SCREEN_OFF_OFFLINE_MS && inact >= SCREEN_OFF_OFFLINE_MS;

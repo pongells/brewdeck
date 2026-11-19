@@ -235,7 +235,7 @@ static void on_off_btn(lv_event_t *e) {
 }
 void on_off_timer(lv_timer_t *t) {
   (void)t;
-  const bool want = g_off_active && g_off_link != LINK_ONLINE && (g_br_state == 0) && !g_in_wifi_pages &&
+  const bool want = g_off_active && g_off_link != LINK_ONLINE && (g_br_state == BR_HIDDEN) && !g_in_wifi_pages &&
                     (!g_off_ever_online || lv_tick_elaps(g_off_since) >= OFF_DELAY_MS);
   if (want && lv_obj_is_hidden(g_off)) {
     picker_close();

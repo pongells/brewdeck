@@ -7,6 +7,7 @@
 // its profile (bd_load_stored_shot, sent once the machine is idle) and opens the shot review on it.
 WsShotIndex *g_hx;                         // the machine's index of stored shots (PSRAM)
 bool g_hx_ok = false;                      // g_hx holds an index
+static const uint32_t LOAD_TIMEOUT_MS = 15000;   // a stored shot that does not come by then is "Not available"
 static lv_obj_t *g_hl_list;
 static EmptyState g_hl_empty;
 static uint32_t g_hl_ids[WS_SHOT_INDEX_MAX];
@@ -48,7 +49,7 @@ static void on_hist_row(lv_event_t *e) {
   if (g_hl_wait) return;                          // one at a time
   g_hl_msg_id = 0;
   if (g_menu_link != LINK_ONLINE) { g_hl_msg_id = id; g_hl_msg = "Machine offline"; }
-  else if (g_idle_busy || g_br_state != 0) { g_hl_msg_id = id; g_hl_msg = "Machine busy"; }
+  else if (g_idle_busy || g_br_state != BR_HIDDEN) { g_hl_msg_id = id; g_hl_msg = "Machine busy"; }
   else if (bd_load_stored_shot(id) == BD_OK) { g_hl_wait = id; g_hl_wait_ms = lv_tick_get(); }
   hist_values();
 }
@@ -97,7 +98,7 @@ static void hist_add(int k) {
   }
 }
 static void on_hb_timer(lv_timer_t *t) {
-  if (lv_obj_is_hidden(g_menu) || g_menu_cur != 7 || !g_hx_ok || g_hb_i >= g_hx->n) {
+  if (lv_obj_is_hidden(g_menu) || g_menu_cur != MP_HISTORY || !g_hx_ok || g_hb_i >= g_hx->n) {
     lv_timer_pause(t);
     return;
   }
@@ -141,16 +142,16 @@ void hist_page_shown(void) {
   lv_obj_scroll_to_y(g_hl_list, 0, LV_ANIM_OFF);
 }
 void hist_timer(void) {                    // from menu_timer (1 s): a load that never answered
-  if (g_hl_wait && lv_tick_elaps(g_hl_wait_ms) > 15000) {
+  if (g_hl_wait && lv_tick_elaps(g_hl_wait_ms) > LOAD_TIMEOUT_MS) {
     g_hl_msg_id = g_hl_wait; g_hl_msg = "Not available"; g_hl_wait = 0;
-    if (g_menu_cur == 7) hist_values();
+    if (g_menu_cur == MP_HISTORY) hist_values();
   }
 }
 void ui_set_shot_index(const WsShotIndex *ix) {
   if (!g_hx) return;
   *g_hx = *ix;
   g_hx_ok = true;
-  if (g_menu_cur == 7 && !lv_obj_is_hidden(g_menu)) hist_build();
+  if (g_menu_cur == MP_HISTORY && !lv_obj_is_hidden(g_menu)) hist_build();
 }
 void ui_set_hist(int state, const ShotTrace *s, const ProfileShape *sh, const ShotTrace *prev, int prev_state) {
   if (!g_hl_wait || state == RV_PREV_LOADING || state == RV_PREV_NONE) return;
@@ -158,16 +159,16 @@ void ui_set_hist(int state, const ShotTrace *s, const ProfileShape *sh, const Sh
   g_hl_wait = 0;
   if (state != RV_PREV_READY || !s || (uint32_t)s->id != id || s->n < 3) {
     g_hl_msg_id = id; g_hl_msg = "Not available";
-    if (g_menu_cur == 7) hist_values();
+    if (g_menu_cur == MP_HISTORY) hist_values();
     return;
   }
   hw_put(id, s->pt[s->n - 1].w);
-  if (g_menu_cur == 7) hist_values();
+  if (g_menu_cur == MP_HISTORY) hist_values();
   // still on the list (not closed, no shot started meanwhile): open it
-  if (g_menu_cur == 7 && !lv_obj_is_hidden(g_menu) && g_br_state == 0) rv_open_stored(s, sh, prev, prev_state);
+  if (g_menu_cur == MP_HISTORY && !lv_obj_is_hidden(g_menu) && g_br_state == BR_HIDDEN) rv_open_stored(s, sh, prev, prev_state);
 }
 void build_hist(lv_obj_t *m) {
-  lv_obj_t *pg = g_menu_page[7] = box(m, 24, 96, 752, 384, COL_BG, 0);
+  lv_obj_t *pg = g_menu_page[MP_HISTORY] = box(m, 24, 96, 752, 384, COL_BG, 0);
   g_hl_list = box(pg, 0, 0, 752, 384, COL_BG, 0);
   lv_obj_set_flex_flow(g_hl_list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_clickable(g_hl_list, true);

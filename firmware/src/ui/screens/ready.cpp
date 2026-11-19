@@ -2,6 +2,7 @@
 // button) and the keypad for both values.
 #include "../ui_int.h"
 
+static const uint32_t SEND_DELAY_MS = 1000;   // a -/+ change is sent this long after the last tap
 static const int PV_W = 344, PV_H = 100;         // profile preview box (fits the 24 px screen margin)
 // drop centred in a 24 px box (a 4.5 px radius drop from y 5.7 to 18)
 static const lv_point_t FL_DROP[] = {{12,6},{13,6},{14,8},{16,11},{16,14},{16,16},{15,17},{14,18},{12,18},{10,18},{9,17},{8,16},{8,14},{8,11},{10,8},{11,6},{12,6}};
@@ -16,9 +17,9 @@ lv_timer_t *g_temp_tm;                     // user data 1 while a change waits t
 lv_timer_t *g_weight_tm;                   // user data 1 while a -/+ change waits to be sent
 int g_act_weight10 = -1;                   // last active-profile weight taken over
 bool g_can_tare = false;
-int g_fl_mode = -1;            // machine's mode: 2 FLUSH, 5 FLUSH_AUTO, 7 HOME, other / -1 = busy or offline
-bool g_fl_idle = false;        // online, HOME, nothing running
-int g_fl_want = -1;            // mode asked for, until the machine reports it (or the core says it did not take it)
+int g_fl_mode = FL_UNKNOWN;                // machine's mode as bd_flush (BD_FLUSH_OFF = HOME)
+bool g_fl_idle = false;                   // online, HOME, nothing running
+int g_fl_want = FL_UNKNOWN;                // mode asked for, until the machine reports it or the core refuses it
 static uint32_t g_fl_auto_ms = 0;          // FLUSH_AUTO seen since
 // header and live values
 lv_obj_t *g_pill, *g_pill_dot, *g_pill_lbl;      // state pill
@@ -92,7 +93,7 @@ void weight_commit(lv_timer_t *t) {
 }
 static void weight_changed(bool now) {
   if (now) { weight_commit(NULL); return; }
-  if (!g_weight_tm) g_weight_tm = lv_timer_create(weight_commit, 1000, NULL);
+  if (!g_weight_tm) g_weight_tm = lv_timer_create(weight_commit, SEND_DELAY_MS, NULL);
   lv_timer_set_user_data(g_weight_tm, (void *)1);
   lv_timer_reset(g_weight_tm);
   lv_timer_resume(g_weight_tm);
@@ -138,7 +139,7 @@ static void step_temp(int delta) {
   if (v == g_tset) return;
   g_tset = v;
   refresh_tset();
-  if (!g_temp_tm) g_temp_tm = lv_timer_create(temp_commit, 1000, NULL);
+  if (!g_temp_tm) g_temp_tm = lv_timer_create(temp_commit, SEND_DELAY_MS, NULL);
   lv_timer_set_user_data(g_temp_tm, (void *)1);
   lv_timer_reset(g_temp_tm);
   lv_timer_resume(g_temp_tm);
@@ -357,11 +358,11 @@ static void on_tare(lv_event_t *e) { (void)e; if (g_can_tare) bd_tare(); }
 // one word. Holding fills it from the left in LVGL's long-press time (400 ms), then the timed flush starts; flush mode
 // and the timed flush = dark blue button, blue text ("Flush mode on" / "Flushing N s", counting up: the machine's
 // duration is in d_settings, not read, so no draining fill).
-static int fl_cur(void) { return g_fl_want >= 0 ? g_fl_want : g_fl_mode; }
+static int fl_cur(void) { return g_fl_want != FL_UNKNOWN ? g_fl_want : g_fl_mode; }
 void fl_show(void) {
   if (!g_fl_btn) return;
   const int m = fl_cur();
-  const bool on = m == 2, aut = m == 5, usable = on || aut || g_fl_idle;
+  const bool on = m == BD_FLUSH_ON, aut = m == BD_FLUSH_TIMED, usable = on || aut || g_fl_idle;
   if (aut && !g_fl_auto_ms) g_fl_auto_ms = stamp_nz(lv_tick_get());
   if (!aut) g_fl_auto_ms = 0;
   char t[24];
@@ -374,7 +375,7 @@ void fl_show(void) {
 }
 static void fl_ask(int to) {
   g_fl_want = to;
-  if (bd_flush_mode(to == 2 ? BD_FLUSH_ON : to == 5 ? BD_FLUSH_TIMED : BD_FLUSH_OFF) != BD_OK) g_fl_want = -1;   // refused
+  if (bd_flush_mode((bd_flush)to) != BD_OK) g_fl_want = FL_UNKNOWN;   // refused
   fl_show();
 }
 static void fl_fill_cb(void *o, int32_t v) {
@@ -382,7 +383,7 @@ static void fl_fill_cb(void *o, int32_t v) {
 }
 static void on_flush_press(lv_event_t *e) {
   if (lv_event_get_code(e) == LV_EVENT_PRESSED) {
-    if (!(fl_cur() == 7 && g_fl_idle)) return;      // a tap turns it off: no fill
+    if (!(fl_cur() == BD_FLUSH_OFF && g_fl_idle)) return;      // a tap turns it off: no fill
     lv_obj_set_hidden(g_fl_fill, false);
     lv_anim_t an;                                  // fills in the long-press time, then LONG_PRESSED starts it
     lv_anim_init(&an);
@@ -400,16 +401,16 @@ static void on_flush_press(lv_event_t *e) {
 static void on_flush_tap(lv_event_t *e) {          // SHORT_CLICKED: not sent after a long press
   (void)e;
   const int m = fl_cur();
-  if (m == 2 || m == 5) fl_ask(7);
-  else if (g_fl_idle) fl_ask(2);
+  if (m == BD_FLUSH_ON || m == BD_FLUSH_TIMED) fl_ask(BD_FLUSH_OFF);
+  else if (g_fl_idle) fl_ask(BD_FLUSH_ON);
 }
 static void on_flush_hold(lv_event_t *e) {
   (void)e;
-  if (fl_cur() == 7 && g_fl_idle) fl_ask(5);
+  if (fl_cur() == BD_FLUSH_OFF && g_fl_idle) fl_ask(BD_FLUSH_TIMED);
 }
 static void on_fl_timer(lv_timer_t *t) {
   (void)t;
-  if (fl_cur() == 5) fl_show();                    // seconds count
+  if (fl_cur() == BD_FLUSH_TIMED) fl_show();                    // seconds count
 }
 
 // ---- Ready screen ---------------------------------------------------------------------------

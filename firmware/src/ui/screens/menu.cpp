@@ -21,7 +21,7 @@ LiveData g_menu_live;
 int g_menu_link = LINK_CONNECTING;
 static char g_sys_txt[3][64] = {"", "", ""};   // build, uptime (+ restart reason), memory
 static const int IDLE_OPTS[] = {0, 1, 2, 5, 10, 20, 30, 60};
-static const char *const PAGE_NAMES[] = {"Display", "Scale", "Wi-Fi", "About", "", "", "Machine address", "Shot history"};
+static const char *const PAGE_NAMES[MENU_PAGES] = {"Display", "Scale", "Wi-Fi", "About", "", "", "Machine address", "Shot history"};
 
 void ui_on_settings(void (*cb)(int bright, int idle_min, bool bounce, bool splash)) { g_settings_cb = cb; }
 void ui_set_settings(int bright, int idle_min, bool bounce, bool splash) {
@@ -89,43 +89,43 @@ static void menu_refresh(void) {
       set_tc(g_disp_tog_l[t][i], on ? COL_TEXT : COL_MUTED);
     }
   // Scale
-  set_text(g_info[1][0], on ? scale_kind_text(d) : "Unknown");
-  set_text(g_info[1][1], !on ? "Unknown" : d->scales_present ? "Connected" : "Not connected");
+  set_text(g_info[MP_SCALE][0], on ? scale_kind_text(d) : "Unknown");
+  set_text(g_info[MP_SCALE][1], !on ? "Unknown" : d->scales_present ? "Connected" : "Not connected");
   if (on && d->scales_present && d->scale_type != SCALE_PREDICTIVE) snprintf(b, sizeof b, "%.1f g", d->weight);
   else snprintf(b, sizeof b, "-");
-  set_text(g_info[1][2], b);
-  set_text(g_info[1][3], "Automatic at the start of a shot");
+  set_text(g_info[MP_SCALE][2], b);
+  set_text(g_info[MP_SCALE][3], "Automatic at the start of a shot");
   // Wi-Fi
-  set_text(g_info[4][0], g_wifi_ssid[0] ? g_wifi_ssid : "Not connected");
+  set_text(g_info[MP_WIFI_DETAILS][0], g_wifi_ssid[0] ? g_wifi_ssid : "Not connected");
   if (g_wifi_ssid[0]) snprintf(b, sizeof b, "%d dBm  \xC2\xB7  channel %d", g_wifi_rssi, g_wifi_ch); else snprintf(b, sizeof b, "-");
-  set_text(g_info[4][1], b);
-  set_text(g_info[4][2], g_wifi_ap[0] ? g_wifi_ap : "-");
-  set_text(g_info[4][3], g_off_sip[0] ? g_off_sip : "-");
+  set_text(g_info[MP_WIFI_DETAILS][1], b);
+  set_text(g_info[MP_WIFI_DETAILS][2], g_wifi_ap[0] ? g_wifi_ap : "-");
+  set_text(g_info[MP_WIFI_DETAILS][3], g_off_sip[0] ? g_off_sip : "-");
   snprintf(b, sizeof b, "%s  \xC2\xB7  %s", g_off_mach, on ? "online" : "not reachable");
-  set_text(g_info[4][4], b);
+  set_text(g_info[MP_WIFI_DETAILS][4], b);
   forget_refresh();
   // About
-  for (int i = 0; i < 3; i++) set_text(g_info[3][i], g_sys_txt[i][0] ? g_sys_txt[i] : "-");
+  for (int i = 0; i < 3; i++) set_text(g_info[MP_ABOUT][i], g_sys_txt[i][0] ? g_sys_txt[i] : "-");
   if (g_upd_rel[0]) snprintf(b, sizeof b, "Release %s \xC2\xB7 install in the web UI", g_upd_rel);
   else snprintf(b, sizeof b, "%s", g_upd_known ? "Available \xC2\xB7 install in the web UI" : "None reported");
-  set_tc(g_info[3][6], g_upd_known ? COL_BLUE : COL_TEXT);
-  set_text(g_info[3][6], b);
+  set_tc(g_info[MP_ABOUT][6], g_upd_known ? COL_BLUE : COL_TEXT);
+  set_text(g_info[MP_ABOUT][6], b);
   if (d->core_ver[0] && d->core_type[0]) snprintf(b, sizeof b, "%s \xC2\xB7 %s", d->core_ver, d->core_type);
   else snprintf(b, sizeof b, "%s", d->core_ver[0] ? d->core_ver : "Unknown");
-  set_text(g_info[3][3], b);
-  set_text(g_info[3][4], d->front_ver[0] ? d->front_ver : "Unknown");
-  set_text(g_info[3][5], d->static_ver[0] ? d->static_ver : "Unknown");
+  set_text(g_info[MP_ABOUT][3], b);
+  set_text(g_info[MP_ABOUT][4], d->front_ver[0] ? d->front_ver : "Unknown");
+  set_text(g_info[MP_ABOUT][5], d->static_ver[0] ? d->static_ver : "Unknown");
 }
 
 void menu_show_page(int k) {            // -1 = main list
   lv_obj_set_hidden(g_menu_main, true);
   for (int i = 0; i < MENU_PAGES; i++) lv_obj_set_hidden(g_menu_page[i], true);
   g_menu_cur = k;
-  g_in_wifi_pages = k == 2 || k == 4 || k == 5 || k == 6;
+  g_in_wifi_pages = k == MP_WIFI || k == MP_WIFI_DETAILS || k == MP_PASSWORD || k == MP_ADDRESS;
   if (g_in_wifi_pages && !lv_obj_is_hidden(g_off)) lv_obj_set_hidden(g_off, true);
   wifi_page_shown(k);
-  if (k == 7) hist_page_shown();
-  if (k < 0) {
+  if (k == MP_HISTORY) hist_page_shown();
+  if (k == MP_LIST) {
     lv_obj_set_hidden(g_menu_main, false);
     lv_obj_set_hidden(g_menu_back, true);
     set_text(g_menu_title, "Menu");
@@ -133,7 +133,7 @@ void menu_show_page(int k) {            // -1 = main list
   } else {
     lv_obj_set_hidden(g_menu_page[k], false);
     lv_obj_set_hidden(g_menu_back, false);
-    set_text(g_menu_title, k == 4 ? (g_wifi_ssid[0] ? g_wifi_ssid : "Wi-Fi") : k == 5 ? g_wj_ssid : PAGE_NAMES[k]);
+    set_text(g_menu_title, k == MP_WIFI_DETAILS ? (g_wifi_ssid[0] ? g_wifi_ssid : "Wi-Fi") : k == MP_PASSWORD ? g_wj_ssid : PAGE_NAMES[k]);
     lv_obj_set_x(g_menu_title, 92);
   }
   menu_refresh();
@@ -141,14 +141,14 @@ void menu_show_page(int k) {            // -1 = main list
 void on_menu_open(lv_event_t *e) {
   (void)e;
   picker_close();
-  menu_show_page(-1);
+  menu_show_page(MP_LIST);
   lv_obj_set_hidden(g_menu, false);
   lv_obj_move_to_index(g_menu, -1);
   if (!lv_obj_is_hidden(g_off)) lv_obj_move_to_index(g_off, -1);
 }
 void open_wifi_menu(void) {
   on_menu_open(NULL);
-  menu_show_page(2);
+  menu_show_page(MP_WIFI);
 }
 void menu_close(void) {
   lv_obj_set_hidden(g_menu, true);
@@ -160,7 +160,8 @@ static void on_menu_close(lv_event_t *e) { (void)e; menu_close(); }
 static void on_menu_back(lv_event_t *e) {
   (void)e;
   if (g_menu_cur >= 0 && g_menu_cur == g_menu_entry) { menu_close(); return; }   // back to the offline screen
-  menu_show_page(g_menu_cur == 4 || g_menu_cur == 5 ? 2 : g_menu_cur == 6 ? 4 : -1);
+  menu_show_page(g_menu_cur == MP_WIFI_DETAILS || g_menu_cur == MP_PASSWORD ? MP_WIFI
+                 : g_menu_cur == MP_ADDRESS ? MP_WIFI_DETAILS : MP_LIST);
 }
 static void on_menu_row(lv_event_t *e) { menu_show_page((int)(intptr_t)lv_event_get_user_data(e)); }
 static void menu_timer(lv_timer_t *t) {
@@ -282,8 +283,9 @@ void build_menu(lv_obj_t *scr) {
   g_menu_main = box(g_menu, 24, 96, 752, 360, COL_BG, 0);   // lists start at 96
   // R[] keeps two unused entries (0, 3) so the indexes used by the menu's values (g_mrow_val) stay as they are
   static const struct { const char *name; int page; bool grey; } R[7] = {
-    {"Edit profile", -1, true}, {"Scale", 1, false}, {"Display", 0, false},
-    {"Maintenance", -1, true}, {"Wi-Fi", 2, false}, {"About", 3, false}, {"Shot history", 7, false}};
+    {"Edit profile", -1, true}, {"Scale", MP_SCALE, false}, {"Display", MP_DISPLAY, false},
+    {"Maintenance", -1, true}, {"Wi-Fi", MP_WIFI, false}, {"About", MP_ABOUT, false},
+    {"Shot history", MP_HISTORY, false}};
   // only the rows that open something; the web-UI-only items are one line at the bottom
   static const int ORDER[5] = {6, 1, 2, 4, 5};      // Shot history, Scale, Display, Wi-Fi, About
   static const int ICON[5] = {IC_HISTORY, IC_SCALE, IC_DISPLAY, IC_WIFI, IC_ABOUT};
@@ -309,11 +311,11 @@ void build_menu(lv_obj_t *scr) {
   build_wifi(g_menu);                              // pages 2 (list) and 5 (password)
   build_hist(g_menu);                              // page 7
   for (int k = 0; k < 5; k++) {
-    if (k == 2) continue;
+    if (k == MP_WIFI) continue;
     g_menu_page[k] = box(g_menu, 24, 96, 752, 360, COL_BG, 0);
     lv_obj_t *c = flex(g_menu_page[k], LV_FLEX_FLOW_COLUMN, 0);
     hairline(c, LV_BORDER_SIDE_TOP);
-    if (k == 0) {                                 // Display: two steppers
+    if (k == MP_DISPLAY) {                        // Display: two steppers
       static const char *const D[2] = {"Brightness", "Dim after"};
       for (int i = 0; i < 2; i++) {
         lv_obj_t *r = box(c, 0, 0, 752, 80, COL_BG, 0);
@@ -342,7 +344,7 @@ void build_menu(lv_obj_t *scr) {
       lv_obj_set_style_pad_top(n, 16, 0);
       continue;
     }
-    if (k == 3) {                                 // About, first row: what this is (not an official product)
+    if (k == MP_ABOUT) {                          // About, first row: what this is (not an official product)
       lv_obj_t *r = box(c, 0, 0, 752, 44, COL_BG, 0);
       hairline(r, LV_BORDER_SIDE_BOTTOM);
       lv_obj_align(logo(r, 32), LV_ALIGN_LEFT_MID, -3, 0);   // 32 px: at 28 the 2 px wisps nearly touch
@@ -351,12 +353,12 @@ void build_menu(lv_obj_t *scr) {
     }
     for (int i = 0; i < 7 && INFO[k][i]; i++) {
       // Wi-Fi details: room for Forget below; About: the Brewdeck row + 7 rows of 44 px in the 360 px page
-      lv_obj_t *r = box(c, 0, 0, 752, k == 4 ? 52 : k == 3 ? 44 : 60, COL_BG, 0);
+      lv_obj_t *r = box(c, 0, 0, 752, k == MP_WIFI_DETAILS ? 52 : k == MP_ABOUT ? 44 : 60, COL_BG, 0);
       hairline(r, LV_BORDER_SIDE_BOTTOM);
       lv_obj_align(label(r, INFO[k][i], F_TEXT, COL_MUTED), LV_ALIGN_LEFT_MID, 0, 0);
       g_info[k][i] = label(r, "", F_TEXT, COL_TEXT);
       lv_obj_align(g_info[k][i], LV_ALIGN_RIGHT_MID, 0, 0);
-      if (k == 4 && i == 4) {                       // Machine row: change the machine's address
+      if (k == MP_WIFI_DETAILS && i == 4) {                       // Machine row: change the machine's address
         lv_obj_align(g_info[k][i], LV_ALIGN_RIGHT_MID, -28, 0);
         lv_obj_t *ch = icon_box(r, 16, 16);
         lv_obj_align(ch, LV_ALIGN_RIGHT_MID, 0, 0);
@@ -365,8 +367,8 @@ void build_menu(lv_obj_t *scr) {
         lv_obj_add_event_cb(r, on_addr_row, LV_EVENT_CLICKED, NULL);
       }
     }
-    if (k == 4) {                                   // Forget this network (like a phone), 2-tap confirm
-      g_fg_btn = box(g_menu_page[4], 0, 360 - 56, 260, 56, COL_CARD, RAD_CTRL);
+    if (k == MP_WIFI_DETAILS) {                     // Forget this network (like a phone), 2-tap confirm
+      g_fg_btn = box(g_menu_page[MP_WIFI_DETAILS], 0, 360 - 56, 260, 56, COL_CARD, RAD_CTRL);
       make_button(g_fg_btn, COL_CARD_PR);
       lv_obj_add_event_cb(g_fg_btn, on_forget, LV_EVENT_CLICKED, NULL);
       g_fg_lbl = label(g_fg_btn, "Forget this network", F_TEXT_B, COL_TEXT);

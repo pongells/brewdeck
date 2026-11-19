@@ -46,9 +46,13 @@ enum { IC_HISTORY, IC_SCALE, IC_DISPLAY, IC_WIFI, IC_ABOUT, IC_PROFILES, IC_SETT
 struct EmptyState { lv_obj_t *box, *title, *body; };
 struct Restore { int id; char name[48]; int w10, deg; uint32_t t; };   // a restore waiting for its profile
 enum { RV_PREV_NONE = 0, RV_PREV_LOADING, RV_PREV_READY, RV_PREV_MISSING, RV_PREV_FAILED };   // = bd_load (BD_LOAD_*)
-// menu pages: 0 Display, 1 Scale, 2 Wi-Fi list, 3 About, 4 Wi-Fi details, 5 password, 6 machine address (5's objects),
-// 7 shot history
-#define MENU_PAGES 8
+// menu pages (g_menu_page, menu_show_page); the address page uses the password page's objects
+enum { MP_LIST = -1, MP_DISPLAY, MP_SCALE, MP_WIFI, MP_ABOUT, MP_WIFI_DETAILS, MP_PASSWORD, MP_ADDRESS, MP_HISTORY,
+       MENU_PAGES };
+// brewing screen / shot review (g_br_state)
+enum { BR_HIDDEN = 0, BR_BREWING, BR_DONE, BR_REVIEW };
+// the flush button: the machine's mode as bd_flush (BD_FLUSH_OFF = HOME), FL_UNKNOWN = busy, offline or not asked
+enum { FL_UNKNOWN = -1 };
 
 // ---- screens/common.cpp: drawing and object helpers, icons, chart helpers ---------------------------------------
 extern const char *PROFILE_NAME;

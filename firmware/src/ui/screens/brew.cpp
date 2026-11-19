@@ -27,7 +27,7 @@ static const int RV_BASE = CH_BASE;
 ShotPoint *g_br;                          // SHOT_MAX points (11.5 KB) in PSRAM: internal RAM is for Wi-Fi
 int g_br_n = 0;
 static int g_br_step = 1, g_br_skip = 0, g_br_tmax = 30, g_br_lastx = -1;
-int g_br_state = 0;                       // 0 hidden, 1 brewing, 2 done, 3 review
+int g_br_state = BR_HIDDEN;
 bool g_br_seen_brew = false, g_live_brew = false;
 static uint32_t g_br_last_ms = 0, g_br_done_ms = 0;
 static WsShot g_br_cur;
@@ -40,7 +40,10 @@ int g_rv_prev_state = 0;                  // PREV_* from net.h (0 none, 1 loadin
 int g_rv_mode = 0, g_rv_i = 0;
 static int g_rv_tmax = 25;
 static uint32_t g_rv_touch_ms = 0;
-static const uint32_t RV_CLOSE_MS = 60000;
+static const uint32_t RV_CLOSE_MS = 60000;     // the review closes after this long untouched
+static const uint32_t DONE_QUIET_MS = 300;      // brewing reported off and no snapshot this long: Done
+static const uint32_t DONE_NO_DATA_MS = 3000;   // no snapshot this long: Done anyway
+static const uint32_t REVIEW_AFTER_MS = 3000;   // the review opens this long after Done
 lv_obj_t *g_rv, *g_rv_chart;
 static lv_obj_t *g_rv_res_w, *g_rv_res_t, *g_rv_close_t, *g_rv_tog[2], *g_rv_tog_l[2];
 static lv_obj_t *g_rv_v[4][2];
@@ -264,7 +267,7 @@ static void br_start(void) {
   g_br_tmax = 30;
   g_br_lastx = -1;
   g_br_seen_brew = false;
-  g_br_state = 1;
+  g_br_state = BR_BREWING;
   g_rv_hist = false;
   g_rv_prev_state = RV_PREV_NONE;
   memset(&g_br_cur, 0, sizeof g_br_cur);
@@ -282,7 +285,7 @@ static void br_start(void) {
 }
 
 static void br_done(void) {
-  g_br_state = 2;
+  g_br_state = BR_DONE;
   g_br_done_ms = lv_tick_get();
   br_pill(true);
   // look up the previous shot of this profile now, so it is there when the review opens
@@ -290,7 +293,7 @@ static void br_done(void) {
 }
 
 void br_hide(void) {
-  g_br_state = 0;
+  g_br_state = BR_HIDDEN;
   g_rv_hist = false;
   lv_obj_set_hidden(g_brew, true);
   rv_hide();
@@ -359,7 +362,7 @@ void rv_toggle_style(void) {
 
 static void rv_open(void) {
   if (g_br_n < 3) { br_hide(); return; }         // nothing worth reviewing
-  g_br_state = 3;
+  g_br_state = BR_REVIEW;
   g_rv_mode = 0;
   g_rv_i = g_br_n - 1;
   g_rv_touch_ms = lv_tick_get();
@@ -423,9 +426,9 @@ static void on_rv_scrub(lv_event_t *e) {
 void ui_set_prev(int state, const ShotTrace *t) {
   if (g_rv_hist) return;                          // a late answer for the last shot while a stored one is shown
   if (state == RV_PREV_READY && t) memcpy(g_rv_prev, t, sizeof *t);
-  if (g_br_state == 0) return;                    // a late answer after the review was closed
+  if (g_br_state == BR_HIDDEN) return;                    // a late answer after the review was closed
   g_rv_prev_state = state;
-  if (g_br_state == 3) {
+  if (g_br_state == BR_REVIEW) {
     rv_toggle_style();
     rv_values();
     if (g_rv_mode == 1) { rv_axis(); lv_obj_invalidate(g_rv_chart); }
@@ -452,16 +455,16 @@ void rv_open_stored(const ShotTrace *s, const ProfileShape *sh, const ShotTrace 
   rv_open();
 }
 
-static void on_brew_tap(lv_event_t *e) { (void)e; if (g_br_state == 2) rv_open(); }
+static void on_brew_tap(lv_event_t *e) { (void)e; if (g_br_state == BR_DONE) rv_open(); }
 
 static void on_brew_timer(lv_timer_t *t) {
   (void)t;
-  if (g_br_state == 1) {
+  if (g_br_state == BR_BREWING) {
     const uint32_t idle = lv_tick_elaps(g_br_last_ms);
-    if ((g_br_seen_brew && !g_live_brew && idle > 300) || idle > 3000) br_done();
-  } else if (g_br_state == 2 && lv_tick_elaps(g_br_done_ms) > 3000) {
+    if ((g_br_seen_brew && !g_live_brew && idle > DONE_QUIET_MS) || idle > DONE_NO_DATA_MS) br_done();
+  } else if (g_br_state == BR_DONE && lv_tick_elaps(g_br_done_ms) > REVIEW_AFTER_MS) {
     rv_open();
-  } else if (g_br_state == 3) {
+  } else if (g_br_state == BR_REVIEW) {
     const uint32_t el = lv_tick_elaps(g_rv_touch_ms);
     if (el >= RV_CLOSE_MS) { br_hide(); return; }
     const unsigned left = (unsigned)((RV_CLOSE_MS - el + 999) / 1000);
@@ -472,7 +475,7 @@ static void on_brew_timer(lv_timer_t *t) {
 }
 
 void ui_shot(const WsShot *s) {
-  if (g_br_state != 1 || s->time10 + 5 < g_br_cur.time10) br_start();   // first snapshot, or time went back
+  if (g_br_state != BR_BREWING || s->time10 + 5 < g_br_cur.time10) br_start();   // first snapshot, or time went back
   g_br_last_ms = lv_tick_get();
   g_br_cur = *s;
   // keep the point (thinned 2:1 when full)
