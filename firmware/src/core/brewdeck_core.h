@@ -64,7 +64,8 @@ typedef enum {
 
 // ---- the machine right now ----------------------------------------------------------------------------------------
 typedef enum { BD_LINK_CONNECTING = 0, BD_LINK_NO_MACHINE, BD_LINK_ONLINE } bd_link_state;
-// why the link is down: Wi-Fi network not in range / password refused / other; machine name unknown / no reply
+// why the link is down: Wi-Fi network not in range / password refused (only before the first join since boot) /
+// other; machine name unknown / no reply
 typedef enum { BD_WHY_NONE = 0, BD_WHY_WIFI_NO_AP, BD_WHY_WIFI_AUTH, BD_WHY_WIFI_OTHER, BD_WHY_NAME_UNKNOWN,
                BD_WHY_NO_REPLY } bd_why;
 // the machine's readiness as its web UI names it; BD_RD_UNKNOWN when it does not report one

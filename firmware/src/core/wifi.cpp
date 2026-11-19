@@ -62,7 +62,9 @@ static volatile uint32_t g_disc_ms = 0;   // when the last disconnect event came
 static bool g_ever_joined = false;        // joined at least once since boot
 static int wifi_why(uint8_t r) {                   // ESP-IDF wifi_err_reason_t
   if (r == 201 || (r >= 210 && r <= 212)) return BD_WHY_WIFI_NO_AP;           // network not seen
-  if (r == 2 || r == 15 || r == 202 || r == 204) return BD_WHY_WIFI_AUTH;     // auth expired / handshake / auth fail
+  // auth expired / handshake / auth fail: the password, unless it already worked since boot (a router that blocks or
+  // drops the screen answers with the same codes)
+  if ((r == 2 || r == 15 || r == 202 || r == 204) && !g_ever_joined) return BD_WHY_WIFI_AUTH;
   return BD_WHY_WIFI_OTHER;
 }
 bool wifi_down_why(int *why) {
