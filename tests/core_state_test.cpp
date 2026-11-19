@@ -99,6 +99,31 @@ int main(void) {
   CHECK(n_end == 2);
   printf("after the end: start %d end %d points %d\n", n_start, n_end, n_point);
 
+  // 2c. a gap mid-shot (WebSocket reconnect, ~6 s) while the machine still reports brewing: no END, the points after
+  // the gap carry the same shot on; brewing off then ends it
+  reset_counts();
+  d = live(true); cs_take_live(&d, BD_LINK_ONLINE);
+  for (uint32_t t = 1; t <= 50; t++) { point(t); cs_tick(now += 150); }
+  for (int i = 0; i < 40; i++) cs_tick(now += 150);  // 6 s without points
+  CHECK(n_start == 1 && n_end == 0);
+  for (uint32_t t = 91; t <= 120; t++) { point(t); cs_tick(now += 150); }
+  CHECK(n_start == 1 && n_end == 0 && bd_live_shot()->n == 80);
+  d = live(false); cs_take_live(&d, BD_LINK_ONLINE);
+  for (int i = 0; i < 4; i++) cs_tick(now += 150);
+  CHECK(n_start == 1 && n_end == 1);
+  // and a stall longer than 15 s still ends it; a point after that while brewing carries it on (no new START)
+  reset_counts();
+  d = live(true); cs_take_live(&d, BD_LINK_ONLINE);
+  for (uint32_t t = 1; t <= 50; t++) { point(t); cs_tick(now += 150); }
+  for (int i = 0; i < 110; i++) cs_tick(now += 150);  // 16.5 s without points
+  CHECK(n_start == 1 && n_end == 1);
+  point(200);
+  CHECK(n_start == 1 && bd_live_shot()->n == 51);
+  d = live(false); cs_take_live(&d, BD_LINK_ONLINE);
+  for (int i = 0; i < 4; i++) cs_tick(now += 150);
+  CHECK(n_end == 2);
+  printf("gap mid-shot: start %d end %d kept %d\n", n_start, n_end, bd_live_shot()->n);
+
   // 3. a shot longer than the 720 stored points keeps running (points still coming): no END, no wipe
   reset_counts();
   d = live(true); cs_take_live(&d, BD_LINK_ONLINE);

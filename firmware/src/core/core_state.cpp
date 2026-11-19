@@ -47,10 +47,11 @@ const char *cs_profile_name(int id) {
 // ---- shots: start, end, the live shot ------------------------------------------------------------------------------
 // A shot starts at its first point or when the machine reports brewing, whichever comes first. It ends 0.3 s after
 // the machine stopped brewing with no new point (the last points come just after the flag drops), or when no new
-// point came for 3 s (cs_tick).
-static const uint32_t SHOT_QUIET_MS = 300, SHOT_NO_DATA_MS = 3000;
-// a point after the end carries the shot on only this soon after it (a late point, a gap); later it is a stray
-// resend of the finished shot (dropped) unless it starts near 0 s (a new shot)
+// point came for 3 s; 15 s while the machine still reports brewing (a WebSocket reconnect mid-shot takes over 5 s)
+// (cs_tick).
+static const uint32_t SHOT_QUIET_MS = 300, SHOT_NO_DATA_MS = 3000, SHOT_STALL_MS = 15000;
+// a point after the end carries the shot on while the machine reports brewing, or this soon after the end (a late
+// point, a gap); later it is a stray resend of the finished shot (dropped) unless it starts near 0 s (a new shot)
 static const uint32_t SHOT_RESUME_MS = 3000;
 static const uint16_t SHOT_NEW_T10 = 20;
 static bool g_shot_on = false;
@@ -186,7 +187,8 @@ void cs_shot_point(const WsShot *s) {
   if (g_shot_on && back) { shot_end(); shot_begin(); }
   else if (!g_shot_on) {
     const bool more = g_live && g_live->n && !back;
-    if (more && g_shot_end_ms && g_now - g_shot_end_ms <= SHOT_RESUME_MS) g_shot_on = true;   // carry on with it
+    if (more && (g_m.brewing || (g_shot_end_ms && g_now - g_shot_end_ms <= SHOT_RESUME_MS)))
+      g_shot_on = true;                                   // carry on with it
     else if (more && p.t > SHOT_NEW_T10) return;          // a stray point of the finished shot: not a shot
     else shot_begin();
   }
@@ -373,7 +375,8 @@ void cs_tick(uint32_t now) {
   watch_n(&g_w_tare.on, fabsf(g_m.weight) < 0.3f, &g_w_tare.t, now, ANSWER_MS, BD_CMD_TARE);
   if (g_shot_on && g_shot_rx) {                   // a shot that stopped sending points: ended
     if (g_shot_rx != g_shot_seen_rx || !g_shot_seen_t) { g_shot_seen_rx = g_shot_rx; g_shot_seen_t = stamp_nz(now); }
-    else if (now - g_shot_seen_t > (g_shot_brewed && !g_m.brewing ? SHOT_QUIET_MS : SHOT_NO_DATA_MS)) shot_end();
+    else if (now - g_shot_seen_t > (g_shot_brewed && !g_m.brewing ? SHOT_QUIET_MS
+                                    : g_m.brewing ? SHOT_STALL_MS : SHOT_NO_DATA_MS)) shot_end();
   }
 }
 
