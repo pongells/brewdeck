@@ -369,6 +369,17 @@ static void tare_step(WiFiClient &c) {
   Log.println("ws: tare sent");
 }
 
+static void handle_frame(const uint8_t *f, size_t n, uint32_t *cnt);
+// one whole frame; debug builds also log where the internal-RAM low point moved (mem_watch)
+static void frame_in(const uint8_t *f, size_t n, uint32_t *cnt) {
+  handle_frame(f, n, cnt);
+#ifdef BREWDECK_DEBUG_HTTP
+  char act[24];
+  const uint8_t *d;
+  size_t dl;
+  if (pb_envelope(f, n, act, sizeof act, &d, &dl)) mem_watch("ws", act);
+#endif
+}
 static void handle_frame(const uint8_t *f, size_t n, uint32_t *cnt) {
   char act[24];
   const uint8_t *d;
@@ -539,7 +550,7 @@ static void session(WiFiClient &c) {
       asm_n += (size_t)len;
     }
     if (fin) {
-      if (!asm_drop && asm_n) handle_frame(g_rx, asm_n, cnt);
+      if (!asm_drop && asm_n) frame_in(g_rx, asm_n, cnt);
       asm_n = 0;
       asm_drop = false;
     }

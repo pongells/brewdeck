@@ -19,6 +19,7 @@
 // it comes back after a restart); joining a network from the list clears the flag. g_ssid "" = none.
 static char g_ssid[33], g_pass[65];
 static bool g_saved_net = false, g_no_builtin = false;
+static uint32_t g_start_ms = 0;            // when the net task started (wifi_start): the built-in fallback counts from it
 static volatile bool g_forget_req = false;
 static bool compiled_net(void) { return strcmp(WIFI_SSID, "YOUR_WIFI_NAME") != 0; }   // a network in wifi_config.h
 // local time for the idle clock (POSIX TZ string; wifi_config.h can set GAGGI_TZ): Central Europe with summer time
@@ -351,7 +352,7 @@ bool wifi_step(bool idle) {
   // a later drop (or a roaming move) is not a reason to switch networks
   static bool fell_back = false;
   if (g_saved_net && !g_no_builtin && !fell_back && !g_ever_joined && compiled_net() && WiFi.status() != WL_CONNECTED &&
-      millis() > 30000) {
+      millis() - g_start_ms > 30000) {
     fell_back = true;
     Log.printf("wifi: saved network not joined, trying the built-in \"%s\"\n", WIFI_SSID);
     xSemaphoreTake(g_net_mtx, portMAX_DELAY);
@@ -365,6 +366,7 @@ bool wifi_step(bool idle) {
 }
 
 void wifi_start(void) {
+  g_start_ms = millis();
   if (g_ssid[0]) WiFi.begin(g_ssid, g_pass);
   if (g_ssid[0]) Log.printf("wifi: joining \"%s\" (%s)\n", g_ssid, g_saved_net ? "saved on the screen" : "built in");
   else Log.println("wifi: no network set up: choose one on the screen");
