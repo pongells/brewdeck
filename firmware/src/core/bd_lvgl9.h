@@ -19,7 +19,9 @@
 static void (*bd_lvgl9_flush_filter)(int x1, int y1, int x2, int y2, uint16_t *px, int stride) = NULL;
 
 static lv_display_t *bd_lv_disp;
+static lv_indev_t *bd_lv_indev;
 static uint32_t bd_lv_last;
+static bool bd_lv_down;   // a finger on the screen at the last read
 
 static void bd_lv_flush(lv_display_t *d, const lv_area_t *a, uint8_t *px) {
   if (bd_lvgl9_flush_filter) bd_lvgl9_flush_filter(a->x1, a->y1, a->x2, a->y2, (uint16_t *)px, a->x2 - a->x1 + 1);
@@ -29,7 +31,8 @@ static void bd_lv_flush(lv_display_t *d, const lv_area_t *a, uint8_t *px) {
 static void bd_lv_touch(lv_indev_t *in, lv_indev_data_t *data) {
   (void)in;
   int x, y;
-  if (bd_touch_read(&x, &y)) {
+  bd_lv_down = bd_touch_read(&x, &y);
+  if (bd_lv_down) {
     data->state = LV_INDEV_STATE_PRESSED;
     data->point.x = x;
     data->point.y = y;
@@ -60,13 +63,19 @@ static bool bd_lvgl9_setup(void) {
   lv_indev_set_type(in, LV_INDEV_TYPE_POINTER);
   lv_indev_set_read_cb(in, bd_lv_touch);
   lv_indev_set_display(in, bd_lv_disp);
+  lv_indev_set_mode(in, LV_INDEV_MODE_EVENT);   // read by bd_lvgl9_tick, just before drawing
+  bd_lv_indev = in;
   return ok;
 }
 
 // Call from bd_ui_tick(): advances LVGL's clock by the core's (the emulator's fast-forward works through it) and
-// lets it draw.
+// lets it draw. Touch is read every call, right before drawing; while a finger is down the screen is redrawn in the
+// same call instead of at the next refresh period (LVGL's separate read and refresh timers could add ~30 ms to a
+// drag). Animations keep LVGL's refresh period.
 static void bd_lvgl9_tick(uint32_t now_ms) {
   if (bd_lv_last) lv_tick_inc(now_ms - bd_lv_last);
   bd_lv_last = now_ms ? now_ms : 1;
+  lv_indev_read(bd_lv_indev);
+  if (bd_lv_down) lv_timer_ready(lv_display_get_refr_timer(bd_lv_disp));
   lv_timer_handler();
 }
