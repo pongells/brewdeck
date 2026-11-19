@@ -407,19 +407,39 @@ lv_obj_t *strip_value(lv_obj_t *row, lv_color_t dot, const char *unit) {
   return v;
 }
 
+static const char *const MON[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 // a stored time as "today 14:05", "yesterday 09:12" or "4 Nov 16:55" ("-" when the machine's clock was not set)
 void fmt_when(uint32_t ts, char *b, size_t n) {
   const time_t now = time(NULL), t = (time_t)ts;
-  if (ts < 1600000000u) { snprintf(b, n, "-"); return; }
+  if (ts < CLOCK_SET_TS) { snprintf(b, n, "-"); return; }
   struct tm a, c;
   localtime_r(&t, &a);
   localtime_r(&now, &c);
-  static const char *const MON[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-  const bool synced = now > 1600000000;
+  const bool synced = now > (time_t)CLOCK_SET_TS;
   if (synced && a.tm_year == c.tm_year && a.tm_yday == c.tm_yday) snprintf(b, n, "today %02d:%02d", a.tm_hour, a.tm_min);
   else if (synced && a.tm_year == c.tm_year && a.tm_yday + 1 == c.tm_yday)
     snprintf(b, n, "yesterday %02d:%02d", a.tm_hour, a.tm_min);
   else snprintf(b, n, "%d %s %02d:%02d", a.tm_mday, MON[a.tm_mon % 12], a.tm_hour, a.tm_min);
+}
+// "Today" / "Yesterday" / "4 Nov" (+ year when not this one); "Date unknown" while a clock is not set
+void fmt_day(uint32_t ts, char *b, size_t n) {
+  const time_t now = time(NULL), t = (time_t)ts;
+  if (ts < CLOCK_SET_TS || now < (time_t)CLOCK_SET_TS) { snprintf(b, n, "Date unknown"); return; }
+  struct tm a, c;
+  localtime_r(&t, &a);
+  localtime_r(&now, &c);
+  if (a.tm_year == c.tm_year && a.tm_yday == c.tm_yday) snprintf(b, n, "Today");
+  else if (a.tm_year == c.tm_year && a.tm_yday + 1 == c.tm_yday) snprintf(b, n, "Yesterday");
+  else if (a.tm_year == c.tm_year) snprintf(b, n, "%d %s", a.tm_mday, MON[a.tm_mon % 12]);
+  else snprintf(b, n, "%d %s %d", a.tm_mday, MON[a.tm_mon % 12], a.tm_year + 1900);
+}
+// today as a number that changes at midnight (-1 while the clock is not set): page fingerprints include it for their
+// "today" / "yesterday" labels
+int today_key(void) {
+  const time_t now = time(NULL);
+  struct tm c;
+  localtime_r(&now, &c);
+  return now > (time_t)CLOCK_SET_TS ? c.tm_year * 400 + c.tm_yday : -1;
 }
 // a pill-shaped row (round ends, filled): the state pills of the brewing, review and steam headers, steam's Refill
 lv_obj_t *pill_row(lv_obj_t *p) {

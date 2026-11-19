@@ -28,19 +28,6 @@ static void hw_put(uint32_t id, unsigned w10) {
   g_hw[i].id = id;
   g_hw[i].w10 = (uint16_t)w10;
 }
-// "Today" / "Yesterday" / "4 Nov" (+ year when not this one); "Date unknown" while a clock is not set
-static void fmt_day(uint32_t ts, char *b, size_t n) {
-  const time_t now = time(NULL), t = (time_t)ts;
-  if (ts < 1600000000u || now < 1600000000) { snprintf(b, n, "Date unknown"); return; }
-  struct tm a, c;
-  localtime_r(&t, &a);
-  localtime_r(&now, &c);
-  static const char *const MON[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-  if (a.tm_year == c.tm_year && a.tm_yday == c.tm_yday) snprintf(b, n, "Today");
-  else if (a.tm_year == c.tm_year && a.tm_yday + 1 == c.tm_yday) snprintf(b, n, "Yesterday");
-  else if (a.tm_year == c.tm_year) snprintf(b, n, "%d %s", a.tm_mday, MON[a.tm_mon % 12]);
-  else snprintf(b, n, "%d %s %d", a.tm_mday, MON[a.tm_mon % 12], a.tm_year + 1900);
-}
 static void hist_row_value(lv_obj_t *l, const WsShotRec *r) {
   char b[40];
   if (r->id == g_hl_wait) { set_text(l, "Loading..."); set_tc(l, COL_MUTED); return; }
@@ -88,7 +75,7 @@ static void hist_add(int k) {
     lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);  // drawn only while pressed
     lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
     lv_obj_add_event_cb(row, on_hist_row, LV_EVENT_CLICKED, (void *)(uintptr_t)r->id);
-    if (r->ts >= 1600000000u) {
+    if (r->ts >= CLOCK_SET_TS) {
       const time_t t = (time_t)r->ts;
       struct tm a;
       localtime_r(&t, &a);
@@ -120,16 +107,13 @@ static void on_hb_timer(lv_timer_t *t) {
 // ~110 ms of the page's ~190 ms opening, and usually nothing has changed since the last time
 static uint32_t g_hb_sig = 0;
 static uint32_t hist_sig(void) {
-  uint32_t h = 2166136261u;
-  auto mix = [&h](const void *p, size_t n) { for (size_t i = 0; i < n; i++) { h ^= ((const uint8_t *)p)[i]; h *= 16777619u; } };
+  uint32_t h = FNV_SEED;
+  auto mix = [&h](const void *p, size_t n) { h = fnv1a(h, p, n); };
   const int n = g_hx_ok ? g_hx->n : -1;
   mix(&n, sizeof n);
   for (int i = 0; i < n; i++) { mix(&g_hx->r[i].id, 4); mix(&g_hx->r[i].ts, 4); mix(g_hx->r[i].name, strlen(g_hx->r[i].name)); }
   if (n <= 0) mix(&g_menu_link, sizeof g_menu_link);
-  const time_t now = time(NULL);
-  struct tm c;
-  localtime_r(&now, &c);
-  const int day = now > 1600000000 ? c.tm_year * 400 + c.tm_yday : -1;
+  const int day = today_key();
   mix(&day, sizeof day);
   return h;
 }

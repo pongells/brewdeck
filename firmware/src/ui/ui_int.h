@@ -20,6 +20,16 @@
 // A "since" timestamp where 0 means "not set". Never write `now | 1`: on an even tick that is 1 ms in the future, so an
 // elapsed check in the same millisecond wraps to ~49 days and passes at once. 0 maps to UINT32_MAX = 1 ms in the past.
 static inline uint32_t stamp_nz(uint32_t now) { return now ? now : 0xFFFFFFFFu; }
+// a send-later timer (user data 1 while a change waits to be sent)
+static inline bool timer_pending(lv_timer_t *t) { return t && lv_timer_get_user_data(t) == (void *)1; }
+// FNV-1a over n bytes, continuing from h (start with FNV_SEED): fingerprints of what a page shows
+static const uint32_t FNV_SEED = 2166136261u;
+static inline uint32_t fnv1a(uint32_t h, const void *p, size_t n) {
+  for (size_t i = 0; i < n; i++) { h ^= ((const uint8_t *)p)[i]; h *= 16777619u; }
+  return h;
+}
+// a Unix time before this (Sep 2020) means the clock was not set (no NTP yet, or the machine's clock)
+static const uint32_t CLOCK_SET_TS = 1600000000u;
 
 static inline void Serial_log(const char *m) { bd_log("%s", m); }   // the core's log (time in front on the device)
 
@@ -80,6 +90,8 @@ void ch_text_c(lv_layer_t *ctx, int x, int y, const char *s, lv_text_align_t ali
 void axis_time(lv_layer_t *ctx, int x0, int w, int y, int span_s, int step_s);
 lv_obj_t *strip_value(lv_obj_t *row, lv_color_t dot, const char *unit);
 void fmt_when(uint32_t ts, char *b, size_t n);
+void fmt_day(uint32_t ts, char *b, size_t n);
+int today_key(void);
 lv_obj_t *pill_row(lv_obj_t *p);
 
 // ---- screens/ready.cpp: Ready, its keypad, the flush button -----------------------------------------------------

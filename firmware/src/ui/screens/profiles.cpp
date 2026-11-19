@@ -253,14 +253,12 @@ static void on_pick_row(lv_event_t *e) {
 }
 // selects profile id on the machine and shows it at once; false if not sent (active already, busy, offline)
 static bool pick_profile(int id) {
-  const ProfileInfo *p = NULL;
-  for (int i = 0; i < g_profiles.count; i++)
-    if (g_profiles.p[i].id == id) p = &g_profiles.p[i];
+  const ProfileInfo *p = prof_by_id(id);
   if (!p || p->selected || !g_can_select) return false;
   // a -/+ change still waiting for its 1 s belongs to the OLD profile: send it now, before the switch (the core refuses
   // it if the machine has already switched), so it can never land on the new profile or poison its originals
-  if (g_weight_tm && lv_timer_get_user_data(g_weight_tm) == (void *)1) weight_commit(NULL);
-  if (g_temp_tm && lv_timer_get_user_data(g_temp_tm) == (void *)1) temp_commit(NULL);
+  if (timer_pending(g_weight_tm)) weight_commit(NULL);
+  if (timer_pending(g_temp_tm)) temp_commit(NULL);
   // saved as the boot profile once the machine has taken it; refused (offline, busy): nothing to show
   if (bd_select_profile(id, true) != BD_OK) return false;
   // show the choice right away; the machine's status confirms it, or the core's answer reverts it (ui_command_answer)
@@ -367,8 +365,8 @@ static void add_row(lv_obj_t *list, const ProfileInfo *p) {
 // fingerprint of everything the rows show: rebuilding ~100 objects took ~170 ms of the page's ~280 ms opening, and
 // usually nothing has changed since the last time (the day is in it for "today" / "yesterday")
 static uint32_t picker_sig(void) {
-  uint32_t h = 2166136261u;
-  auto mix = [&h](const void *p, size_t n) { for (size_t i = 0; i < n; i++) { h ^= ((const uint8_t *)p)[i]; h *= 16777619u; } };
+  uint32_t h = FNV_SEED;
+  auto mix = [&h](const void *p, size_t n) { h = fnv1a(h, p, n); };
   const ProfileList *l = &g_profiles;
   mix(&l->count, sizeof l->count);
   for (int i = 0; i < l->count; i++) {
@@ -382,10 +380,7 @@ static uint32_t picker_sig(void) {
     prof_now(p, &cw, &cd);
     mix(&sw, sizeof sw); mix(&sd, sizeof sd); mix(&cw, sizeof cw); mix(&cd, sizeof cd);
   }
-  const time_t now = time(NULL);
-  struct tm c;
-  localtime_r(&now, &c);
-  const int day = now > 1600000000 ? c.tm_year * 400 + c.tm_yday : -1;
+  const int day = today_key();
   mix(&day, sizeof day);
   return h;
 }

@@ -50,10 +50,10 @@ void ui_command_answer(int cmd, int answer) {
     g_fl_want = -1;
     fl_show();
   } else if (cmd == BD_CMD_STOP_WEIGHT && g_act_weight10 >= 0 &&
-             !(g_weight_tm && lv_timer_get_user_data(g_weight_tm) == (void *)1)) {
+             !timer_pending(g_weight_tm)) {
     g_weight10 = clamp_w10(g_act_weight10);
     refresh_value();
-  } else if (cmd == BD_CMD_BREW_TEMP && g_act_temp > 0 && !(g_temp_tm && lv_timer_get_user_data(g_temp_tm) == (void *)1)) {
+  } else if (cmd == BD_CMD_BREW_TEMP && g_act_temp > 0 && !timer_pending(g_temp_tm)) {
     g_tset = g_act_temp;
     refresh_tset();
   }
@@ -237,7 +237,7 @@ void ui_set_live(const LiveData *d, int link) {
     else if (d->target > 0) t = (int)(d->target + 0.5f);
     if (t != g_act_temp) {
       g_act_temp = t;
-      if (!(g_temp_tm && lv_timer_get_user_data(g_temp_tm) == (void *)1)) { g_tset = t; refresh_tset(); }
+      if (!timer_pending(g_temp_tm)) { g_tset = t; refresh_tset(); }
     }
   }
   // target weight: the ACTIVE profile's (d_act_prof) wins over the stored one (REST): a weight set from this screen
@@ -247,7 +247,7 @@ void ui_set_live(const LiveData *d, int link) {
     const int w10 = (int)(d->act_weight * 10.0f + 0.5f);
     if (w10 != g_act_weight10) {
       g_act_weight10 = w10;
-      if (!(g_weight_tm && lv_timer_get_user_data(g_weight_tm) == (void *)1)) {
+      if (!timer_pending(g_weight_tm)) {
         g_weight10 = clamp_w10(w10);
         refresh_value();
       }
