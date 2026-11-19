@@ -531,7 +531,10 @@ static void set_heating(bool on) {
   g_m.temperature = on ? 62.0f : 90.1f;
   g_m.warmup_remaining = on ? 240 : 0;
 }
+static lv_timer_t *g_release_t = NULL;     // the pressure-release sequence (t_release): one at a time
+static void release_cancel(void) { if (g_release_t) { lv_timer_delete(g_release_t); g_release_t = NULL; } }
 static void a_ready(void) {
+  release_cancel();
   g_shot_on = false; g_m.brew_active = false; g_m.pressure = 0;
   g_offline = g_nowifi = g_no_cfg = g_wifi_auth = false;
   snprintf(g_mhost, sizeof g_mhost, "%s", "gaggiuino.local");
@@ -569,7 +572,7 @@ static void a_steam_go(int speed) {
   const int cur = steam_speed();
   if (cur == speed) { steam_set(false); return; }
   if (cur) steam_set(false);
-  machine_up(); stop_shot(); g_heating = false;
+  machine_up(); stop_shot(); release_cancel(); g_heating = false;
   steam_set(true, speed);
 }
 static void a_steam(void) { a_steam_go(1); }
@@ -596,10 +599,17 @@ static void t_scale_type(void) {   // Bluetooth -> wired -> predictive -> Blueto
 }
 static void t_water(void) { g_m.water_level = g_m.water_level > 20 ? 12 : 100; }
 static void steam_stop(void) { if (g_m.steam_active || g_st.on) steam_set(false); }
-static lv_timer_t *g_release_t = NULL;     // the pressure-release sequence (t_release): one at a time
+// fast steam back to normal speed from where it is (the screen's clock runs 10x with it: a notice would flash past)
+static void steam_normal_speed(void) {
+  if (!g_st.on || g_st.speed <= 1) return;
+  const uint32_t now = SDL_GetTicks();
+  g_st.t0 = now - (now - g_st.t0) * (uint32_t)g_st.speed;
+  g_st.speed = 1;
+  printf("steam: back to normal speed\n");
+}
 static void t_machine(void) {                // off: whatever it was doing stops
   g_offline = !g_offline;
-  if (g_offline) { stop_shot(); steam_stop(); if (g_release_t) { lv_timer_delete(g_release_t); g_release_t = NULL; } }
+  if (g_offline) { stop_shot(); steam_stop(); release_cancel(); }
 }
 static void t_wifi(void) { g_nowifi = !g_nowifi; }
 static void t_heating(void) {                // a cold boiler: no shot or steam going on
@@ -610,6 +620,7 @@ static void t_resid(void) { g_m.pressure = g_m.pressure > 0.5f ? 0 : 1.4f; print
 static void t_notif(void) {   // as the machine sends it (d_notif): the update notice (INFO, the longest real text)
   static int k = 0;            // and test notices of the other types; the pressure release has its own button
   machine_up();
+  steam_normal_speed();
   static const int T[4] = {NOTIF_INFO, NOTIF_WARN, NOTIF_SUCCESS, NOTIF_ERROR};
   static const char *const KIND[4] = {"", "warning", "success", "error"};
   static char test[48];
@@ -626,7 +637,8 @@ static void t_release(void) {               // pressed again, it starts over
   static int step = 0;
   step = 0;
   machine_up();
-  if (g_release_t) lv_timer_delete(g_release_t);
+  stop_shot(); steam_stop();                 // the machine releases pressure while idle (power-on, after a flush)
+  release_cancel();
   g_release_t = lv_timer_create([](lv_timer_t *tm) {
     static const char *const M[4] = {"Dropping beats in: 3", "Dropping beats in: 2", "Dropping beats in: 1", "Releasing pressure!"};
     printf("machine -> notification \"%s\"\n", M[step]);
