@@ -66,9 +66,10 @@ Wi-Fi, looking for the machine), see [below](#when-the-machine-is-not-reachable)
 
 ![Opening the profile list](manual/profiles.gif)
 
-Tap *Profiles*. The list shows the active profile first, then the ones you used most recently, then the rest by
-name, one per row with its stop weight (∞ = none), brew temperature and when you last used it. Tap one to switch (only
-while the machine is idle; tapping the active one just closes the list): the machine selects it, and it also becomes
+Tap *Profiles*. The list shows the active profile first, then the ones you selected most recently, then the rest by
+name, one per row with its stop weight (∞ = none), brew temperature and when you last selected it (here or in the web
+UI) or pulled a shot with it. Tap one to switch (only while the machine is idle; tapping the active one just closes
+the list): the machine selects it, and it also becomes
 the profile the machine starts with. *Community* marks profiles imported from Gaggiuino's community library. A row
 shows its values once the machine has sent the profile's details. Brewdeck lists up to 24 profiles (the first 24 the
 machine reports).

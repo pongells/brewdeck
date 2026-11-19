@@ -12,7 +12,7 @@ static const int PK_NAME_W = 376, PK_STOP_R = 476, PK_TEMP_R = 540, PK_USED_R = 
 
 lv_obj_t *g_pick;                          // full-screen page
 static lv_obj_t *g_pick_list;
-static lv_obj_t *g_pick_sub;               // the page's subtitle ("Active, then recently used")
+static lv_obj_t *g_pick_sub;               // the page's subtitle ("Active, then recently selected")
 bd_profiles g_profiles;
 // profile select in flight: shown at once, until the machine reports it or the core answers that it was not taken
 int g_pend_id = 0;
@@ -479,7 +479,7 @@ void build_picker(lv_obj_t *scr) {
   lv_obj_set_clickable(g_pick, true);               // nothing below can be used
   lv_obj_set_hidden(g_pick, true);
   lv_obj_set_pos(label(g_pick, "Profiles", F_TITLE, COL_TEXT), 24, 32);
-  g_pick_sub = label(g_pick, "Active, then recently used", F_TEXT, COL_MUTED);
+  g_pick_sub = label(g_pick, "Active, then recently selected", F_TEXT, COL_MUTED);
   lv_obj_align(g_pick_sub, LV_ALIGN_TOP_RIGHT, -92, 41);
   lv_obj_t *cl = box(g_pick, 724, 24, 52, 52, COL_CARD, RAD_CTRL);
   make_button(cl, COL_CARD_PR);
@@ -491,7 +491,7 @@ void build_picker(lv_obj_t *scr) {
   g_pick_hdr = box(g_pick, 0, PK_HDR, 800, PK_HDR_H, COL_BG, 0);
   lv_obj_set_style_bg_opa(g_pick_hdr, LV_OPA_TRANSP, 0);
   lv_obj_set_pos(label(g_pick_hdr, "Profile", F_SMALL, COL_FAINT), 24, 7);
-  static const char *const HDR[3] = {"Stop", "Temp", "Last used"};
+  static const char *const HDR[3] = {"Stop", "Temp", "Last selected"};
   static const int HDR_R[3] = {PK_STOP_R, PK_TEMP_R, PK_USED_R};
   for (int k = 0; k < 3; k++) {
     lv_obj_t *h = label(g_pick_hdr, HDR[k], F_SMALL, COL_FAINT);
