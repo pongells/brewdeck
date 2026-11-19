@@ -1,6 +1,4 @@
-// Brewdeck's own UI on the core API (brewdeck_core.h): implements bd_ui_* and feeds ui.cpp's screens with the core's
-// state and events (ui_set_* in ui.h); ui.cpp sends its commands with bd_* itself. Also the UI's storage (settings,
-// per-profile originals) on bd_store_*. Shared by the device, the emulator and the web demo (each with its own core).
+// Brewdeck's bd_ui_*: the core's state and events into the screens (ui_set_*), the UI's settings and originals.
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -8,15 +6,17 @@
 #include "../core/bd_lvgl9.h"
 #include "ui.h"
 
+// Shared by the device, the emulator and the web demo (each with its own core). The screens send their commands with
+// bd_* themselves.
+
 extern "C" const bd_ui_desc BD_UI = {"screen", "1", 1};          // "screen": the NVS namespace of its settings
 
 // ShotTrace, ProfileShape, WifiNet (live.h) are the API's bd_shot, bd_profile_shape, bd_wifi_net
 
 static void cpy(char *d, size_t n, const char *s) { snprintf(d, n, "%s", s ? s : ""); }
 
-// each profile's values from before its first change here (the "edited" marks and "Reset to" in screens/ready.cpp,
-// profiles.cpp): key "p" + FNV-1a of the
-// name (storage keys are at most 15 chars), value = weight x10 << 16 | degC
+// each profile's original values (screens/profiles.cpp): key "p" + FNV-1a of the name (storage keys are at most 15
+// chars), value = weight x10 << 16 | degC
 static void orig_key(const char *n, char *k, size_t kn) {
   uint32_t h = 2166136261u;
   for (; *n; n++) { h ^= (uint8_t)*n; h *= 16777619u; }
@@ -50,7 +50,7 @@ static void on_settings(int bright, int idle_min, bool bounce, bool splash) {
   g_set_dirty = g_now ? g_now : 1;
 }
 
-// ---- state: bd_* -> ui.cpp ----------------------------------------------------------------------------------------
+// ---- state: bd_* -> the screens -------------------------------------------------------------------------------------
 static void live_of(const bd_machine *m, LiveData *d) {
   memset(d, 0, sizeof *d);
   d->temperature = m->temperature;
@@ -117,7 +117,8 @@ static void info_tick(void) {
   const uint32_t mn = c->uptime_s / 60;
   const int rs = c->reset >= 0 && c->reset <= BD_RESET_OTHER ? (int)c->reset : (int)BD_RESET_OTHER;
   snprintf(up, sizeof up, "%u h %u min \xC2\xB7 %s", (unsigned)(mn / 60), (unsigned)(mn % 60), RESET_TXT[rs]);
-  if (!c->free_internal && !c->free_psram) snprintf(mem, sizeof mem, "n/a (desktop)");   // the emulator does not measure
+  // the emulator does not measure memory
+  if (!c->free_internal && !c->free_psram) snprintf(mem, sizeof mem, "n/a (desktop)");
   else snprintf(mem, sizeof mem, "%u KB internal, %.1f MB PSRAM", (unsigned)(c->free_internal / 1024),
                 c->free_psram / 1048576.0);
   ui_set_sysinfo(c->build, up, mem);
@@ -126,7 +127,7 @@ static void info_tick(void) {
   else ui_set_clock(-1, -1);
 }
 
-// ---- bd_ui_* ------------------------------------------------------------------------------------------------------
+// ---- bd_ui_* --------------------------------------------------------------------------------------------------------
 #ifdef BREWDECK_DEBUG_HTTP
 static size_t bench_run(char *out, size_t cap);   // GET /bench, below
 #endif
@@ -178,7 +179,8 @@ static size_t bench_run(char *out, size_t cap) {
       sum += us;
       fl += fus;
     }
-    n = snprintf(o, left, "%-14s %8.1f %8.1f %8.1f %8.1f\n", name, open_us / 1000.0, best / 1000.0, sum / 3000.0, fl / 3000.0);
+    n = snprintf(o, left, "%-14s %8.1f %8.1f %8.1f %8.1f\n", name, open_us / 1000.0, best / 1000.0, sum / 3000.0,
+                 fl / 3000.0);
     if (n > 0 && (size_t)n < left) { o += n; left -= n; }
   }
   lv_refr_now(NULL);
@@ -221,7 +223,8 @@ void bd_ui_tick(uint32_t now) {
     bd_store_set_int("idle", g_idle);
     bd_store_set_int("bounce", g_bounce);
     bd_store_set_int("splash", g_splash);
-    bd_log("settings saved: brightness %d %%, idle %d min, idle clock %s", g_bright, g_idle, g_bounce ? "bouncing" : "still");
+    bd_log("settings saved: brightness %d %%, idle %d min, idle clock %s", g_bright, g_idle,
+           g_bounce ? "bouncing" : "still");
   }
   bd_lvgl9_tick(now);
 }

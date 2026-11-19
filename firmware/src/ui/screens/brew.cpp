@@ -7,17 +7,16 @@ enum { BS_P, BS_F, BS_W, BS_T, BS_TP, BS_TF };
 // polyline pen: solid segments, or a 4 on / 5 off dash pattern that runs on across points (as in the design)
 typedef struct { lv_layer_t *ctx; lv_draw_line_dsc_t d; bool dashed; float phase; int px, py; } Pen;
 
-// ---- brewing screen and shot review ---------------------------------------
-// Brewing opens on the first shot snapshot (WebSocket d_shot_snap, ~7/s) and shows "Done" when the machine reports
-// brewActive false after the shot (or 3 s without snapshots). 3 s later (or on a tap) the shot review opens: the whole
-// shot, a scrubber (drag on the chart) and a "Target | Previous" toggle for the dashed line (the profile's targets, or
-// the previous stored shot of the same profile, loaded from the machine). Close, or 60 s without a touch, goes back to
-// Ready (or to the list, for a shot opened from the shot history).
-// Charts: solid = this shot, dashed = what it is compared with (the targets the machine sent in each snapshot, or the
+// ---- brewing screen and shot review ---------------------------------------------------------------------------------
+// Brewing opens on the first shot point (~7/s) and shows "Done" when the machine reports brewing off after the shot
+// (or DONE_NO_DATA_MS without points). REVIEW_AFTER_MS later (or on a tap) the shot review opens: the whole shot, a
+// scrubber (drag on the chart) and a "Target | Previous" toggle for the dashed line (the profile's targets, or the
+// previous stored shot of the same profile, loaded from the machine). Close, or RV_CLOSE_MS without a touch, goes back
+// to Ready (or to the list, for a shot opened from the shot history).
+// Charts: solid = this shot, dashed = what it is compared with (the targets the machine sent with each point, or the
 // previous shot). Drawn by custom-draw objects that dash sloped lines themselves (a pen with its own dash phase, so
-// the dashes run on across segments); while brewing only the strip at
-// "now" is invalidated. Design opacities are pre-mixed with the background (overlapping round caps of translucent
-// segments would show as dots).
+// the dashes run on across segments); while brewing only the strip at "now" is invalidated. Design opacities are
+// pre-mixed with the background (overlapping round caps of translucent segments would show as dots).
 static const int BR_X = 24, BR_Y = 96, BR_W = 752, BR_H = 288;    // brewing chart box: full width
 static const int CH_BASE = 261;                                     // brewing + review: baseline, 261 px / 12.5 bar
 // the review uses the brewing chart's box, baseline and scales, so the lines stay put when it opens after a shot
@@ -36,7 +35,7 @@ static lv_obj_t *g_br_chart, *g_br_pill, *g_br_dot, *g_br_pill_lbl, *g_br_prof, 
 static lv_obj_t *g_br_w, *g_br_target, *g_br_p, *g_br_f, *g_br_temp;
 // review
 static ShotTrace *g_rv_prev;                     // previous shot (PSRAM)
-int g_rv_prev_state = 0;                  // PREV_* from net.h (0 none, 1 loading, 2 ready, 3 missing, 4 failed)
+int g_rv_prev_state = RV_PREV_NONE;       // the previous shot: RV_PREV_* (= bd_load)
 int g_rv_mode = 0, g_rv_i = 0;
 static int g_rv_tmax = 25;
 static uint32_t g_rv_touch_ms = 0;
@@ -50,15 +49,14 @@ static lv_obj_t *g_rv_v[4][2];
 // "vs Profile target": the profile's planned rest after the shot stopped (estimated, preview_plan), drawn dimmer
 static ShotPoint g_rv_plan[240];
 static int g_rv_plan_n = 0;
-// review of a STORED shot (menu > Shot history): the same screen, fed from GET /api/shots/<id>; its own
-// profile (targets, planned rest) instead of the active one; Close goes back to the list
+// review of a STORED shot (menu > Shot history): the same screen, fed with the shot the core loaded; its own profile
+// (targets, planned rest) instead of the active one; Close goes back to the list
 static bool g_rv_hist = false;
 static ProfileShape *g_rv_shape;                 // that shot's stored profile (PSRAM)
 static int g_rv_tw10 = 0, g_rv_tset = -1;         // its stop weight (x10) and set temperature
 
 static float target_g(void) { return g_weight10 > 0 ? g_weight10 / 10.0f : 21.0f; }
-// pressure / flow: 0..12.5 at the top of the box (the machine can reach ~12 bar; was 11.8 on brewing / 11.4 on the
-// review, so a higher pressure stuck at the top)
+// pressure / flow: 0..12.5 at the top of the box (the machine can reach ~12 bar)
 static ChartMap br_map(void) {   // 752x288: plot 0..752, baseline 261, 261 px / 12.5 bar
   ChartMap m = {0, CH_BASE, 75.2f / g_br_tmax, 2.088f, 0.245f, 17.96f / target_g()};
   return m;
@@ -103,7 +101,6 @@ static void pen_to(Pen *pn, int x, int y) {
     for (int guard = 0; s < len && guard < 4096; guard++) {
       const float in = pn->phase < 4 ? 4 - pn->phase : 9 - pn->phase;
       // a step that rounds to nothing (phase a hair below a boundary) would loop forever: jump to the boundary
-      // (it froze the UI on the device)
       if (in < 0.01f) { pn->phase = pn->phase < 4 ? 4 : 0; continue; }
       const float e = s + in < len ? s + in : len;
       if (pn->phase < 4 && vis) {
@@ -130,7 +127,8 @@ static void ch_series(lv_layer_t *ctx, int ox, int oy, const ChartMap *m, const 
     int e = i;
     if (k == BS_W) while (e + 1 < n && pts[e + 1].w == pts[i].w) e++;
     pen_to(&pn, ox + cm_x(m, pts[i].t), oy + cm_y(m, k, sp_val(&pts[i], k)));
-    if (e != i && (e - i + 1 > 3 || e == n - 1)) pen_to(&pn, ox + cm_x(m, pts[e].t), oy + cm_y(m, k, sp_val(&pts[e], k)));
+    if (e != i && (e - i + 1 > 3 || e == n - 1))
+      pen_to(&pn, ox + cm_x(m, pts[e].t), oy + cm_y(m, k, sp_val(&pts[e], k)));
     i = e + 1;
   }
 }
@@ -146,7 +144,9 @@ static void ch_dot(lv_layer_t *ctx, int x, int y, int r, lv_color_t col) {
 }
 // the scrub time above the scrubber: F_TEXT_B, centred on it, kept inside the chart (ox..ox+w)
 static const int RV_AT_H = 22, RV_AT_HW = 30;      // label height, half width (fits "1:05.0")
-static int rv_at_cx(int x, int ox, int w) { return x < ox + RV_AT_HW ? ox + RV_AT_HW : x > ox + w - RV_AT_HW ? ox + w - RV_AT_HW : x; }
+static int rv_at_cx(int x, int ox, int w) {
+  return x < ox + RV_AT_HW ? ox + RV_AT_HW : x > ox + w - RV_AT_HW ? ox + w - RV_AT_HW : x;
+}
 
 // the four live lines (temperature, weight, flow, pressure on top)
 static void ch_live(lv_layer_t *ctx, int ox, int oy, const ChartMap *m, const ShotPoint *pts, int n) {
@@ -198,7 +198,7 @@ static void rv_draw(lv_event_t *e) {
   lv_obj_get_coords(lv_event_get_target_obj(e), &a);
   const int ox = a.x1, oy = a.y1;
   const ChartMap m = rv_map();
-  // no phase / stage bands (phases are not that important); grid and axes as on the brewing screen
+  // grid and axes as on the brewing screen
   ch_axes(ctx, ox, oy, &m, RV_PW, g_rv_tmax);
   if (!g_br_n) return;
   // dashed: the profile's targets during this shot, or the previous shot
@@ -248,7 +248,8 @@ static void br_pill(bool done) {
 }
 
 static void br_target(void) {
-  char b[24];   // the stop weight after the weight: "/ 21.0" (the unit follows); nothing without a stop weight
+  // the stop weight after the weight: "/ 21.0" (the unit follows); nothing without a stop weight
+  char b[24];
   if (g_weight10 > 0) snprintf(b, sizeof b, "/ %d.%d", g_weight10 / 10, g_weight10 % 10);
   else b[0] = 0;
   set_text(g_br_target, b);
@@ -286,7 +287,8 @@ static void br_done(void) {
   g_br_done_ms = lv_tick_get();
   br_pill(true);
   // look up the previous shot of this profile now, so it is there when the review opens
-  if (g_cur_profile[0] && bd_load_previous_shot(g_cur_profile, (int)g_br_cur.time10) == BD_OK) g_rv_prev_state = RV_PREV_LOADING;
+  if (g_cur_profile[0] && bd_load_previous_shot(g_cur_profile, (int)g_br_cur.time10) == BD_OK)
+    g_rv_prev_state = RV_PREV_LOADING;
 }
 
 void br_hide(void) {
@@ -296,7 +298,7 @@ void br_hide(void) {
   rv_hide();
 }
 
-// ---- review ----
+// ---- shot review ----------------------------------------------------------------------------------------------------
 static void fmt10(unsigned v, char *b, size_t n) { snprintf(b, n, "%u.%u", v / 10, v % 10); }
 // values row: values at the scrubber, this shot (solid) and the dashed line (previous shot or the targets)
 void rv_values(void) {
@@ -308,12 +310,17 @@ void rv_values(void) {
   if (g_rv_mode == 1 && prev) {
     const ShotTrace *pt = g_rv_prev;
     int best = 0;
-    for (int i = 1; i < pt->n; i++) if (abs((int)pt->pt[i].t - (int)s->t) < abs((int)pt->pt[best].t - (int)s->t)) best = i;
+    for (int i = 1; i < pt->n; i++)
+      if (abs((int)pt->pt[i].t - (int)s->t) < abs((int)pt->pt[best].t - (int)s->t)) best = i;
     const ShotPoint *q = &pt->pt[best];
     const bool past = s->t > pt->pt[pt->n - 1].t + 5;     // the previous shot had ended by then
     const unsigned w[4] = {q->p, q->f, q->w, q->temp};
-    for (int i = 0; i < 4; i++) { if (past) snprintf(b, sizeof b, "-"); else fmt10(w[i], b, sizeof b); set_text(g_rv_v[i][1], b); }
-  } else {                                        // targets: as sent during the shot, the stop weight, the set temperature
+    for (int i = 0; i < 4; i++) {
+      if (past) snprintf(b, sizeof b, "-");
+      else fmt10(w[i], b, sizeof b);
+      set_text(g_rv_v[i][1], b);
+    }
+  } else {                                        // targets as sent during the shot, the stop weight, the set temp
     fmt10(s->tp, b, sizeof b); set_text(g_rv_v[0][1], b);
     fmt10(s->tf, b, sizeof b); set_text(g_rv_v[1][1], b);
     const unsigned tw = g_rv_hist ? (unsigned)g_rv_tw10 : (unsigned)(g_weight10 > 0 ? g_weight10 : 0);   // 0: "-"
@@ -327,7 +334,8 @@ void rv_values(void) {
 
 static void rv_plan(void) {   // the rest of the active profile from the phase (and moment) where the shot stopped
   g_rv_plan_n = 0;
-  const ProfileShape *sh = g_rv_hist ? (g_rv_shape && g_rv_shape->n ? g_rv_shape : NULL) : (g_shape_loaded ? &g_last_shape : NULL);
+  const ProfileShape *sh = g_rv_hist ? (g_rv_shape && g_rv_shape->n ? g_rv_shape : NULL)
+                                      : (g_shape_loaded ? &g_last_shape : NULL);
   if (!sh || g_br_n < 2) return;
   const ShotPoint *e = &g_br[g_br_n - 1];
   int k = g_br_n - 1;
@@ -347,7 +355,8 @@ void rv_axis(void) {   // 25 s, or longer in steps of 5 s so this shot (and the 
 }
 
 void rv_toggle_style(void) {
-  static const char *prev_txt[] = {"Previous", "Previous", "Previous", "No previous", "Previous n/a"};   // short: the toggle is narrow
+  // per RV_PREV_*, short: the toggle is narrow
+  static const char *prev_txt[] = {"Previous", "Previous", "Previous", "No previous", "Previous n/a"};
   set_text(g_rv_tog_l[1], prev_txt[g_rv_prev_state < 5 ? g_rv_prev_state : 4]);
   for (int i = 0; i < 2; i++) {
     const bool on = g_rv_mode == i;
@@ -406,7 +415,7 @@ static void on_rv_scrub(lv_event_t *e) {
   g_rv_touch_ms = lv_tick_get();
   if (best == g_rv_i) return;
   // redraw only the strips under the old and the new scrubber (line, dots up to r 5, handle r 9: +-12 px), not the
-  // whole chart: ~148k px per step took ~60 ms on the device; the series clip to the strip (pen_to)
+  // whole chart (~148k px, too slow per step on the device); the series clip to the strip (pen_to)
   const int xo = a.x1 + cm_x(&m, g_br[g_rv_i].t), xn = a.x1 + cm_x(&m, g_br[best].t);
   g_rv_i = best;
   rv_values();
@@ -542,8 +551,8 @@ void build_brew(lv_obj_t *scr) {
   g_br_prof = label(hl, PROFILE_NAME, F_TEXT, COL_MUTED);
   g_br_clock = label(g_brew, "0:00", F_VALUE, COL_TEXT);
   lv_obj_align(g_br_clock, LV_ALIGN_TOP_RIGHT, -24, 22);
-  // values: one row under the full-width chart, left-aligned: weight (white), pressure,
-  // flow, temperature; each a dot in its colour + 38 px number + unit. No big number, no stop-weight line, no footer.
+  // values: one row under the full-width chart, left-aligned: weight (white), pressure, flow, temperature; each a dot
+  // in its colour, the number and its unit
   lv_obj_t *vr = flex(g_brew, LV_FLEX_FLOW_ROW, 0);
   lv_obj_set_flex_align(vr, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_pos(vr, 24, VALS_Y);
@@ -566,10 +575,10 @@ void build_brew(lv_obj_t *scr) {
   lv_obj_add_event_cb(g_br_chart, br_draw, LV_EVENT_DRAW_MAIN, NULL);
   lv_obj_set_hidden(g_brew, true);
 
-  // ---- shot review ----
+  // shot review
   g_rv = box(scr, 0, 0, 800, 480, COL_BG, 0);
-  // header: Done pill (green dot like the Ready pill: status pills have a dot, no icon; the check mark
-  // on card grey looked like a button), "21.8 g in 7.3 s" + the profile name; Close with countdown on the right
+  // header: Done pill (a dot like the Ready pill: status pills have a dot, never an icon), "21.8 g in 7.3 s";
+  // Close with its countdown on the right
   lv_obj_t *rh = flex(g_rv, LV_FLEX_FLOW_ROW, 16);
   lv_obj_set_flex_align(rh, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_pos(rh, 24, 24);
@@ -579,7 +588,7 @@ void build_brew(lv_obj_t *scr) {
   lv_obj_set_style_bg_color(rp, COL_PILL_BG, 0);
   box(rp, 0, 0, 10, 10, COL_GREEN, 5);
   label(rp, "Done", F_TEXT_B, COL_PILL_TX);
-  lv_obj_t *rc = flex(rh, LV_FLEX_FLOW_ROW, 14);    // one line: "19.6 g in 23.0 s  Leva 9 SINGLE v0.9"
+  lv_obj_t *rc = flex(rh, LV_FLEX_FLOW_ROW, 14);    // one line: "19.6 g in 23.0 s"
   lv_obj_set_flex_align(rc, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
   lv_obj_t *rr = flex(rc, LV_FLEX_FLOW_ROW, 8);
   g_rv_res_w = label(rr, "0.0 g", F_TITLE, COL_TEXT);

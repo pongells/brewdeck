@@ -1,31 +1,32 @@
 // Machine notifications (banner), the pressure-release glow and the notices list under the bell.
 #include "../ui_int.h"
 
-// A bell button left of Profiles keeps the machine's recent notices (newest first, time of the last arrival),
-// a blue dot while one arrived without being shown (asleep); a tap opens the list under it, a tap anywhere else closes it. The pressure
-// release ("Dropping beats" / "Releasing pressure") is NOT kept here (it lights the screen up when it
+// A bell button left of Profiles keeps the machine's recent notices (newest first, time of the last arrival), a blue
+// dot while one arrived without being shown (asleep); a tap opens the list under it, a tap anywhere else closes it.
+// The pressure release ("Dropping beats" / "Releasing pressure") is NOT kept here (it lights the screen up when it
 // happens: glow + banner). The update notice is kept with the screen's own text. Read-only, sends nothing.
 static const int NB_Y = 38;   // the banner's y off Ready (= the status pills' y)
 #define NTC_MAX 10   // the list scrolls
 struct Notice { char t[64]; uint8_t type; char when[8]; bool unread; };
 // colours per notice type (BD_NOTICE_*: info, success, warn, error): banner background, dot, banner text
 static const struct { uint32_t bg, dot, tx; } NTC_COL[4] = {
-    {0x1A1A1D, 0x7CC4FF, 0xF2F2F3}, {0x10291A, 0x4ADE80, 0x7EE2A8}, {0x33200F, 0xFFA94D, 0xFFC089}, {0x3A1416, 0xE5484D, 0xFF9EA1}};
+    {0x1A1A1D, 0x7CC4FF, 0xF2F2F3}, {0x10291A, 0x4ADE80, 0x7EE2A8},
+    {0x33200F, 0xFFA94D, 0xFFC089}, {0x3A1416, 0xE5484D, 0xFF9EA1}};
 
-// ---- machine notifications (d_notif): a banner in the status pill's place on Ready, centred elsewhere, ~5 s --------------------
+// ---- the banner -----------------------------------------------------------------------------------------------------
+// A machine notice for ~5 s: in the status pill's place on Ready, centred elsewhere.
 // Pill like the status pills (dot, no icon), colour by type; on the top layer (over every screen, never takes taps).
-// Wakes the screen (screen off / idle clock) so "Releasing pressure!" is seen. "Fill the water tank!" is left out:
-// the machine repeats it ~1.4/s (a Gaggiuino quirk) and the water pill shows it already. A repeat of the shown text keeps it up.
+// Wakes the screen (screen off / idle clock) so "Releasing pressure!" is seen. The core leaves out "Fill the water
+// tank!" (the machine repeats it ~1.4/s; the water pill shows it already). A repeat of the shown text keeps it up.
 static lv_obj_t *g_nb, *g_nb_dot, *g_nb_lbl;
 static int g_nb_pill_max = 392;   // Ready: the banner in the pill's place ends before the header's buttons
 static uint32_t g_nb_ms = 0;
 static bool g_nb_lit = false;                     // backlight raised for a banner over the idle clock
-// On Ready the message takes the status pill's place for 5 s (the pill is hidden under it; up to the header's buttons,
-// "..." when longer), then the pill comes back; no slide. Elsewhere: centred, sliding in.
+// On Ready the message takes the status pill's place for NB_SHOW_MS (the pill is hidden under it; up to the header's
+// buttons, "..." when longer), then the pill comes back; no slide. Elsewhere: centred, sliding in.
 static bool g_nb_inpill = false;
-// The machine's update notice ("Release c929939 now available for download!", INFO) comes every 2 min: shown once
-// per connection (again when the text changes), never wakes the idle clock / screen off and
-// does not count as a touch; Menu > About keeps it ("Machine update").
+// The machine's update notice comes every 2 min: shown once per connection (again when the release changes), never
+// wakes the idle clock / screen off and does not count as a touch; Menu > About keeps it ("Machine update").
 char g_upd_rel[32] = "";
 bool g_upd_known = false;   // the machine reported an update (release name in g_upd_rel, "" if not given)
 bool g_upd_shown = false;
@@ -69,24 +70,23 @@ static void on_nb_timer(lv_timer_t *t) {
   }
 }
 // Pressure-release warning: water comes ~3 s after the machine's countdown starts ("Dropping beats in: 3 / 2 / 1", ~1 s
-// apart, then "Releasing pressure!"), so a soft blue glow (a hard frame looked too intense) fades in from the screen
-// edges (FR_D px deep) on each beat (full, fading to 25 % in 0.7 s), holds at 60 % while the pressure is released
-// (until the banner goes), then fades out. Its opacity falls off like an inset shadow (~26 % at the edge, 17 % at
-// 20 px, 9 % at 40 px) plus a 2 px line at 50 %, in four edge strips (only the edges are redrawn; LVGL's own shadow
-// faded out within ~20 px and gets slow when wider). Top layer, taps pass through. Recognised by the machine's text:
-// a Gaggiuino update that rewords it leaves only the banner.
+// apart, then "Releasing pressure!"), so a soft blue glow fades in from the screen edges (FR_D px deep) on each beat
+// (full, fading to 25 % in 0.7 s), holds at 60 % while the pressure is released (until the banner goes), then fades
+// out. Its opacity falls off like an inset shadow (~26 % at the edge, 17 % at 20 px, 9 % at 40 px) plus a 2 px line at
+// 50 %, in four edge strips (only the edges are redrawn; LVGL's own shadow fades out within ~20 px and gets slow when
+// wider). Taps pass through. The core recognises the machine's text: a Gaggiuino update that rewords it leaves only
+// the banner.
 static lv_obj_t *g_fr[4];
 static int g_fr_mode = 0;                          // 0 off, 1 countdown, 2 releasing
 static int g_fr_opa = 0;                           // 0-255
 static uint32_t g_fr_ms = 0;                       // last beat / release message
-static const int FR_D = 48;                        // glow depth (48 px: fewer pixels per frame than 80)
-// Drawn per pixel straight into LVGL's draw buffer: 2 px bands showed steps on the panel (it looked pixelated): a faint blue over near-black has only a few RGB565 levels, so the fade is mixed in
-// 8.8 fixed point and an ordered 4x4 (Bayer) threshold of one 565 step is added before rounding (dithering).
-// Speed: a plain per-pixel version made each glow frame ~120-145 ms (bands: ~85-100 ms), long enough
-// for the panel to show half-drawn frames (slight horizontal distortion while fading). The mixed pixel depends
-// only on (source pixel, alpha, threshold), so results are reused: along a row (top/bottom strips: same alpha and
-// background over long runs, the threshold repeats every 4 px) and down a column (side strips: alpha depends only on
-// x, the threshold repeats every 4 rows); 16-bit pixel read/written in one go instead of the bit fields.
+static const int FR_D = 48;                        // glow depth (px)
+// Drawn per pixel into the finished strip: a faint blue over near-black has only a few RGB565 levels, so the fade is
+// mixed in 8.8 fixed point and an ordered 4x4 (Bayer) threshold of one 565 step is added before rounding (dithering).
+// Speed: slow glow frames let the panel show half-drawn frames while fading. The mixed pixel depends only on (source
+// pixel, alpha, threshold), so results are reused: along a row (top / bottom strips: same alpha and background over
+// long runs, the threshold repeats every 4 px) and down a column (side strips: alpha depends only on x, the threshold
+// repeats every 4 rows); the 16-bit pixel is read / written in one go.
 static const uint8_t FR_BAYER[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
 static inline uint16_t fr_mix(uint32_t s, int32_t a, int32_t th) {   // RGB565 s, alpha 0..256, threshold 0..15
   const int32_t r0 = ((s >> 8) & 0xF8) | (s >> 13), g0 = ((s >> 3) & 0xFC) | ((s >> 9) & 3),
@@ -96,13 +96,13 @@ static inline uint16_t fr_mix(uint32_t s, int32_t a, int32_t th) {   // RGB565 s
   const int32_t b = LV_MIN(((b0 << 8) + (0xFF - b0) * a + th * 128) >> 8, 255);
   return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
 }
-// LVGL 9 draws later (draw tasks), so the glow is no longer drawn by an object: it is applied to each finished strip
-// just before it goes to the screen (ui_flush_filter, called by the LVGL adapter, bd_lvgl9.h), i.e. over everything,
-// as the top-layer object was. The four edge objects stay to mark what must be redrawn while it fades.
+// LVGL 9 draws later (draw tasks), so the glow is applied to each finished strip just before it goes to the panel
+// (ui_flush_filter, called by the LVGL adapter, bd_lvgl9.h), i.e. over everything. Four invisible edge objects on the
+// top layer mark what must be redrawn while it fades.
 void ui_flush_filter(int x1, int y1, int x2, int y2, uint16_t *buf, int stride) {
   if (g_fr_opa <= 0 || !g_fr[0] || lv_obj_is_hidden(g_fr[0])) return;
-  // alpha per distance from an edge, 0..256: the old band curve (0.28 at the edge, between linear and squared),
-  // continuous instead of in 2 px steps, plus the 2 px edge line at 50 % (blended over it)
+  // alpha per distance from an edge, 0..256: 0.28 at the edge, between linear and squared, plus the 2 px edge line
+  // at 50 % (blended over it)
   static uint32_t A[FR_D];
   static int a_for = -1;
   if (a_for != g_fr_opa) {
@@ -188,7 +188,8 @@ static void on_fr_timer(lv_timer_t *t) {
   if (lv_tick_elaps(g_fr_ms) > keep) { fr_fade(g_fr_opa, 0, 500); g_fr_mode = 0; }
 }
 void build_frame(void) {
-  const int st[4][4] = {{0, 0, 800, FR_D}, {0, 480 - FR_D, 800, FR_D}, {0, FR_D, FR_D, 480 - 2 * FR_D}, {800 - FR_D, FR_D, FR_D, 480 - 2 * FR_D}};
+  const int st[4][4] = {{0, 0, 800, FR_D}, {0, 480 - FR_D, 800, FR_D}, {0, FR_D, FR_D, 480 - 2 * FR_D},
+                        {800 - FR_D, FR_D, FR_D, 480 - 2 * FR_D}};
   for (int i = 0; i < 4; i++) {
     g_fr[i] = box(lv_layer_top(), st[i][0], st[i][1], st[i][2], st[i][3], COL_BLUE, 0);
     lv_obj_set_style_bg_opa(g_fr[i], LV_OPA_TRANSP, 0);
@@ -196,7 +197,7 @@ void build_frame(void) {
   }
   lv_timer_create(on_fr_timer, 100, NULL);
 }
-// ---- machine notices list ------------------------------------------
+// ---- machine notices list -------------------------------------------------------------------------------------------
 static Notice g_ntc[NTC_MAX];
 static int g_ntc_n = 0;
 static bool g_ntc_unread = false;
@@ -232,8 +233,9 @@ static void ntc_add(int type, const char *t, bool seen) {
   if (g_clock_h >= 0) snprintf(when, sizeof when, "%02d:%02d", g_clock_h, g_clock_m);
   int j = 0;
   while (j < g_ntc_n && strcmp(g_ntc[j].t, t)) j++;
-  if (j < g_ntc_n) {                               // a text already listed (the update notice every 2 min): moves
-    const Notice n = g_ntc[j];                     // to the top with the new time, not unread again
+  // a text already listed (the update notice every 2 min) moves to the top with the new time, not unread again
+  if (j < g_ntc_n) {
+    const Notice n = g_ntc[j];
     for (int i = j; i > 0; i--) g_ntc[i] = g_ntc[i - 1];
     g_ntc[0] = n;
     snprintf(g_ntc[0].when, sizeof g_ntc[0].when, "%s", when);
@@ -315,8 +317,8 @@ static void ntc_close_if_covered(void) {          // the list belongs to Ready: 
   if (g_ntc_back && !lv_obj_is_hidden(g_ntc_back) && !nb_on_ready()) ntc_close();
 }
 // style and place the banner: in the status pill's place while Ready is visible, centred (sliding in) elsewhere.
-// Also called by on_nb_timer when Ready comes back while a centred banner is up (else it stays centred over the
-// header after a notice that arrived during the offline screen).
+// Also called by on_nb_timer when Ready comes back while a centred banner is up, so a notice that arrived during
+// the offline screen does not stay centred over the header.
 static void nb_place(int k, const char *msg, bool shown) {
   if (msg != g_nb_txt) snprintf(g_nb_txt, sizeof g_nb_txt, "%s", msg);
   g_nb_k = k;
@@ -336,7 +338,10 @@ static void nb_place(int k, const char *msg, bool shown) {
   lv_text_get_size(&sz, msg, F_TEXT_B, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
   const int32_t room = (ready ? g_nb_pill_max : 760) - 2 * 16 - 10 - 8;
   if (sz.x > room) one_line(g_nb_lbl, room);
-  else { lv_label_set_long_mode(g_nb_lbl, LV_LABEL_LONG_MODE_CLIP); lv_obj_set_size(g_nb_lbl, LV_SIZE_CONTENT, LV_SIZE_CONTENT); }
+  else {
+    lv_label_set_long_mode(g_nb_lbl, LV_LABEL_LONG_MODE_CLIP);
+    lv_obj_set_size(g_nb_lbl, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  }
   if (ready) {                                     // in the status pill's place, no slide
     lv_anim_delete(g_nb, nb_anim_y);
     lv_obj_align(g_nb, LV_ALIGN_TOP_LEFT, 24, NB_Y - 8);   // Ready: 24 px margin
@@ -358,9 +363,9 @@ static void nb_place(int k, const char *msg, bool shown) {
 // the banner for a notice (all kinds): wakes the screen and shows it in the pill's place on Ready, centred elsewhere
 // fr: pressure-release glow (1 a countdown beat, 2 releasing, 0 none)
 static void notify_show(int type, const char *msg, int fr) {
-  // standby: stay on the dim clock instead of jumping to Ready; the banner (and the
-  // glow) show over it at full backlight, back to dim when the banner goes. Screen off: lights up on the clock.
-  // Dimming Off (no clock): screen off wakes to the screen below as before.
+  // standby: stay on the dim clock instead of jumping to Ready; the banner (and the glow) show over it at full
+  // backlight, back to dim when the banner goes. Screen off: lights up on the clock. Dimming Off (no clock): screen
+  // off wakes to the screen below.
   if (g_blank_on) {
     g_blank_on = g_blank_offline = false;
     lv_obj_set_hidden(g_blank, true);

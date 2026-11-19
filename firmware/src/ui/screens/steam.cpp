@@ -3,11 +3,11 @@
 
 #define ST_PTS 240                                  // 1 sample/s: the last 4 minutes
 
-// ---- steam screen --------------------------------------------------------------
+// ---- steam screen ---------------------------------------------------------------------------------------------------
 // Layout like the brewing screen: header = Steam pill (+ an orange "Refill N%" pill below 20 %) and the steam clock;
 // the brewing chart's full-width box: temperature red with the dashed set point (labelled), pressure blue, since steam
 // started; one values row under it (temperature / set point, pressure).
-static const int ST_CX = 24, ST_CY = 96, ST_CW = 752, ST_CH = 288;    // chart box = the brewing chart's (BR_*), full width
+static const int ST_CX = 24, ST_CY = 96, ST_CW = 752, ST_CH = 288;    // chart box = the brewing chart's (BR_*)
 lv_obj_t *g_st;
 static lv_obj_t *g_st_temp, *g_st_setl, *g_st_chart, *g_st_clock, *g_st_p;
 static lv_obj_t *g_st_tank, *g_st_tank_pct, *g_st_wt;
@@ -21,20 +21,23 @@ static void st_draw(lv_event_t *e) {
   lv_area_t a;
   lv_obj_get_coords(lv_event_get_target_obj(e), &a);
   // plot area like br_draw: the full box width, baseline at 261 (box coordinates)
-  const int ox = a.x1, oy = a.y1, x0 = ox, x1 = ox + ST_CW, base = oy + 261, top = oy + 22;   // like br_draw
+  const int ox = a.x1, oy = a.y1, x0 = ox, x1 = ox + ST_CW, base = oy + 261, top = oy + 22;
   lv_draw_line_dsc_t l;
   lv_draw_line_dsc_init(&l);
   l.color = COL_LINE;
   l.width = 1;
   int lo = g_st_n ? g_st_s[0] : 0, hi = lo;
   for (int i = 0; i < g_st_n; i++) { if (g_st_s[i] < lo) lo = g_st_s[i]; if (g_st_s[i] > hi) hi = g_st_s[i]; }
-  if (g_st_set_deg > 0) { if (g_st_set_deg * 10 > hi) hi = g_st_set_deg * 10; if (g_st_set_deg * 10 < lo) lo = g_st_set_deg * 10; }
+  if (g_st_set_deg > 0) {
+    if (g_st_set_deg * 10 > hi) hi = g_st_set_deg * 10;
+    if (g_st_set_deg * 10 < lo) lo = g_st_set_deg * 10;
+  }
   lo -= 50;                                         // 5 deg of room below, 8 above (the set point sits near the top)
   hi += 80;
   // the set point's label (right end, 22 px above its line): a grid label next to it is left out
   const int set_y = g_st_set_deg > 0 && g_st_n ? top + (hi - g_st_set_deg * 10) * (base - top) / (hi - lo) : -100;
   // pressure scale: 0..3 bar, grows to the next whole bar above the highest reading (up to 13: the machine can
-  // reach ~12 bar; was a fixed 3 bar that cut higher readings off at the top)
+  // reach ~12 bar)
   int pmax = 300;
   for (int i = 0; i < g_st_n; i++) if (g_st_ps[i] > pmax) pmax = g_st_ps[i];
   pmax = (pmax + 99) / 100 * 100;
@@ -164,8 +167,8 @@ void st_update(const LiveData *d, bool on) {
   snprintf(b, sizeof b, "Refill %d%%", lvl);
   set_text(g_st_tank_pct, b);
   if (!g_st_last || lv_tick_elaps(g_st_last) >= 1000) {   // one chart point per second
-    // on a 1 s grid (+= 1000, not "now"): checked every ~150 ms, "now" drifted ~7 % slow, so the chart's time axis
-    // fell behind the steam clock (1:51 at 1:59); after a long gap it starts again
+    // on a 1 s grid (+= 1000, not "now"): this runs every ~150 ms, and "now" would drift ~7 % slow behind the steam
+    // clock; after a long gap it starts again
     g_st_last = g_st_last && lv_tick_elaps(g_st_last) < 3000 ? stamp_nz(g_st_last + 1000) : stamp_nz(lv_tick_get());
     if (g_st_n == ST_PTS) {
       memmove(g_st_s, g_st_s + 1, sizeof g_st_s[0] * (ST_PTS - 1));
@@ -192,8 +195,8 @@ void build_steam(lv_obj_t *scr) {
   lv_obj_set_style_bg_color(pill, COL_BLUE_BG, 0);
   box(pill, 0, 0, 10, 10, COL_BLUE, 5);
   label(pill, "Steam", F_TEXT_B, COL_BLUE);
-  // water (the level adds nothing here): only an orange "Refill N%" pill below 20 %, like the
-  // Ready footer's rule (a pill only while something needs attention); hidden otherwise
+  // water (the level adds nothing here): only an orange "Refill N%" pill below 20 %, like the Ready footer's rule
+  // (a pill only while something needs attention); hidden otherwise
   lv_obj_t *wt = g_st_wt = pill_row(hl);
   lv_obj_set_style_pad_left(wt, 10, 0);
   lv_obj_set_style_pad_right(wt, 12, 0);
@@ -201,11 +204,10 @@ void build_steam(lv_obj_t *scr) {
   g_st_tank = icon_tank(wt, 60, COL_WARN);
   g_st_tank_pct = label(wt, "", F_TEXT_B, COL_WARN_TX);
   lv_obj_set_hidden(wt, true);
-  // no menu button (not needed while steaming); the clock top right, like brewing
+  // the clock top right, like brewing
   g_st_clock = label(g_st, "0:00", F_VALUE, COL_TEXT);
   lv_obj_align(g_st_clock, LV_ALIGN_TOP_RIGHT, -24, 22);
-  // values: one row under the full-width chart, like brewing: boiler temperature (red),
-  // pressure (blue). The set point is the dashed line in the chart; no "Set point" line, no footer note.
+  // values: one row under the full-width chart, like brewing: boiler temperature (red) / set point, pressure (blue)
   lv_obj_t *vr = flex(g_st, LV_FLEX_FLOW_ROW, 0);
   lv_obj_set_flex_align(vr, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_pos(vr, 24, VALS_Y);

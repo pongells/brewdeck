@@ -1,12 +1,13 @@
 // Idle clock, screen off (against image retention) and the splash at start.
 #include "../ui_int.h"
 
-// after the offline screen has shown 2 min untouched (machine switched off at night): a plain black picture AND the
-// backlight off. Black matters too: LCD image retention comes from the cells holding one picture, lit or not.
-// Wakes on a touch (only wakes, to the screen below, not the clock), a shot / steam / flush, or the machine coming
-// back when it was off because of the offline screen.
-#define SCREEN_OFF_MIN 30
-#define SCREEN_OFF_OFFLINE_MS 120000
+// Screen off, against image retention: after SCREEN_OFF_MIN without a touch (or the "Dim after" time if longer; not
+// when dimming is Off) and nothing running, or after the offline screen has shown untouched for SCREEN_OFF_OFFLINE_MS
+// (machine switched off at night): a plain black picture AND the backlight off. Black matters too: LCD image retention
+// comes from the cells holding one picture, lit or not. Wakes on a touch (only wakes, to the screen below, not the
+// clock), a shot / steam / flush, or the machine coming back when it was off because of the offline screen.
+static const int SCREEN_OFF_MIN = 30;
+static const uint32_t SCREEN_OFF_OFFLINE_MS = 120000;
 
 // with the Display setting "Idle clock: Bouncing" the clock block bounces around the screen like the DVD logo; it also
 // does the job of the anti-retention shift used when it stands still. 1 px per 40 ms on each axis (25 px/s, 45
@@ -17,10 +18,10 @@ static const int IDLE_EDGE = 24;                  // the screens' margin
 static const uint32_t SHIFT_MS = 180000;          // still clock: moves to its next place this often
 static const uint32_t BREW_WAKE_MS = 2000;        // a brew keeps the clock up at most this long for its screen
 
-// ---- idle screen ----------------------------------------------------------------
+// ---- idle screen ----------------------------------------------------------------------------------------------------
 // After g_idle_min minutes without a touch, while nothing runs: a quiet clock + temperature on black, backlight dimmed.
 // The first touch only wakes it (taps do not reach the buttons below); a shot or steam wakes it too.
-int g_idle_min = 10, g_bright = 100, g_idle_bright = 50;   // menu changes the first two; idle: 20 % looked off
+int g_idle_min = 10, g_bright = 100, g_idle_bright = 50;   // the menu sets the first two; idle: dim, not dark
 lv_obj_t *g_idle;
 static lv_obj_t *g_idle_clock, *g_idle_dot, *g_idle_txt, *g_idle_col;
 void bl_set(int pct) { bd_set_backlight(g_blank_on ? 0 : pct); }   // off while the screen is off
@@ -39,7 +40,7 @@ bool g_idle_bounce = false;    // Display setting, saved in NVS "screen"/"bounce
 static int g_ib_x, g_ib_y, g_ib_dx = 1, g_ib_dy = 1, g_ib_tint = 0;
 static int g_idle_shift = -1;         // still clock: current anti-retention place (-1 = place it again)
 static const uint32_t IDLE_TINTS[] = {0x6A6A72, 0x5E7486, 0x86765A, 0x5E8270, 0x86626A, 0x726690};
-static void idle_bounce_start(void) {           // from the centre, as before
+static void idle_bounce_start(void) {           // from the centre
   lv_obj_update_layout(g_idle_col);
   g_ib_x = (800 - lv_obj_get_width(g_idle_col)) / 2;
   g_ib_y = (480 - lv_obj_get_height(g_idle_col)) / 2;
@@ -77,12 +78,13 @@ void on_idle_timer(lv_timer_t *t) {
   const bool hidden = lv_obj_is_hidden(g_idle);
   const bool want = g_idle_min > 0 && !g_idle_busy && g_br_state == BR_HIDDEN &&
                     (g_idle_force || lv_display_get_inactive_time(NULL) >= (uint32_t)g_idle_min * 60000u);
-  // a brew wakes the clock: keep it until the brewing screen opens on the first snapshot (br_start hides it in the
-  // same frame), at most 2 s: hiding it first, then opening the brewing screen, cost two full redraws.
+  // a brew wakes the clock: keep it until the brewing screen opens on the first point (br_start hides it in the same
+  // frame), at most BREW_WAKE_MS: hiding it first, then opening the brewing screen, would cost two full redraws
   static uint32_t busy_since = 0;
   if (!g_idle_busy) busy_since = 0;
   else if (!busy_since) busy_since = stamp_nz(lv_tick_get());
-  const bool wait_brew = g_live_brew && g_br_state == BR_HIDDEN && busy_since && lv_tick_elaps(busy_since) < BREW_WAKE_MS;
+  const bool wait_brew =
+      g_live_brew && g_br_state == BR_HIDDEN && busy_since && lv_tick_elaps(busy_since) < BREW_WAKE_MS;
   if (!want) { if (!hidden && (g_idle_busy || g_br_state != BR_HIDDEN) && !wait_brew) idle_hide(); return; }
   char b[48];
   if (g_clock_h >= 0) snprintf(b, sizeof b, "%02d:%02d", g_clock_h, g_clock_m);
@@ -91,13 +93,15 @@ void on_idle_timer(lv_timer_t *t) {
   static const char *const ST[3] = {"ready", "heating", "cooling"};
   const int st = g_idle_state >= 0 && g_idle_state <= 3 ? g_idle_state : 0;
   char sts[32];
-  if (st == 3) snprintf(sts, sizeof sts, "%s \xC2\xB7 %.1f bar", ST[g_idle_word % 3], g_press_val);   // pressure left in the system
+  // pressure left in the system: the bar after the word
+  if (st == 3) snprintf(sts, sizeof sts, "%s \xC2\xB7 %.1f bar", ST[g_idle_word % 3], g_press_val);
   else snprintf(sts, sizeof sts, "%s", ST[st]);
   if (g_clock_h >= 0) snprintf(b, sizeof b, "%s\xC2\xB0 \xC2\xB7 %s", g_idle_temp, sts);
   else snprintf(b, sizeof b, "%s", sts);
   set_text(g_idle_txt, b);
   set_bg(g_idle_dot, st == 1 ? COL_GOLD : st == 2 ? COL_BLUE : st == 3 ? COL_WARN : COL_GREEN);
-  if (!g_idle_bounce) {   // against image retention: the block moves a few px every 3 min (8 places, <= 12 px from the centre)
+  // still clock, against image retention: the block moves a few px every SHIFT_MS (8 places, <= 12 px from the centre)
+  if (!g_idle_bounce) {
     static const int8_t DX[8] = {0, 10, -8, 12, -12, 6, -4, 8}, DY[8] = {0, -6, 8, 4, -8, 10, -10, -2};
     const int k = (int)(lv_tick_get() / SHIFT_MS) % 8;
     if (hidden || k != g_idle_shift) {
@@ -117,7 +121,7 @@ void on_idle_timer(lv_timer_t *t) {
     bl_set(g_idle_bright < g_bright ? g_idle_bright : g_bright);   // never brighter than set
   }
 }
-// ---- screen off (against image retention) ---------------------------------------------------------
+// ---- screen off (against image retention) ---------------------------------------------------------------------------
 lv_obj_t *g_blank;
 bool g_blank_on = false, g_blank_offline = false;
 static bool g_blank_force = false;
@@ -146,7 +150,8 @@ static void on_blank_timer(lv_timer_t *t) {
   if (g_idle_busy || g_br_state != BR_HIDDEN || g_in_wifi_pages) { g_blank_force = false; return; }
   const uint32_t idle_ms = (uint32_t)(g_idle_min > SCREEN_OFF_MIN ? g_idle_min : SCREEN_OFF_MIN) * 60000u;
   const bool by_idle = g_idle_min > 0 && inact >= idle_ms;
-  const bool by_offline = off_shown && lv_tick_elaps(g_off_shown_ms) >= SCREEN_OFF_OFFLINE_MS && inact >= SCREEN_OFF_OFFLINE_MS;
+  const bool by_offline =
+      off_shown && lv_tick_elaps(g_off_shown_ms) >= SCREEN_OFF_OFFLINE_MS && inact >= SCREEN_OFF_OFFLINE_MS;
   if (!g_blank_force && !by_idle && !by_offline) return;
   g_blank_force = false;
   g_blank_on = true;
@@ -167,10 +172,10 @@ void build_blank(lv_obj_t *scr) {
 }
 void ui_test_screen_off(void) { g_blank_force = true; }
 
-// ---- splash -------------------------------------------------------------------------------------------------------
-// After boot, 5 s (a tap anywhere closes it at once): the screen's own name and, as clearly, that it is not an official
-// Gaggiuino product. Top layer, over everything; deleted when it goes. Started by ui_bridge.cpp (bd_ui_init) when the
-// setting is on, not by ui_init, so the sim renders and scripted emulator runs do not show it.
+// ---- splash ---------------------------------------------------------------------------------------------------------
+// After boot, 5 s (a tap anywhere closes it at once): the screen's own name and, as clearly, that it is not an
+// official Gaggiuino product. Top layer, over everything; deleted when it goes. Started by ui_bridge.cpp (bd_ui_init)
+// when the setting is on, not by ui_init, so the sim renders and scripted emulator runs do not show it.
 static lv_obj_t *g_splash;
 bool g_splash_on = true;                  // Display setting "Splash at start" (read at boot by ui_bridge.cpp)
 static void splash_end(void) { if (g_splash) { lv_obj_delete(g_splash); g_splash = NULL; } }

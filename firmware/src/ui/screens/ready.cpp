@@ -1,13 +1,13 @@
-// The Ready screen (header, temperature, profile preview, brew temperature and stop weight steppers, footer, flush
-// button) and the keypad for both values.
+// The Ready screen (header, temperature, preview, brew temp and stop weight, footer, flush) and its keypad.
 #include "../ui_int.h"
 
 static const uint32_t SEND_DELAY_MS = 1000;   // a -/+ change is sent this long after the last tap
 static const int PV_W = 344, PV_H = 100;         // profile preview box (fits the 24 px screen margin)
 // drop centred in a 24 px box (a 4.5 px radius drop from y 5.7 to 18)
-static const lv_point_t FL_DROP[] = {{12,6},{13,6},{14,8},{16,11},{16,14},{16,16},{15,17},{14,18},{12,18},{10,18},{9,17},{8,16},{8,14},{8,11},{10,8},{11,6},{12,6}};
+static const lv_point_t FL_DROP[] = {{12, 6}, {13, 6}, {14, 8}, {16, 11}, {16, 14}, {16, 16}, {15, 17}, {14, 18},
+                                     {12, 18}, {10, 18}, {9, 17}, {8, 16}, {8, 14}, {8, 11}, {10, 8}, {11, 6}, {12, 6}};
 
-// ---- state ----
+// ---- state ----------------------------------------------------------------------------------------------------------
 int g_weight10 = 210;                      // stop weight in tenths of a gram (0 = none)
 char g_cur_profile[48] = "";               // machine's active profile (raw name from the status)
 bool g_can_select = false;                 // online, idle, mode HOME (set by ui_set_live)
@@ -47,7 +47,7 @@ static lv_obj_t *g_pv_line[PV_SERIES][PV_MAX_SEG];
 static lv_point_t g_pv_pts[PV_SERIES][PV_MAX_PTS];   // lv_line keeps a pointer: must stay alive
 bool g_shape_loaded = false;
 ProfileShape g_last_shape;                 // last one from the machine (to restore after a failed select)
-int g_shape_id = -1;                       // last profile / target weight taken from the machine
+int g_shape_id = -1;                       // last profile / stop weight taken from the machine
 static int g_shape_weight10 = -1;
 // keypad
 lv_obj_t *g_editor;                        // full-screen keypad
@@ -64,7 +64,7 @@ static bool g_ed_temp;                     // false: stop weight, true: brew tem
 static char g_ed_was[24] = "";
 static char g_ed_cur[8] = "";              // the value when the keypad opened (shown grey until the first key)
 
-// ---- stop weight -----
+// ---- stop weight ----------------------------------------------------------------------------------------------------
 void format_weight(char *out, size_t n, int tenths) {
   snprintf(out, n, "%d.%d", tenths / 10, tenths % 10);
 }
@@ -78,18 +78,21 @@ void refresh_value(void) {
   orig_paint();
 }
 
-// Stop weight: a new value from the keypad (Done) or 1 s after the last -/+ goes to the machine with
-// bd_set_stop_weight (only that field of the active profile). Only while online and idle in HOME; the core checks again.
+// A new stop weight from the keypad (Done) or SEND_DELAY_MS after the last -/+ goes to the machine with
+// bd_set_stop_weight (only that field of the active profile). Only while online and idle in HOME; the core checks
+// again.
 void weight_commit(lv_timer_t *t) {
   (void)t;
   if (g_weight_tm) { lv_timer_pause(g_weight_tm); lv_timer_set_user_data(g_weight_tm, NULL); }
-  // sent: keep it (the machine reports it ~1 s later); refused by the core (offline, range, unknown profile) or not
-  // sendable (busy / offline): back to the machine's value
-  if (g_can_select && g_cur_profile[0] && bd_set_stop_weight(prof_id(g_cur_profile), g_weight10 / 10.0f, true) == BD_OK) orig_note();
-  else if (g_act_weight10 >= 0 && g_weight10 != g_act_weight10) {   // not sent: back to the machine's
+  // sent: keep it (the machine reports it ~1 s later). Refused by the core (offline, range, unknown profile) or not
+  // sendable (busy / offline): back to the machine's value, else the screen shows a stop weight the machine never got
+  if (g_can_select && g_cur_profile[0] &&
+      bd_set_stop_weight(prof_id(g_cur_profile), g_weight10 / 10.0f, true) == BD_OK) {
+    orig_note();
+  } else if (g_act_weight10 >= 0 && g_weight10 != g_act_weight10) {
     g_weight10 = clamp_w10(g_act_weight10);
-    refresh_value();                                                // value (the screen showed a
-  }                                                                 // stop weight the machine never got)
+    refresh_value();
+  }
 }
 static void weight_changed(bool now) {
   if (now) { weight_commit(NULL); return; }
@@ -114,7 +117,7 @@ void step_weight(int delta10) {
 static void on_minus(lv_event_t *e) { (void)e; step_weight(-W_STEP10); }
 static void on_plus(lv_event_t *e)  { (void)e; step_weight(+W_STEP10); }
 
-// ---- brew temperature ------------------------------------------------------------
+// ---- brew temperature -----------------------------------------------------------------------------------------------
 void refresh_tset(void) {
   char buf[8];
   if (g_tset < 0) snprintf(buf, sizeof buf, "0"); else snprintf(buf, sizeof buf, "%d", g_tset);
@@ -125,15 +128,18 @@ void refresh_tset(void) {
 void temp_commit(lv_timer_t *t) {
   (void)t;
   if (g_temp_tm) { lv_timer_pause(g_temp_tm); lv_timer_set_user_data(g_temp_tm, NULL); }
-  if (g_can_select && g_cur_profile[0] && g_tset >= T_MIN && bd_set_brew_temp(prof_id(g_cur_profile), g_tset, true) == BD_OK) orig_note();
-  else if (g_act_temp > 0 && g_tset != g_act_temp) {   // not sent / refused: back to the machine's value, or
-    g_tset = g_act_temp;                               // the screen keeps showing a temperature the machine never got
-    refresh_tset();                                    //
+  // not sent / refused: back to the machine's value, else the screen shows a temperature the machine never got
+  if (g_can_select && g_cur_profile[0] && g_tset >= T_MIN &&
+      bd_set_brew_temp(prof_id(g_cur_profile), g_tset, true) == BD_OK) {
+    orig_note();
+  } else if (g_act_temp > 0 && g_tset != g_act_temp) {
+    g_tset = g_act_temp;
+    refresh_tset();
   }
 }
 static void step_temp(int delta) {
   if (!g_can_select) return;            // nothing to change while busy / offline
-  int v = g_tset < T_MIN ? T_START : g_tset + delta;   // unknown: start at 60, not at 1
+  int v = g_tset < T_MIN ? T_START : g_tset + delta;   // unknown: start at T_START, not at T_MIN
   if (v < T_MIN) v = T_MIN;
   if (v > T_MAX) v = T_MAX;
   if (v == g_tset) return;
@@ -147,12 +153,12 @@ static void step_temp(int delta) {
 static void on_t_minus(lv_event_t *e) { (void)e; step_temp(-1); }
 static void on_t_plus(lv_event_t *e)  { (void)e; step_temp(+1); }
 
-// ---- editor ---------------------------------------------------------------------------------
-// One full-screen keypad for both targets: weight in g with one decimal, or the brew
-// temperature in whole degC (the "." key is greyed). Done sends the value at once (weight_changed / temp_commit).
+// ---- keypad ---------------------------------------------------------------------------------------------------------
+// One full-screen keypad for both values: the stop weight in g with one decimal, or the brew temperature in whole
+// degC (the "." key is greyed). Done sends the value at once (weight_commit / temp_commit).
 static void editor_layout(void) {
-  // empty field = the current value in grey with the cursor in front of it (the first key
-  // replaces it) and the accepted range below; while typing the cursor follows the digits and "Was ..." is shown
+  // empty field = the current value in grey with the cursor in front of it (the first key replaces it) and the
+  // accepted range below; while typing the cursor follows the digits and "Was ..." is shown
   const bool empty = g_entry[0] == 0;
   lv_label_set_text(g_entry_lbl, empty ? g_ed_cur : g_entry);
   lv_obj_set_style_text_color(g_entry_lbl, empty ? COL_OUTLINE : COL_TEXT, 0);
@@ -161,12 +167,16 @@ static void editor_layout(void) {
   const int w = lv_obj_get_width(g_entry_lbl);
   lv_obj_set_x(g_cursor, empty ? 24 : 24 + w + 6);
   // the unit 10 px after the digits (empty) or after the cursor (typing): close enough to read as one value even
-  // while the cursor blinks off (was 23 px: "93    °C")
+  // while the cursor blinks off
   lv_obj_set_x(g_unit_lbl, (empty ? 24 + 4 + 6 + w : 24 + w + 6 + 4) + 10);
   char b[48];
-  if (!empty) lv_label_set_text(g_was_lbl, g_ed_was);
-  else if (g_ed_temp) { snprintf(b, sizeof b, "Type a temperature from %d to %d \xC2\xB0" "C", T_MIN, T_MAX); lv_label_set_text(g_was_lbl, b); }
-  else { snprintf(b, sizeof b, "Type a weight from %d to %d g, 0 for none", W_MIN10 / 10, W_MAX10 / 10); lv_label_set_text(g_was_lbl, b); }
+  if (!empty) {
+    lv_label_set_text(g_was_lbl, g_ed_was);
+  } else {
+    if (g_ed_temp) snprintf(b, sizeof b, "Type a temperature from %d to %d \xC2\xB0" "C", T_MIN, T_MAX);
+    else snprintf(b, sizeof b, "Type a weight from %d to %d g, 0 for none", W_MIN10 / 10, W_MAX10 / 10);
+    lv_label_set_text(g_was_lbl, b);
+  }
 }
 
 void editor_open(bool temp) {
@@ -178,7 +188,7 @@ void editor_open(bool temp) {
   } else if (g_weight10 > 0) {
     format_weight(buf, sizeof buf, g_weight10);
     snprintf(was, sizeof was, "Was %s g", buf);
-  } else {                                        // no stop weight: nothing to show in the entry (no infinity in F_HERO)
+  } else {                                        // no stop weight: an empty entry (F_HERO has no infinity sign)
     buf[0] = 0;
     snprintf(was, sizeof was, "Was no stop weight");
   }
@@ -213,7 +223,7 @@ void editor_key(char k) {
   if (k == 'b') {
     if (len > 0) g_entry[len - 1] = 0;
   } else if (k == '.') {
-    if (dot || g_ed_temp) return;                      // whole degrees only                                   // only one decimal point
+    if (dot || g_ed_temp) return;                      // one decimal point; whole degrees only
     if (len == 0) strcpy(g_entry, "0.");
     else { g_entry[len] = '.'; g_entry[len + 1] = 0; }
   } else if (k >= '0' && k <= '9') {
@@ -262,15 +272,16 @@ void editor_done(void) {
   editor_close();
 }
 
-static void on_reset(lv_event_t *e) {             // back to the profile's value from before the first change here
+// back to the profile's original value; sent like Done (and saved); the original itself stays
+static void on_reset(lv_event_t *e) {
   (void)e;
   orig_sync();
   if (!g_orig_have) { editor_close(); return; }
   if (g_ed_temp) snprintf(g_entry, sizeof g_entry, "%d", g_orig_deg);
   else if (g_orig_w10 <= 0) snprintf(g_entry, sizeof g_entry, "0");
   else format_weight(g_entry, sizeof g_entry, g_orig_w10);
-  editor_done();                                   // sends it like Done (and the save follows, ws.cpp); the original
-}                                                  // (the profile's snapshot) stays
+  editor_done();
+}
 static void on_open_editor(lv_event_t *e) { (void)e; editor_open(false); }
 static void on_open_temp_editor(lv_event_t *e) { (void)e; editor_open(true); }
 static void on_cancel(lv_event_t *e)      { (void)e; editor_close(); }
@@ -284,7 +295,7 @@ static void on_blink(lv_timer_t *t) {
   lv_obj_set_style_bg_opa(g_cursor, g_cursor_on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
 }
 
-// ---- profile preview + target weight from the active profile (display only) -------------------
+// ---- profile preview and stop weight from the active profile (display only) -----------------------------------------
 void ui_set_shape(const ProfileShape *sh) {
   static bd_preview bp;                            // the core's preview for our box (preview.cpp geometry)
   if (sh != &g_last_shape) g_last_shape = *sh;
@@ -316,8 +327,7 @@ void ui_set_shape(const ProfileShape *sh) {
   else lv_obj_set_hidden(g_pv_msg, true);
   g_shape_loaded = true;
   // stop weight: the STORED profile's, only until the machine reports the running one (d_act_prof, ui_set_live):
-  // a graph re-read after a save must not put an older stored weight over the running one (seen: a restore to
-  // "no stop weight" went back to 5.0 g when the graph came in a moment later)
+  // a graph re-read after a save must not put an older stored weight over the running one
   const int w10 = (int)(sh->stop_weight * 10.0f + 0.5f);
   if (g_act_weight10 < 0 && w10 > 0 && (sh->id != g_shape_id || w10 != g_shape_weight10)) {
     g_weight10 = clamp_w10(w10);
@@ -344,20 +354,18 @@ void show_profile(const char *raw) {      // header + editor label (without the 
   orig_paint();
 }
 
-// ---- footer: Tare and the flush button ----------------------
-// Tare (button hidden: the machine tares at the start of a shot, and the scale has its own button; clear its hidden
-// flag in ready.cpp to bring it back): bd_tare, only with a scale connected while idle in HOME.
+// ---- footer: Tare and the flush button ------------------------------------------------------------------------------
+// Tare: bd_tare, only with a scale connected while idle in HOME. The button is hidden (build_ready): the machine
+// tares at the start of a shot, and the scale has its own button.
 static void on_tare(lv_event_t *e) { (void)e; if (g_can_tare) bd_tare(); }
 
-// Flush button: a tap turns
-// the machine's FLUSH mode on (the brew switch then flushes) or off (-> HOME); a long press asks for FLUSH_AUTO (the
-// machine's timed flush, "Auto Flush Duration"). On only while online and idle in HOME; off only from a flush mode.
-// The button follows the mode the machine reports; a tap shows the new state at once and reverts after 5 s if the
-// machine does not report it.
-// Look (interactive elements look different from the info pills, and nothing is circular): a rounded button like Menu / -/+ (48 tall, radius 14), drop +
-// one word. Holding fills it from the left in LVGL's long-press time (400 ms), then the timed flush starts; flush mode
-// and the timed flush = dark blue button, blue text ("Flush mode on" / "Flushing N s", counting up: the machine's
-// duration is in d_settings, not read, so no draining fill).
+// Flush button: a tap turns the machine's FLUSH mode on (the brew switch then flushes) or off (-> HOME); a long press
+// asks for FLUSH_AUTO (the machine's timed flush, "Auto Flush Duration"). On only while online and idle in HOME; off
+// only from a flush mode. The button follows the mode the machine reports; a tap shows the new state at once and the
+// core's answer reverts it if the machine does not take it.
+// A rounded button like Menu / -/+ (controls look different from the info pills): drop + one word. Holding fills it
+// from the left in LVGL's long-press time, then the timed flush starts. Flush mode and the timed flush: dark blue
+// button, blue text ("Flush mode on" / "Flushing N s", counting up: the machine's duration is not read).
 static int fl_cur(void) { return g_fl_want != FL_UNKNOWN ? g_fl_want : g_fl_mode; }
 void fl_show(void) {
   if (!g_fl_btn) return;
@@ -410,10 +418,10 @@ static void on_flush_hold(lv_event_t *e) {
 }
 static void on_fl_timer(lv_timer_t *t) {
   (void)t;
-  if (fl_cur() == BD_FLUSH_TIMED) fl_show();                    // seconds count
+  if (fl_cur() == BD_FLUSH_TIMED) fl_show();   // the seconds count
 }
 
-// ---- Ready screen ---------------------------------------------------------------------------
+// ---- Ready screen ---------------------------------------------------------------------------------------------------
 // a footer item is a pill only while it needs attention (orange); otherwise plain icon + text
 void foot_pill(lv_obj_t *p, bool warn, int32_t pl, int32_t pr) {
   const lv_opa_t opa = warn ? LV_OPA_COVER : LV_OPA_TRANSP;
@@ -431,7 +439,7 @@ void stepper_part(lv_obj_t *o) {
 }
 
 void build_ready(lv_obj_t *scr) {
-  // header, left: state pill (the water pill is in the footer, next to the scale)
+  // header, left: state pill, then the active profile's name
   lv_obj_t *hl = flex(scr, LV_FLEX_FLOW_ROW, 14);
   lv_obj_set_pos(hl, 24, 24);
   lv_obj_set_height(hl, 52);
@@ -448,8 +456,8 @@ void build_ready(lv_obj_t *scr) {
   g_pill_lbl = label(pill, "Ready", F_TEXT_B, COL_PILL_TX);
 
   // header, right: settings (the menu) and, left of it, a "Profiles" button that opens the profile page. The active
-  // profile's name is information, after the state pill (like the brewing screen), not a field: a field with a down
-  // chevron read as a dropdown, but it opens a whole page.
+  // profile's name is information after the state pill (like the brewing screen), not a field: a field would read as
+  // a dropdown, but it opens a whole page.
   lv_obj_t *menu = box(scr, 724, 24, 52, 52, COL_CARD, RAD_CTRL);
   make_button(menu, COL_CARD_PR);
   g_menu_btn = menu;
@@ -482,7 +490,7 @@ void build_ready(lv_obj_t *scr) {
   lv_obj_set_style_pad_top(tcol, 34, 0);  // the digits sit on the preview's bottom line (y 224)
   lv_obj_t *trow = flex(tcol, LV_FLEX_FLOW_ROW, 0);
   lv_obj_set_flex_align(trow, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-  // no marker before the number (it adds little on Ready; brewing / steam keep their dots, they have several values side by side)
+  // no dot before the number: brewing / steam have them because they show several values side by side
   lv_obj_t *temp = label(trow, "90.1", F_HERO, COL_TEXT);
   g_temp_lbl = temp;
   lv_obj_set_style_text_letter_space(temp, -6, 0);
@@ -490,7 +498,7 @@ void build_ready(lv_obj_t *scr) {
   lv_obj_set_style_pad_top(deg, 2, 0);
   lv_obj_set_style_translate_x(deg, -7, 0);
 
-  // left, bottom: target temperature, -/+ like the target weight
+  // left, bottom: brew temperature, -/+ like the stop weight
   lv_obj_t *tt = g_tt_lbl = label(scr, "Brew temp", F_TEXT, COL_MUTED);
   lv_obj_set_pos(tt, 24, 275);
   stepper_card(scr, 24, 328);
@@ -521,7 +529,7 @@ void build_ready(lv_obj_t *scr) {
   lv_obj_set_style_pad_bottom(label(tval, "\xC2\xB0" "C", F_ROW, COL_MUTED), base_pad(F_VALUE, F_ROW), 0);
   lv_obj_add_event_cb(tvb, on_open_temp_editor, LV_EVENT_CLICKED, NULL);
 
-  // right: target weight
+  // right: stop weight
   lv_obj_t *tw = g_tw_lbl = label(scr, "Stop weight", F_TEXT, COL_MUTED);
   lv_obj_set_pos(tw, 433, 275);   // weight at the bottom, preview above
 
@@ -558,8 +566,7 @@ void build_ready(lv_obj_t *scr) {
   lv_obj_set_style_pad_bottom(unit, base_pad(F_VALUE, F_ROW), 0);
   lv_obj_add_event_cb(val, on_open_editor, LV_EVENT_CLICKED, NULL);
 
-  // profile preview
-  // colour key for the preview (and every chart): what blue and gold mean
+  // profile preview, with a colour key (for every chart): what blue and gold mean
   lv_obj_t *key = flex(scr, LV_FLEX_FLOW_ROW, 8);
   lv_obj_set_flex_align(key, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_pos(key, 433, 96);
@@ -597,8 +604,8 @@ void build_ready(lv_obj_t *scr) {
   lv_obj_t *pct = label(tank, "18%", F_TEXT_B, COL_WARN_TX);
   g_tank_pct = pct;
 
-  // scale pill, styled like the water pill: [type icon] Scale 101.9 g / orange "No scale" / "Predictive". The type comes
-  // from the 3 scale flags of d_settings (pb_scale_cfg), presence from scalesPresent
+  // scale pill, styled like the water pill: [type icon] Scale 101.9 g / orange "No scale" / "Predictive" (type and
+  // presence from the core)
   lv_obj_t *sc = flex(fl, LV_FLEX_FLOW_ROW, 8);
   lv_obj_set_height(sc, 40);
   lv_obj_set_style_pad_left(sc, 12, 0);
@@ -626,8 +633,8 @@ void build_ready(lv_obj_t *scr) {
   g_scale_name = label(sc, "No scale", F_TEXT, COL_OUTLINE);
   g_scale_lbl = label(sc, "0.0 g", F_TEXT_B, COL_TEXT);
   lv_obj_set_hidden(g_scale_lbl, true);
-  // pressure pill: always the current pressure, styled
-  // like the scale pill; orange like "Refill" while idle in HOME with residual pressure (g_press_warn)
+  // pressure pill: always the current pressure, styled like the scale pill; orange like "Refill" while idle in HOME
+  // with residual pressure (g_press_warn)
   {
     lv_obj_t *pp = g_pr_pill = flex(fl, LV_FLEX_FLOW_ROW, 8);
     lv_obj_set_height(pp, 40);
@@ -658,8 +665,7 @@ void build_ready(lv_obj_t *scr) {
   make_button(tare, COL_CARD_PR);
   g_tare_lbl = label(tare, "Tare", F_TEXT_B, COL_TEXT);
   lv_obj_add_event_cb(tare, on_tare, LV_EVENT_CLICKED, NULL);
-  // hidden: the machine tares by itself at brew start, and the scale has its own button.
-  // The tare path (on_tare -> bd_tare) stays and works; clear this flag to bring the button back.
+  // hidden: the machine tares by itself at brew start, and the scale has its own button (on_tare still works)
   lv_obj_set_hidden(tare, true);
 
   // flush: [drop] Flush, a rounded button; a fill behind the content shows the long press
@@ -690,7 +696,7 @@ void build_ready(lv_obj_t *scr) {
   lv_obj_align(fb, LV_ALIGN_TOP_RIGHT, -24, 406);
 }
 
-// ---- the keypad (stop weight / brew temperature) ---------------------------------------------------------------------
+// ---- building the keypad --------------------------------------------------------------------------------------------
 void build_editor(lv_obj_t *scr) {
   g_editor = box(scr, 0, 0, 800, 480, COL_BG, 0);
   lv_obj_set_hidden(g_editor, true);
@@ -732,7 +738,7 @@ void build_editor(lv_obj_t *scr) {
   g_was_lbl = label(g_editor, "Was 21.0 g", F_TEXT, COL_MUTED);
   lv_obj_set_pos(g_was_lbl, 24, 256);
 
-  g_reset_btn = flex(g_editor, LV_FLEX_FLOW_ROW, 8);   // "Reset to 21.0 g" (originals), like Cancel
+  g_reset_btn = flex(g_editor, LV_FLEX_FLOW_ROW, 8);   // "Reset to 21.0 g" (the original), like Cancel
   lv_obj_set_pos(g_reset_btn, 24, 296);
   lv_obj_set_height(g_reset_btn, 52);
   lv_obj_set_style_pad_hor(g_reset_btn, 20, 0);

@@ -1,7 +1,7 @@
 // Shot history (menu page): the stored shots, opened in the shot review.
 #include "../ui_int.h"
 
-// ---- Shot history (menu page 7) ----------------------------------------------------------
+// ---- shot history ---------------------------------------------------------------------------------------------------
 // The newest 50 stored shots from the machine's WebSocket index (no request): day headers, then time, profile and
 // duration per row (grams once that shot was opened in this session). A tap loads the shot and the next older one of
 // its profile (bd_load_stored_shot, sent once the machine is idle) and opens the shot review on it.
@@ -42,7 +42,8 @@ static void hist_row_value(lv_obj_t *l, const WsShotRec *r) {
 }
 static void hist_values(void) {
   for (int i = 0; i < g_hl_n && g_hx_ok; i++)
-    for (int j = 0; j < g_hx->n; j++) if (g_hx->r[j].id == g_hl_ids[i]) { hist_row_value(g_hl_val[i], &g_hx->r[j]); break; }
+    for (int j = 0; j < g_hx->n; j++)
+      if (g_hx->r[j].id == g_hl_ids[i]) { hist_row_value(g_hl_val[i], &g_hx->r[j]); break; }
 }
 static void on_hist_row(lv_event_t *e) {
   const uint32_t id = (uint32_t)(uintptr_t)lv_event_get_user_data(e);
@@ -53,8 +54,7 @@ static void on_hist_row(lv_event_t *e) {
   else if (bd_load_stored_shot(id) == BD_OK) { g_hl_wait = id; g_hl_wait_ms = lv_tick_get(); }
   hist_values();
 }
-// rows are added a few at a time (all 50 at once was one ~0.6 s frame on the device). Scrolling is ~80 ms per frame
-// (LVGL redraws the whole list area per 20-line strip); a custom-drawn list was tried and dropped (this is good enough)
+// rows are added a few at a time: all 50 at once would be one ~0.6 s frame on the device
 static int g_hb_i = 0;                            // next index record to add
 static char g_hb_day[24] = "";
 static lv_timer_t *g_hb_timer;
@@ -104,15 +104,19 @@ static void on_hb_timer(lv_timer_t *t) {
   }
   hist_add(6);
 }
-// fingerprint of what the list shows (records, empty-state reason, the day for its headers): rebuilding the rows took
-// ~110 ms of the page's ~190 ms opening, and usually nothing has changed since the last time
+// fingerprint of what the list shows (records, empty-state reason, the day for its headers): rebuilding the rows is
+// most of the page's opening time, and usually nothing has changed since the last time
 static uint32_t g_hb_sig = 0;
 static uint32_t hist_sig(void) {
   uint32_t h = FNV_SEED;
   auto mix = [&h](const void *p, size_t n) { h = fnv1a(h, p, n); };
   const int n = g_hx_ok ? g_hx->n : -1;
   mix(&n, sizeof n);
-  for (int i = 0; i < n; i++) { mix(&g_hx->r[i].id, 4); mix(&g_hx->r[i].ts, 4); mix(g_hx->r[i].name, strlen(g_hx->r[i].name)); }
+  for (int i = 0; i < n; i++) {
+    mix(&g_hx->r[i].id, 4);
+    mix(&g_hx->r[i].ts, 4);
+    mix(g_hx->r[i].name, strlen(g_hx->r[i].name));
+  }
   if (n <= 0) mix(&g_menu_link, sizeof g_menu_link);
   const int day = today_key();
   mix(&day, sizeof day);
@@ -141,7 +145,7 @@ void hist_page_shown(void) {
   }
   lv_obj_scroll_to_y(g_hl_list, 0, LV_ANIM_OFF);
 }
-void hist_timer(void) {                    // from menu_timer (1 s): a load that never answered
+void hist_timer(void) {                    // from menu_timer (every second): a load that never answered
   if (g_hl_wait && lv_tick_elaps(g_hl_wait_ms) > LOAD_TIMEOUT_MS) {
     g_hl_msg_id = g_hl_wait; g_hl_msg = "Not available"; g_hl_wait = 0;
     if (g_menu_cur == MP_HISTORY) hist_values();
@@ -165,7 +169,8 @@ void ui_set_hist(int state, const ShotTrace *s, const ProfileShape *sh, const Sh
   hw_put(id, s->pt[s->n - 1].w);
   if (g_menu_cur == MP_HISTORY) hist_values();
   // still on the list (not closed, no shot started meanwhile): open it
-  if (g_menu_cur == MP_HISTORY && !lv_obj_is_hidden(g_menu) && g_br_state == BR_HIDDEN) rv_open_stored(s, sh, prev, prev_state);
+  if (g_menu_cur == MP_HISTORY && !lv_obj_is_hidden(g_menu) && g_br_state == BR_HIDDEN)
+    rv_open_stored(s, sh, prev, prev_state);
 }
 void build_hist(lv_obj_t *m) {
   lv_obj_t *pg = g_menu_page[MP_HISTORY] = box(m, 24, 96, 752, 384, COL_BG, 0);

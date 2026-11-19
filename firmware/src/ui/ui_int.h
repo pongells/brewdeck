@@ -1,5 +1,5 @@
-#pragma once
 // Internal to Brewdeck's UI (ui.cpp + screens/*.cpp): what the screen files share. The public side is ui.h.
+#pragma once
 #include <ctype.h>
 #include <stdint.h>
 #include <lvgl.h>
@@ -31,7 +31,7 @@ static inline uint32_t fnv1a(uint32_t h, const void *p, size_t n) {
 // a Unix time before this (Sep 2020) means the clock was not set (no NTP yet, or the machine's clock)
 static const uint32_t CLOCK_SET_TS = 1600000000u;
 
-// ---- shared constants and types ---------------------------------------------------------------------------------
+// ---- shared constants and types -------------------------------------------------------------------------------------
 static_assert(sizeof(lv_point_precise_t) == sizeof(lv_point_t), "point layout (LV_USE_FLOAT 0)");
 // stop weight in tenths of a gram: the range the screen edits, and the -/+ step
 static const int W_MIN10 = 50, W_MAX10 = 800, W_STEP10 = 5;
@@ -52,7 +52,7 @@ enum { BR_HIDDEN = 0, BR_BREWING, BR_DONE, BR_REVIEW };
 // the flush button: the machine's mode as bd_flush (BD_FLUSH_OFF = HOME), FL_UNKNOWN = busy, offline or not asked
 enum { FL_UNKNOWN = -1 };
 
-// ---- screens/common.cpp: drawing and object helpers, icons, chart helpers ---------------------------------------
+// ---- screens/common.cpp: drawing and object helpers, icons, chart helpers -------------------------------------------
 extern const char *PROFILE_NAME;
 void dl(lv_layer_t *L, lv_draw_line_dsc_t *d, const lv_point_t *a, const lv_point_t *b);
 void darc(lv_layer_t *L, lv_draw_arc_dsc_t *d, const lv_point_t *c, int r, int a0, int a1);
@@ -95,7 +95,7 @@ void fmt_day(uint32_t ts, char *b, size_t n);
 int today_key(void);
 lv_obj_t *pill_row(lv_obj_t *p);
 
-// ---- screens/ready.cpp: Ready, its keypad, the flush button -----------------------------------------------------
+// ---- screens/ready.cpp: Ready, its keypad, the flush button ---------------------------------------------------------
 extern int g_weight10;
 extern char g_cur_profile[48];
 extern lv_obj_t *g_editor;
@@ -145,7 +145,7 @@ void fl_show(void);
 void build_ready(lv_obj_t *scr);
 void build_editor(lv_obj_t *scr);
 
-// ---- screens/profiles.cpp: the Profiles page, originals and snapshots -------------------------------------------
+// ---- screens/profiles.cpp: the Profiles page, originals and snapshots -----------------------------------------------
 extern lv_obj_t *g_pick;
 extern ProfileList g_profiles;
 extern int g_pend_id;
@@ -166,12 +166,12 @@ bool orig_weight_edited(void);
 void orig_paint(void);
 void snap_apply(void);
 
-// ---- screens/steam.cpp ------------------------------------------------------------------------------------------
+// ---- screens/steam.cpp ----------------------------------------------------------------------------------------------
 extern lv_obj_t *g_st;
 void st_update(const LiveData *d, bool on);
 void build_steam(lv_obj_t *scr);
 
-// ---- screens/brew.cpp: brewing screen and shot review -----------------------------------------------------------
+// ---- screens/brew.cpp: brewing screen and shot review ---------------------------------------------------------------
 extern ShotPoint *g_br;
 extern int g_br_n;
 extern int g_br_state;
@@ -190,7 +190,7 @@ void rv_toggle_style(void);
 void rv_open_stored(const ShotTrace *s, const ProfileShape *sh, const ShotTrace *prev, int prev_state);
 void build_brew(lv_obj_t *scr);
 
-// ---- screens/offline.cpp ----------------------------------------------------------------------------------------
+// ---- screens/offline.cpp --------------------------------------------------------------------------------------------
 extern lv_obj_t *g_off;
 extern int g_off_link;
 extern uint32_t g_off_since;
@@ -202,7 +202,7 @@ extern char g_off_mach[40];
 void on_off_timer(lv_timer_t *t);
 void build_offline(lv_obj_t *scr);
 
-// ---- screens/idle.cpp: idle clock, screen off, splash -----------------------------------------------------------
+// ---- screens/idle.cpp: idle clock, screen off, splash ---------------------------------------------------------------
 extern int g_idle_min;
 extern int g_bright;
 extern int g_idle_bright;
@@ -226,7 +226,7 @@ void on_idle_timer(lv_timer_t *t);
 void build_idle(lv_obj_t *scr);
 void build_blank(lv_obj_t *scr);
 
-// ---- screens/notices.cpp: banner, pressure-release glow, notices list -------------------------------------------
+// ---- screens/notices.cpp: banner, pressure-release glow, notices list -----------------------------------------------
 extern char g_upd_rel[32];
 extern bool g_upd_known;
 extern bool g_upd_shown;
@@ -234,7 +234,7 @@ void ntc_build_btn(lv_obj_t *scr, int32_t x);
 void build_notif(void);
 void build_frame(void);
 
-// ---- screens/menu.cpp: the menu and its Display, Scale, About pages ---------------------------------------------
+// ---- screens/menu.cpp: the menu and its Display, Scale, About pages -------------------------------------------------
 extern lv_obj_t *g_menu;
 extern lv_obj_t *g_menu_page[MENU_PAGES];
 extern int g_menu_cur;
@@ -248,7 +248,7 @@ void open_wifi_menu(void);
 void menu_close(void);
 void build_menu(lv_obj_t *scr);
 
-// ---- screens/wifi.cpp: Wi-Fi list, details, password and address keyboard ---------------------------------------
+// ---- screens/wifi.cpp: Wi-Fi list, details, password and address keyboard -------------------------------------------
 extern char g_wifi_ssid[33];
 extern char g_wifi_ap[20];
 extern int g_wifi_rssi, g_wifi_ch;
@@ -270,7 +270,7 @@ void on_forget(lv_event_t *e);
 void forget_refresh(void);
 void build_wifi(lv_obj_t *m);
 
-// ---- screens/history.cpp: the shot history page -----------------------------------------------------------------
+// ---- screens/history.cpp: the shot history page ---------------------------------------------------------------------
 extern WsShotIndex *g_hx;
 extern bool g_hx_ok;
 void hist_page_shown(void);

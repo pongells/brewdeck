@@ -1,10 +1,10 @@
-// Shared helpers: drawing calls, object helpers (box, label, flex, hairline), the logo, line icons, empty states, the
-// time-axis labels / values row / pill row the charts share, the date format, and the state several screens use.
+// Shared helpers: drawing calls, object helpers, the logo, line icons, empty states, chart helpers, date formats.
 #include "../ui_int.h"
 #include <time.h>
 
-// ---- LVGL 9 drawing: descriptors carry the geometry and the work is done later (draw tasks), so a label's text is
-// copied (text_local) and must not point into a stack buffer otherwise
+// ---- drawing calls --------------------------------------------------------------------------------------------------
+// LVGL 9 draws later (draw tasks): descriptors carry the geometry, and a label's text is copied (text_local) because
+// it usually points into a stack buffer
 void dl(lv_layer_t *L, lv_draw_line_dsc_t *d, const lv_point_t *a, const lv_point_t *b) {
   d->p1.x = a->x; d->p1.y = a->y; d->p2.x = b->x; d->p2.y = b->y;
   lv_draw_line(L, d);
@@ -21,7 +21,7 @@ void dlabel(lv_layer_t *L, lv_draw_label_dsc_t *d, const lv_area_t *a, const cha
 // the profile name shown until the machine names one
 const char *PROFILE_NAME = "Leva 9 SINGLE v0.9";
 
-// ---- small helpers ---------------------------------------------------------------------------
+// ---- small helpers --------------------------------------------------------------------------------------------------
 lv_obj_t *box(lv_obj_t *p, int x, int y, int w, int h, lv_color_t bg, int r) {
   lv_obj_t *o = lv_obj_create(p);
   lv_obj_remove_style_all(o);
@@ -36,7 +36,7 @@ lv_obj_t *box(lv_obj_t *p, int x, int y, int w, int h, lv_color_t bg, int r) {
 }
 
 // one line, cut with "..." past w px (0: the width set elsewhere, e.g. flex grow). LVGL's dots mode only stops at one
-// line when the label's height is one line; with a content height it wraps first (seen: long profile names).
+// line when the label's height is one line; with a content height it wraps first.
 void one_line(lv_obj_t *l, int32_t w) {
   lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_DOTS);
   if (w > 0) lv_obj_set_width(l, w);
@@ -55,8 +55,8 @@ lv_obj_t *label(lv_obj_t *p, const char *text, const lv_font_t *font, lv_color_t
   lv_obj_set_style_text_color(l, col, 0);
   return l;
 }
-// Type alignment from the font metrics (works for any pair of theme fonts; labels bottom-aligned in a flex row):
-// pad that puts the small text's baseline on the big text's baseline
+// the pad that puts the small text's baseline on the big text's baseline (any pair of theme fonts; labels
+// bottom-aligned in a flex row)
 int base_pad(const lv_font_t *big, const lv_font_t *small) { return big->base_line - small->base_line; }
 // a value's dot, centred on the digits of `f`, in a box as tall as the label (bottom-aligned next to it)
 void digit_dot(lv_obj_t *row, const lv_font_t *f, lv_color_t c, int d) {
@@ -71,8 +71,9 @@ void digit_dot(lv_obj_t *row, const lv_font_t *f, lv_color_t c, int d) {
   box(o, 0, mid - d / 2, d, d, c, d / 2);
 }
 
-// ---- the Brewdeck logo: three wisps in the value colours (blue pressure, gold flow, coral temperature) on
-// the controls' card square. Same geometry as docs/images/logo.svg (96-unit grid); drawn, not an image.
+// ---- the Brewdeck logo ----------------------------------------------------------------------------------------------
+// Three wisps in the value colours (blue pressure, gold flow, coral temperature) on the controls' card square. Same
+// geometry as docs/images/logo.svg (96-unit grid); drawn, not an image.
 static void logo_draw(lv_event_t *e) {
   lv_obj_t *o = lv_event_get_target_obj(e);
   lv_layer_t *ctx = lv_event_get_layer(e);
@@ -118,7 +119,8 @@ lv_obj_t *logo(lv_obj_t *p, int size) {
   return o;
 }
 
-// ---- line icons (24 px grid, 2 px strokes, round ends; colour = the object's line colour) ----------------
+// ---- line icons -----------------------------------------------------------------------------------------------------
+// 24 px grid, 2 px strokes, round ends; colour = the object's line colour
 static void icon_draw(lv_event_t *e) {
   lv_obj_t *o = lv_event_get_target_obj(e);
   lv_layer_t *ctx = lv_event_get_layer(e);
@@ -137,8 +139,14 @@ static void icon_draw(lv_event_t *e) {
   c.width = 2;
   c.rounded = 1;
   auto P = [&](float x, float y) { return lv_point_t{(int32_t)(ox + x * k), (int32_t)(oy + y * k)}; };
-  auto L = [&](float x1, float y1, float x2, float y2) { lv_point_t p1 = P(x1, y1), p2 = P(x2, y2); dl(ctx, &l, &p1, &p2); };
-  auto C = [&](float x, float y, float r, int a0, int a1) { lv_point_t cp = P(x, y); darc(ctx, &c, &cp, (uint16_t)(r * k), a0, a1); };
+  auto L = [&](float x1, float y1, float x2, float y2) {
+    lv_point_t p1 = P(x1, y1), p2 = P(x2, y2);
+    dl(ctx, &l, &p1, &p2);
+  };
+  auto C = [&](float x, float y, float r, int a0, int a1) {
+    lv_point_t cp = P(x, y);
+    darc(ctx, &c, &cp, (uint16_t)(r * k), a0, a1);
+  };
   auto D = [&](float x, float y, float r) {          // a filled dot
     lv_draw_rect_dsc_t d;
     lv_draw_rect_dsc_init(&d);
@@ -173,17 +181,20 @@ static void icon_draw(lv_event_t *e) {
       break;
     case IC_WIFI: C(12, 20, 13, 225, 315); C(12, 20, 8.5f, 225, 315); D(12, 19, 1.4f); break;
     case IC_ABOUT: C(12, 12, 8.5f, 0, 360); L(12, 11, 12, 16.5f); D(12, 7.8f, 1); break;
-    case IC_PROFILES: L(9, 7, 20, 7); L(9, 12, 20, 12); L(9, 17, 20, 17); D(5, 7, 1.2f); D(5, 12, 1.2f); D(5, 17, 1.2f); break;
+    case IC_PROFILES:
+      L(9, 7, 20, 7); L(9, 12, 20, 12); L(9, 17, 20, 17); D(5, 7, 1.2f); D(5, 12, 1.2f); D(5, 17, 1.2f);
+      break;
     case IC_BELL:                                  // dome, straight sides flaring at the rim, clapper under it
       C(12, 9, 6, 180, 360); L(6, 9, 6, 13.5f); L(6, 13.5f, 4, 17); L(18, 9, 18, 13.5f); L(18, 13.5f, 20, 17);
       L(4, 17, 20, 17); C(12, 19, 2, 0, 180);
       break;
-    case IC_SETTINGS: {                             // a cog: outline with eight teeth (r 7.5 .. 10) and a hole (r 3)
+    case IC_SETTINGS: {                             // a cog: outline with eight teeth (r 7.4 .. 10) and a hole (r 3.2)
       C(12, 12, 3.2f, 0, 360);
       float px = 0, py = 0, fx = 0, fy = 0;
       for (int i = 0; i < 32; i++) {
         static const float R[4] = {7.4f, 10, 10, 7.4f}, A[4] = {-15, -8, 8, 15};
-        const float an = ((i / 4) * 45 + A[i % 4]) * 0.0174533f, x = 12 + R[i % 4] * cosf(an), y = 12 + R[i % 4] * sinf(an);
+        const float an = ((i / 4) * 45 + A[i % 4]) * 0.0174533f;
+        const float x = 12 + R[i % 4] * cosf(an), y = 12 + R[i % 4] * sinf(an);
         if (i) L(px, py, x, y); else { fx = x; fy = y; }
         px = x; py = y;
       }
@@ -203,7 +214,8 @@ lv_obj_t *line_icon(lv_obj_t *p, int kind, int size, lv_color_t col) {
   return o;
 }
 
-// ---- empty state: icon, title, one line saying what happens next (lists with nothing to show) ----------
+// ---- empty state ----------------------------------------------------------------------------------------------------
+// icon, title and one line saying what happens next (lists with nothing to show)
 EmptyState empty_state(lv_obj_t *p, int kind) {
   EmptyState s;
   s.box = flex(p, LV_FLEX_FLOW_COLUMN, 10);
@@ -284,7 +296,7 @@ void display_name(const char *in, char *out, size_t n, bool *community) {
   if (community) *community = c;
 }
 
-// ---- icons ----------------------------------------------------------------------------------
+// ---- icons ----------------------------------------------------------------------------------------------------------
 lv_obj_t *icon_box(lv_obj_t *p, int w, int h) {
   lv_obj_t *o = lv_obj_create(p);
   lv_obj_remove_style_all(o);
@@ -357,7 +369,7 @@ void icon_backspace(lv_obj_t *p, lv_color_t col) {
   line(c, x2, 2, 2, col);
 }
 
-// ---- chart helpers shared by the brewing, review and steam screens -------------------------------------------------
+// ---- chart helpers (brewing, review, steam) -------------------------------------------------------------------------
 void ch_hline(lv_layer_t *ctx, int x1, int x2, int y, lv_color_t col) {
   lv_draw_line_dsc_t d;
   lv_draw_line_dsc_init(&d);
@@ -413,7 +425,8 @@ void fmt_when(uint32_t ts, char *b, size_t n) {
   localtime_r(&t, &a);
   localtime_r(&now, &c);
   const bool synced = now > (time_t)CLOCK_SET_TS;
-  if (synced && a.tm_year == c.tm_year && a.tm_yday == c.tm_yday) snprintf(b, n, "today %02d:%02d", a.tm_hour, a.tm_min);
+  if (synced && a.tm_year == c.tm_year && a.tm_yday == c.tm_yday)
+    snprintf(b, n, "today %02d:%02d", a.tm_hour, a.tm_min);
   else if (synced && a.tm_year == c.tm_year && a.tm_yday + 1 == c.tm_yday)
     snprintf(b, n, "yesterday %02d:%02d", a.tm_hour, a.tm_min);
   else snprintf(b, n, "%d %s %02d:%02d", a.tm_mday, MON[a.tm_mon % 12], a.tm_hour, a.tm_min);

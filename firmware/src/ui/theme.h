@@ -14,7 +14,8 @@ LV_FONT_DECLARE(it_400_13);
 LV_FONT_DECLARE(it_200_64);    // only "B r e w d c k" (the splash's name)
 }
 
-// ---- type scale: six steps, three weights (200 hero, 300 large numbers, 400 text, 600 emphasis) ----
+// ---- type scale -----------------------------------------------------------------------------------------------------
+// six steps, three weights (200 hero, 300 large numbers, 400 text, 600 emphasis)
 #define F_HERO    (&it_200_120)   // the one big number: Ready temperature, keypad entry, idle clock
 #define F_VALUE   (&it_300_40)    // live / review values, clocks, Brew temp / Stop weight (+ U+221E), keypad keys
 #define F_TITLE   (&it_300_28)    // page titles, the shot result, offline title, idle status line
@@ -25,7 +26,7 @@ LV_FONT_DECLARE(it_200_64);    // only "B r e w d c k" (the splash's name)
 #define F_SMALL   (&it_400_13)    // chart axis, tags
 #define F_SPLASH  (&it_200_64)    // the splash name only
 
-// ---- colours ----
+// ---- colours --------------------------------------------------------------------------------------------------------
 #define COL_BG      lv_color_hex(0x0A0A0B)
 #define COL_TEXT    lv_color_hex(0xF2F2F3)   // text: values, names
 #define COL_MUTED   lv_color_hex(0x8E8E96)   // text: labels, units, secondary
@@ -41,7 +42,7 @@ LV_FONT_DECLARE(it_200_64);    // only "B r e w d c k" (the splash's name)
 #define COL_GOLD_PR lv_color_hex(0xD9A93C)
 #define COL_BLUE    lv_color_hex(0x7CC4FF)
 #define COL_GREEN   lv_color_hex(0x4ADE80)
-#define COL_RED     lv_color_hex(0xFF6B6B)   // water temperature (coral: the deep #E5484D looked dark on black)
+#define COL_RED     lv_color_hex(0xFF6B6B)   // water temperature (coral: a deeper red reads dark on black)
 #define COL_PRESS   COL_BLUE   // one colour per value: pressure blue, flow gold, temperature red, weight white
 #define COL_FLOW    COL_GOLD
 #define COL_PILL_BG lv_color_hex(0x10291A)   // Ready / Done pill
@@ -51,7 +52,7 @@ LV_FONT_DECLARE(it_200_64);    // only "B r e w d c k" (the splash's name)
 #define COL_WARN    lv_color_hex(0xFFA94D)
 #define COL_BREW_BG lv_color_hex(0x3A2E10)   // Brewing pill
 #define COL_BREW_TX lv_color_hex(0xFFDD8A)
-#define COL_BLUE_BG lv_color_hex(0x0F2233)   // busy pills (Brewing aside), Steam pill, flush mode on
+#define COL_BLUE_BG lv_color_hex(0x0F2233)   // busy pills other than Brewing, Steam pill, flush mode on
 #define COL_PALE_TX lv_color_hex(0xC8C8CE)   // neutral pills (Standby, Waiting, Cooling), the bell
 // a toggle's selected segment (review, Display page), the selected profile row, tags
 #define COL_PK_BTN  lv_color_hex(0x26262A)
@@ -60,7 +61,7 @@ LV_FONT_DECLARE(it_200_64);    // only "B r e w d c k" (the splash's name)
 #define COL_IDLE_TX lv_color_hex(0x7A7A82)   // idle clock line (dimmed screen; the clock itself takes IDLE_TINTS)
 #define COL_GRID    lv_color_hex(0x161618)   // chart grid hairlines (brewing, review, steam)
 
-// ---- radii ----
+// ---- radii ----------------------------------------------------------------------------------------------------------
 #define RAD_CTRL  14                  // buttons and other controls
 #define RAD_INNER 11                  // a segment inside a control (RAD_CTRL minus its 3 px padding)
 #define RAD_CARD  20                  // cards and panels

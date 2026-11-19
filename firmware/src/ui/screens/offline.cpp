@@ -7,23 +7,23 @@ enum { OFF_ACT_NONE = 0, OFF_ACT_WIFI, OFF_ACT_RETRY, OFF_ACT_ADDRESS };
 // on the tile's corner: orange "!" (Wi-Fi failed), orange "?" (machine not found), gold "+" (no Wi-Fi set up).
 enum { OI_WIFI_TRY = 0, OI_WIFI_FAIL, OI_WIFI_NONE, OI_CUP_TRY, OI_CUP_FAIL };
 
-// The machine cannot be reached (or no Wi-Fi yet): a full screen saying so, instead of greyed values that cannot be
-// used. Shown after 5 s offline (short REST/WS dropouts, e.g. at the start of a shot,
-// do not flash it), at once while booting; never over a shot in progress or the shot review (they work from the
-// data already here). Hidden as soon as the machine answers.
+// The machine cannot be reached (or no Wi-Fi yet): a full screen saying so, instead of values that cannot be used.
+// Shown after OFF_DELAY_MS offline (short dropouts, e.g. at the start of a shot, do not flash it), at once while
+// booting; never over a shot in progress or the shot review (they work from the data already here). Hidden as soon as
+// the machine answers.
 static const uint32_t OFF_DELAY_MS = 5000;
 lv_obj_t *g_off;
 static lv_obj_t *g_off_title, *g_off_body, *g_off_detail, *g_off_icon;
 int g_off_link = LINK_CONNECTING;
-uint32_t g_off_since;          // lv_tick when the link was last lost (5 s delay before the screen shows)
+uint32_t g_off_since;          // lv_tick when the link was last lost (OFF_DELAY_MS before the screen shows)
 uint32_t g_off_phase;          // lv_tick when the current state began (joining Wi-Fi / looking for the machine)
 bool g_off_ever_online = false;
-bool g_off_active = false;     // network mode only: set by the first ui_set_live (demo/sim without it: never)
+bool g_off_active = false;     // set by the first ui_set_live (the render test never sets it)
 char g_off_sip[20] = "", g_off_mach[40] = "";
 
-// States (say clearly what is wrong, stop "trying" after 20 s):
-//   no Wi-Fi set up / joining Wi-Fi (< 20 s) / not connected to Wi-Fi (>= 20 s, the screen keeps retrying quietly)
-//   looking for the machine (< 20 s after Wi-Fi is up) / machine not found (>= 20 s: name or IP can be changed)
+// States (say clearly what is wrong, stop "trying" after OFF_GIVE_UP_MS; the core keeps retrying quietly):
+//   no Wi-Fi set up / joining Wi-Fi / not connected to Wi-Fi
+//   looking for the machine (after Wi-Fi is up) / machine not found (name or IP can be changed)
 static const uint32_t OFF_GIVE_UP_MS = 20000;
 static lv_obj_t *g_off_btn[2], *g_off_btn_l[2];
 static int g_off_btn_act[2];                   // what each button does: OFF_ACT_*
@@ -113,7 +113,11 @@ static void off_icon_draw(lv_event_t *e) {
       d.color = COL_BORDER;
       if (kind == OI_WIFI_TRY) {                    // 1.8 s cycle, each arc 0.3 s after the one inside it
         const float u = (float)((t + 1800 - i * 300) % 1800) / 1800;
-        const float on = u < 0.15f ? 0 : u < 0.30f ? (u - 0.15f) / 0.15f : u < 0.70f ? 1 : u < 0.85f ? (0.85f - u) / 0.15f : 0;
+        const float on = u < 0.15f   ? 0
+                         : u < 0.30f ? (u - 0.15f) / 0.15f
+                         : u < 0.70f ? 1
+                         : u < 0.85f ? (0.85f - u) / 0.15f
+                                     : 0;
         d.color = lv_color_mix(COL_BLUE, COL_BORDER, (uint8_t)(on * 255));
       }
       darc(ctx, &d, &c, (int)((15 + i * 15) * k + 0.5f), 225, 315);
@@ -228,7 +232,7 @@ static void on_off_btn(lv_event_t *e) {
     case OFF_ACT_ADDRESS: open_address_page(); g_menu_entry = g_menu_cur; break;
     case OFF_ACT_RETRY:
       bd_wifi_retry();
-      g_off_phase = lv_tick_get();               // back to "Joining" for another 20 s
+      g_off_phase = lv_tick_get();               // back to "Joining" for another OFF_GIVE_UP_MS
       off_text();
       break;
   }
@@ -250,7 +254,7 @@ void on_off_timer(lv_timer_t *t) {
 }
 
 // Fixed positions in every state (nothing moves when buttons come or go): tile 72..184, title 211, text 257 (their
-// baselines match the design: 212 / 256 in CSS), buttons 328, details line 430.
+// baselines match the design), buttons 328, details line 430.
 void build_offline(lv_obj_t *scr) {
   g_off = box(scr, 0, 0, 800, 480, COL_BG, 0);
   lv_obj_set_clickable(g_off, true);    // swallow taps: only the buttons react
@@ -266,7 +270,8 @@ void build_offline(lv_obj_t *scr) {
   }
   g_off_icon = box(g_off, OFF_TILE_X, OFF_TILE_Y, OFF_TILE, OFF_TILE, COL_CARD, 26);
   lv_obj_add_event_cb(g_off_icon, off_icon_draw, LV_EVENT_DRAW_MAIN, NULL);
-  g_off_badge = box(g_off, OFF_TILE_X + OFF_TILE - 28, OFF_TILE_Y - 8, 36, 36, COL_BG, 18);   // 3 px ring of background
+  // the badge: a 3 px ring of background around a dot
+  g_off_badge = box(g_off, OFF_TILE_X + OFF_TILE - 28, OFF_TILE_Y - 8, 36, 36, COL_BG, 18);
   g_off_badge_dot = box(g_off_badge, 3, 3, 30, 30, COL_WARN, 15);
   g_off_badge_l = label(g_off_badge_dot, "?", F_TEXT_B, COL_BG);
   lv_obj_center(g_off_badge_l);

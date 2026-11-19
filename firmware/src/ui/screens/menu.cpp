@@ -1,7 +1,7 @@
 // The menu (its layer, header and list) and its Display, Scale and About pages.
 #include "../ui_int.h"
 
-// ---- menu ----
+// ---- menu -----------------------------------------------------------------------------------------------------------
 // One column of rows that open a page; profiles and maintenance are left to the machine's web UI (one line under the
 // list). Display: this screen's settings (saved by ui_bridge.cpp through ui_on_settings). Scale / Wi-Fi / About:
 // status pages.
@@ -21,7 +21,8 @@ LiveData g_menu_live;
 int g_menu_link = LINK_CONNECTING;
 static char g_sys_txt[3][64] = {"", "", ""};   // build, uptime (+ restart reason), memory
 static const int IDLE_OPTS[] = {0, 1, 2, 5, 10, 20, 30, 60};
-static const char *const PAGE_NAMES[MENU_PAGES] = {"Display", "Scale", "Wi-Fi", "About", "", "", "Machine address", "Shot history"};
+static const char *const PAGE_NAMES[MENU_PAGES] = {"Display", "Scale", "Wi-Fi", "About", "", "", "Machine address",
+                                                     "Shot history"};
 
 void ui_on_settings(void (*cb)(int bright, int idle_min, bool bounce, bool splash)) { g_settings_cb = cb; }
 void ui_set_settings(int bright, int idle_min, bool bounce, bool splash) {
@@ -36,7 +37,8 @@ void ui_set_sysinfo(const char *build, const char *uptime, const char *memory) {
   char mon[4]; int day, year, hh, mm;
   const bool emu = !strncmp(build, "emulator ", 9);
   if (sscanf(build + (emu ? 9 : 0), "%3s %d %d %d:%d", mon, &day, &year, &hh, &mm) == 5)
-    snprintf(g_sys_txt[0], sizeof g_sys_txt[0], "%s%d %s %d, %02d:%02d", emu ? "emulator " : "", day, mon, year, hh, mm);
+    snprintf(g_sys_txt[0], sizeof g_sys_txt[0], "%s%d %s %d, %02d:%02d", emu ? "emulator " : "", day, mon, year, hh,
+             mm);
   else snprintf(g_sys_txt[0], sizeof g_sys_txt[0], "%s", build);
   snprintf(g_sys_txt[1], sizeof g_sys_txt[1], "%s", uptime);
   snprintf(g_sys_txt[2], sizeof g_sys_txt[2], "%s", memory);
@@ -63,11 +65,14 @@ static void menu_refresh(void) {
   set_text(g_mrow_val[2], b);
   set_text(g_mrow_val[4], g_wifi_ssid[0] ? g_wifi_ssid : "Not connected");
   {
-    char mon[4] = ""; int day = 0;                  // build date ("Nov 15 2026 ..." / "emulator Nov 15 2026") -> "Built 15 Nov"
+    // build date ("15 Nov 2026, ..." / "emulator 15 Nov 2026, ...") -> "Built 15 Nov"
+    char mon[4] = "";
+    int day = 0;
     const char *bd = g_sys_txt[0];
     if (!strncmp(bd, "emulator ", 9)) bd += 9;
     if (g_upd_known) snprintf(b, sizeof b, "Machine update available");
-    else if (sscanf(bd, "%d %3s", &day, mon) == 2 || sscanf(bd, "%3s %d", mon, &day) == 2) snprintf(b, sizeof b, "Built %d %s", day, mon);
+    else if (sscanf(bd, "%d %3s", &day, mon) == 2 || sscanf(bd, "%3s %d", mon, &day) == 2)
+      snprintf(b, sizeof b, "Built %d %s", day, mon);
     else snprintf(b, sizeof b, "Screen firmware");
     set_text(g_mrow_val[5], b);
   }
@@ -82,8 +87,9 @@ static void menu_refresh(void) {
   set_text(g_disp_val[0], b);
   if (g_idle_min) snprintf(b, sizeof b, "%d min", g_idle_min); else snprintf(b, sizeof b, "Off");
   set_text(g_disp_val[1], b);
-  for (int t = 0; t < 2; t++)                     // toggles (like the review's): idle clock Still / Bouncing,
-    for (int i = 0; i < 2; i++) {                 // splash On / Off
+  // toggles (like the review's): idle clock Still / Bouncing, splash On / Off
+  for (int t = 0; t < 2; t++)
+    for (int i = 0; i < 2; i++) {
       const bool on = t == 0 ? (i == 1) == g_idle_bounce : (i == 0) == g_splash_on;
       lv_obj_set_style_bg_opa(g_disp_tog[t][i], on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
       set_tc(g_disp_tog_l[t][i], on ? COL_TEXT : COL_MUTED);
@@ -97,7 +103,8 @@ static void menu_refresh(void) {
   set_text(g_info[MP_SCALE][3], "Automatic at the start of a shot");
   // Wi-Fi
   set_text(g_info[MP_WIFI_DETAILS][0], g_wifi_ssid[0] ? g_wifi_ssid : "Not connected");
-  if (g_wifi_ssid[0]) snprintf(b, sizeof b, "%d dBm  \xC2\xB7  channel %d", g_wifi_rssi, g_wifi_ch); else snprintf(b, sizeof b, "-");
+  if (g_wifi_ssid[0]) snprintf(b, sizeof b, "%d dBm  \xC2\xB7  channel %d", g_wifi_rssi, g_wifi_ch);
+  else snprintf(b, sizeof b, "-");
   set_text(g_info[MP_WIFI_DETAILS][1], b);
   set_text(g_info[MP_WIFI_DETAILS][2], g_wifi_ap[0] ? g_wifi_ap : "-");
   set_text(g_info[MP_WIFI_DETAILS][3], g_off_sip[0] ? g_off_sip : "-");
@@ -117,7 +124,7 @@ static void menu_refresh(void) {
   set_text(g_info[MP_ABOUT][5], d->static_ver[0] ? d->static_ver : "Unknown");
 }
 
-void menu_show_page(int k) {            // -1 = main list
+void menu_show_page(int k) {            // MP_LIST = the menu list
   lv_obj_set_hidden(g_menu_main, true);
   for (int i = 0; i < MENU_PAGES; i++) lv_obj_set_hidden(g_menu_page[i], true);
   g_menu_cur = k;
@@ -133,7 +140,9 @@ void menu_show_page(int k) {            // -1 = main list
   } else {
     lv_obj_set_hidden(g_menu_page[k], false);
     lv_obj_set_hidden(g_menu_back, false);
-    set_text(g_menu_title, k == MP_WIFI_DETAILS ? (g_wifi_ssid[0] ? g_wifi_ssid : "Wi-Fi") : k == MP_PASSWORD ? g_wj_ssid : PAGE_NAMES[k]);
+    set_text(g_menu_title, k == MP_WIFI_DETAILS ? (g_wifi_ssid[0] ? g_wifi_ssid : "Wi-Fi")
+                           : k == MP_PASSWORD   ? g_wj_ssid
+                                                : PAGE_NAMES[k]);
     lv_obj_set_x(g_menu_title, 92);
   }
   menu_refresh();
@@ -154,7 +163,7 @@ void menu_close(void) {
   lv_obj_set_hidden(g_menu, true);
   g_in_wifi_pages = false;
   g_menu_cur = g_menu_entry = -1;
-  if (g_off) on_off_timer(NULL);        // offline screen back in the same frame (else Ready flashes for ~200 ms)
+  if (g_off) on_off_timer(NULL);        // offline screen back in the same frame (no Ready flash in between)
 }
 static void on_menu_close(lv_event_t *e) { (void)e; menu_close(); }
 static void on_menu_back(lv_event_t *e) {
@@ -259,7 +268,7 @@ static lv_obj_t *small_btn(lv_obj_t *p, bool plus, int k) {
   return b;
 }
 
-// ---- building the menu and its pages ------------------------------------------------------------------------------
+// ---- building the menu and its pages --------------------------------------------------------------------------------
 void build_menu(lv_obj_t *scr) {
   g_menu = box(scr, 0, 0, 800, 480, COL_BG, 0);
   lv_obj_set_clickable(g_menu, true);
@@ -281,7 +290,7 @@ void build_menu(lv_obj_t *scr) {
 
   // main list: one full-width column, a blue line icon per row; page index per row, -1 = no page
   g_menu_main = box(g_menu, 24, 96, 752, 360, COL_BG, 0);   // lists start at 96
-  // R[] keeps two unused entries (0, 3) so the indexes used by the menu's values (g_mrow_val) stay as they are
+  // R[] also has the web-UI-only rows (0, 3), not shown; its indexes are g_mrow_val's
   static const struct { const char *name; int page; bool grey; } R[7] = {
     {"Edit profile", -1, true}, {"Scale", MP_SCALE, false}, {"Display", MP_DISPLAY, false},
     {"Maintenance", -1, true}, {"Wi-Fi", MP_WIFI, false}, {"About", MP_ABOUT, false},
@@ -308,8 +317,8 @@ void build_menu(lv_obj_t *scr) {
     {NULL}, {"Type", "Status", "Weight", "Tare"}, {NULL},
     {"Build", "Running for", "Free memory", "Machine firmware", "Machine screen", "Machine web UI", "Machine update"},
     {"Network", "Signal", "Access point", "Screen", "Machine"}};
-  build_wifi(g_menu);                              // pages 2 (list) and 5 (password)
-  build_hist(g_menu);                              // page 7
+  build_wifi(g_menu);                              // the Wi-Fi list and password / address pages
+  build_hist(g_menu);                              // shot history
   for (int k = 0; k < 5; k++) {
     if (k == MP_WIFI) continue;
     g_menu_page[k] = box(g_menu, 24, 96, 752, 360, COL_BG, 0);
@@ -349,7 +358,8 @@ void build_menu(lv_obj_t *scr) {
       hairline(r, LV_BORDER_SIDE_BOTTOM);
       lv_obj_align(logo(r, 32), LV_ALIGN_LEFT_MID, -3, 0);   // 32 px: at 28 the 2 px wisps nearly touch
       lv_obj_align(label(r, "Brewdeck", F_TEXT, COL_TEXT), LV_ALIGN_LEFT_MID, 36, 0);
-      lv_obj_align(label(r, "Unofficial Wi-Fi screen for Gaggiuino machines", F_TEXT, COL_MUTED), LV_ALIGN_RIGHT_MID, 0, 0);
+      lv_obj_align(label(r, "Unofficial Wi-Fi screen for Gaggiuino machines", F_TEXT, COL_MUTED), LV_ALIGN_RIGHT_MID,
+                   0, 0);
     }
     for (int i = 0; i < 7 && INFO[k][i]; i++) {
       // Wi-Fi details: room for Forget below; About: the Brewdeck row + 7 rows of 44 px in the 360 px page
@@ -358,7 +368,7 @@ void build_menu(lv_obj_t *scr) {
       lv_obj_align(label(r, INFO[k][i], F_TEXT, COL_MUTED), LV_ALIGN_LEFT_MID, 0, 0);
       g_info[k][i] = label(r, "", F_TEXT, COL_TEXT);
       lv_obj_align(g_info[k][i], LV_ALIGN_RIGHT_MID, 0, 0);
-      if (k == MP_WIFI_DETAILS && i == 4) {                       // Machine row: change the machine's address
+      if (k == MP_WIFI_DETAILS && i == 4) {         // Machine row: change the machine's address
         lv_obj_align(g_info[k][i], LV_ALIGN_RIGHT_MID, -28, 0);
         lv_obj_t *ch = icon_box(r, 16, 16);
         lv_obj_align(ch, LV_ALIGN_RIGHT_MID, 0, 0);

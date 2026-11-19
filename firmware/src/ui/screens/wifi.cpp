@@ -1,16 +1,17 @@
 // Wi-Fi: network list, details, password and machine address keyboard.
 #include "../ui_int.h"
 
-// Page 2: networks from a scan (2.4 GHz only), the connected one on top in green; tap -> page 5 (password) or, for an
-// open network, join at once; tap the connected one -> page 4 (details). Page 5: own keyboard (no LVGL keyboard
-// widget: the keys match the design system). The password lives only here and in the join request; never logged.
+// The list (MP_WIFI): networks from a scan (2.4 GHz only), the connected one on top in green; tap -> the password
+// page or, for an open network, join at once; tap the connected one -> details. The password page has its own keyboard
+// (no LVGL keyboard widget: the keys match the design system). The password lives only here and in the join request;
+// never logged. The machine address page uses the same keyboard.
 #define NET_ROWS 8                                 // rows on the list page (the rest of the scan is cut)
 #define KEYS 32
 static const uint32_t DOUBLE_TAP_MS = 400;          // shift tapped twice within this: caps lock
 static const uint32_t FORGET_ARM_MS = 3000;         // "Tap again to forget" waits this long
 enum { K_SHIFT = 19, K_BS = 27, K_LAYER = 28, K_SPACE = 29, K_DOT = 30, K_JOIN = 31 };
 
-// ---- Wi-Fi join --------------------------------------------
+// ---- Wi-Fi join -----------------------------------------------------------------------------------------------------
 char g_wifi_ssid[33] = "", g_wifi_ap[20] = "";   // network the screen is on, "" = none
 int g_wifi_rssi = 0, g_wifi_ch = 0;
 char g_wifi_target[33] = "";                     // network the screen tries to join ("" = none set up)
@@ -22,7 +23,7 @@ static bool g_nets_scanning = false;
 int g_wj_state = WIFI_JOIN_IDLE;
 char g_pw[65] = "";
 bool g_pw_show = true, g_shift = false, g_caps = false;
-static bool g_kb_addr = false;                      // keyboard page used for the machine address (page 6)
+static bool g_kb_addr = false;                      // keyboard page used for the machine address
 int g_layer = 0;                             // 0 letters, 1 digits/symbols, 2 more symbols
 static uint32_t g_shift_ms = 0;
 static lv_obj_t *g_wl_note, *g_wl_scan;
@@ -160,7 +161,11 @@ static void on_scan(lv_event_t *e) { (void)e; g_nets_scanning = true; wifi_refre
 void wifi_page_shown(int k) {
   set_hidden(g_wl_note, k != MP_WIFI);
   set_hidden(g_wl_scan, k != MP_WIFI);
-  if (k == MP_WIFI) { wifi_refresh(); if (!g_nets_scanning) { g_nets_scanning = true; bd_wifi_scan(); } wifi_refresh(); }
+  if (k == MP_WIFI) {
+    wifi_refresh();
+    if (!g_nets_scanning) { g_nets_scanning = true; bd_wifi_scan(); }
+    wifi_refresh();
+  }
   if (k == MP_PASSWORD || k == MP_ADDRESS) { g_kb_addr = k == MP_ADDRESS; pw_refresh(); }
 }
 void open_address_page(void) {
@@ -170,7 +175,8 @@ void open_address_page(void) {
   menu_show_page(MP_ADDRESS);
 }
 void on_addr_row(lv_event_t *e) { (void)e; open_address_page(); }
-// "Forget this network" (details page): first tap arms it (orange, "Tap again to forget") for 3 s, second tap forgets
+// "Forget this network" (details page): the first tap arms it (orange, "Tap again to forget") for FORGET_ARM_MS, the
+// second forgets
 lv_obj_t *g_fg_btn, *g_fg_lbl;
 static uint32_t g_fg_armed = 0;                     // lv_tick when armed, 0 = not armed
 static void forget_paint(void) {
@@ -200,7 +206,7 @@ static void on_join(lv_event_t *e) {
     if (!g_pw[0]) return;
     snprintf(g_mach_host, sizeof g_mach_host, "%s", g_pw);
     bd_set_machine_address(g_pw);
-    g_off_phase = lv_tick_get();                    // "Looking for your machine" at the new address for 20 s
+    g_off_phase = lv_tick_get();                    // "Looking for your machine" again, at the new address
     menu_close();
     return;
   }
@@ -246,11 +252,12 @@ static lv_obj_t *kb_key(lv_obj_t *row, int w, int k) {
 }
 
 void build_wifi(lv_obj_t *m) {
-  // header extras on the list page: "2.4 GHz only" + scan button (left of close)
+  // header extras on the list page: "2.4 GHz only" + scan button (left of Close)
   g_wl_scan = box(m, 656, 24, 52, 52, COL_CARD, RAD_CTRL);
   make_button(g_wl_scan, COL_CARD_PR);
   {
-    static const lv_point_t arc[] = {{17, 6}, {13, 4}, {8, 5}, {5, 8}, {4, 12}, {5, 16}, {8, 19}, {12, 20}, {16, 19}, {19, 16}, {20, 12}};
+    static const lv_point_t arc[] = {{17, 6},  {13, 4},  {8, 5},   {5, 8},   {4, 12}, {5, 16},
+                                     {8, 19},  {12, 20}, {16, 19}, {19, 16}, {20, 12}};
     static const lv_point_t head[] = {{13, 3}, {18, 6}, {14, 10}};
     lv_obj_t *ic = icon_box(g_wl_scan, 24, 24);
     lv_obj_center(ic);
@@ -296,7 +303,7 @@ void build_wifi(lv_obj_t *m) {
   }
   g_wl_empty = empty_state(pg, IC_WIFI);
 
-  // password page
+  // password page (and the machine address page)
   pg = g_menu_page[MP_PASSWORD] = g_menu_page[MP_ADDRESS] = box(m, 24, 90, 752, 366, COL_BG, 0);
   lv_obj_t *f = box(pg, 0, 0, 752, 56, COL_WELL, RAD_CTRL);
   lv_obj_set_style_border_width(f, 1, 0);
@@ -331,7 +338,7 @@ void build_wifi(lv_obj_t *m) {
     if (r == 0) for (int i = 0; i < 10; i++) kb_key(row, 68, k++);
     if (r == 1) for (int i = 0; i < 9; i++) kb_key(row, 68, k++);
     if (r == 2) {
-      lv_obj_t *sh = kb_key(row, 104, k++);        // 28 shift
+      lv_obj_t *sh = kb_key(row, 104, k++);        // shift (K_SHIFT)
       static const lv_point_t ar[] = {{10, 2}, {3, 10}, {7, 10}, {7, 18}, {13, 18}, {13, 10}, {17, 10}, {10, 2}};
       lv_obj_t *ic = icon_box(sh, 20, 20);
       lv_obj_align(ic, LV_ALIGN_CENTER, 0, 0);

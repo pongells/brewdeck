@@ -1,11 +1,10 @@
-// The screens (LVGL): Ready, keypads, profile picker, brewing, shot review, steam, menu, Wi-Fi, offline, idle,
-// splash. 800 x 480, 24 px margin on every screen. This file: ui_init and the live data from the core
-// (ui_set_live); each screen is in screens/, what they share in ui_int.h.
+// Brewdeck's screens (800 x 480, 24 px margin): ui_init and the live data (ui_set_live); screens in screens/.
 #include "ui_int.h"
 
 static const float PRESS_ON = 0.8f;          // bar: the pressure pill turns orange while it reads above 0.8
 static const uint32_t PRESS_OFF_MS = 2000;   // reads 0.8 or less this long -> off (no flicker between 0.8 and 0.9)
-static const float TEMP_MARGIN = 3.0f;       // degC: boiler above target + this = Cooling; below target - this = Heating
+// degC: boiler above target + this = Cooling; below target - this = Heating (when the machine reports no readiness)
+static const float TEMP_MARGIN = 3.0f;
 static const uint32_t READY_HOLD_MS = 30000; // after a heating phase, Ready shows once READY held this long
 static const uint32_t HEAT_ARM_MS = 10000;   // Heating this long in a row is a heating phase (arms the Ready hold)
 static const float FLUSH_WATER_BAR = 0.5f;   // flush mode with less pressure than this: no water running
@@ -32,7 +31,7 @@ void ui_init(void) {
   refresh_value();
 }
 
-// ---- live data ---------------------------------------------------------------------------------
+// ---- live data ------------------------------------------------------------------------------------------------------
 static void set_pill(lv_color_t bg, lv_color_t dot, lv_color_t tx, const char *text) {
   set_bg(g_pill, bg);
   set_bg(g_pill_dot, dot);
@@ -67,9 +66,11 @@ void ui_command_answer(int cmd, int answer) {
 // Called on every machine-state change (several times a second); only widgets whose value changed are touched.
 void ui_set_live(const LiveData *d, int link) {
   char b[64];
-  LiveData safe;                                    // a boiler reading that is not a number in 0..400 (a sensor fault)
-  if (!(d->temperature >= 0.0f && d->temperature < 400.0f)) {   // is shown as 0: the big digits font has no "-" or
-    safe = *d;                                      // "nan", and NaN * 10 into int16 (steam chart) is undefined
+  // a boiler reading that is not a number in 0..400 (a sensor fault) is shown as 0: the big digits font has no "-" or
+  // "nan", and NaN * 10 into int16 (steam chart) is undefined
+  LiveData safe;
+  if (!(d->temperature >= 0.0f && d->temperature < 400.0f)) {
+    safe = *d;
     safe.temperature = 0.0f;
     d = &safe;
   }
@@ -96,11 +97,11 @@ void ui_set_live(const LiveData *d, int link) {
     g_fl_mode = FL_UNKNOWN;
     g_fl_want = FL_UNKNOWN;
     fl_show();
-    // Ready itself keeps its last look: a short drop passes unnoticed, a longer one brings the offline screen after
-    // OFF_DELAY_MS (a greyed "Offline" Ready in between only added a third look). Commands are refused above (g_can_*)
-    // and again in the network task.
-    g_idle_busy = false;                            // offline: nothing runs that we know of; a busy flag left from
-    return;                                         // steam / flush kept the screen lit all night
+    // Ready keeps its last look: a short drop passes unnoticed, a longer one brings the offline screen (offline.cpp).
+    // Commands are refused (g_can_*), and again by the core.
+    // Nothing runs that we know of: a busy flag left from steam / flush would keep the screen lit all night.
+    g_idle_busy = false;
+    return;
   }
   // Ready / Warming up / Heating / Standby / Waiting from the machine's readiness (the names of its web UI);
   // the temperature rule only when it is not reported. "Cooling" (boiler > target + 3, after steam) stays the
@@ -109,16 +110,17 @@ void ui_set_live(const LiveData *d, int link) {
   const bool rd_ok = rd >= 0 && rd <= 7;
   const bool cooling = d->target > 0 && d->temperature > d->target + TEMP_MARGIN && rd != 1;
   const bool heating_now = rd_ok ? (rd == 1 || rd == 2) && !cooling
-                                 : d->warmup_remaining > 0 || (d->target > 0 && d->temperature < d->target - TEMP_MARGIN);
-  // Ready only after READY_HOLD_MS of it without a break (while warming up the machine's readiness
-  // goes READY / HEATING a few times as the boiler overshoots and dips, and Ready popped up in between). Until then
-  // the pill (and the idle clock) keep saying Heating / Warming up; a state other than READY (Cooling, Standby, ...) ends it.
+                                 : d->warmup_remaining > 0 ||
+                                       (d->target > 0 && d->temperature < d->target - TEMP_MARGIN);
+  // After a heating phase, Ready only after READY_HOLD_MS of it without a break: while warming up the machine's
+  // readiness goes READY / HEATING a few times as the boiler overshoots and dips. Until then the pill (and the idle
+  // clock) keep saying Heating / Warming up; a state other than READY (Cooling, Standby, ...) ends it.
   static bool s_hold = false;                 // a heating phase was seen and Ready has not been steady yet
   static uint32_t s_ready_since = 0;
   static int s_hold_rd = 2;                   // what the pill said before (1 Warming up / 2 Heating)
   static uint32_t s_heat_since = 0;
-  // only a real heating phase arms the hold (Warming up, or Heating for 10 s in a row): at temperature the machine also
-  // reports HEATING for a second or so now and then, which must not keep Heating up for 30 s
+  // only a real heating phase arms the hold (Warming up, or Heating for HEAT_ARM_MS in a row): at temperature the
+  // machine also reports HEATING for a second or so now and then
   if (heating_now) {
     if (!s_heat_since) s_heat_since = stamp_nz(lv_tick_get());
     if (rd == 1 || lv_tick_elaps(s_heat_since) >= HEAT_ARM_MS) { s_hold = true; s_hold_rd = rd == 1 ? 1 : 2; }
@@ -129,7 +131,7 @@ void ui_set_live(const LiveData *d, int link) {
     else if (!s_ready_since) s_ready_since = stamp_nz(lv_tick_get());
     else if (lv_tick_elaps(s_ready_since) >= READY_HOLD_MS) {
       s_hold = false;
-      bd_log("ui: ready steady for 30 s, showing Ready");
+      bd_log("ui: ready steady for %u s, showing Ready", (unsigned)(READY_HOLD_MS / 1000));
     }
   }
   const bool heating = heating_now || s_hold;
@@ -153,13 +155,13 @@ void ui_set_live(const LiveData *d, int link) {
   }
   // flush mode left on with no water running does not keep the screen awake (only a running pump counts)
   g_idle_busy = busy && !(strncmp(d->mode, "FLUSH", 5) == 0 && !d->brew_active && d->pressure < FLUSH_WATER_BAR);
-  // a shot / steam / flush counts as activity: "Dim after" starts again when it ends (else steaming without touching
-  // the screen goes straight to the idle clock when steam ends)
+  // a shot / steam / flush counts as activity: "Dim after" starts again when it ends, so the screen does not go
+  // straight to the idle clock after steaming without a touch
   if (busy) lv_display_trigger_activity(NULL);
   // residual pressure (the next shot would not start from nominal pressure): idle in HOME and the pill reads above
   // PRESS_ON -> the pressure pill turns orange and the idle clock shows the pressure, until it reads PRESS_ON or less
-  // for PRESS_OFF_MS (the machine releases it itself, after "Dropping beats"). Measured: idle 0.14-0.60 bar, after
-  // steam 1.7-2.9; the core logs the idle pressure range every minute.
+  // for PRESS_OFF_MS (the machine releases it itself, after "Dropping beats"). Idle is ~0.1-0.6 bar, after steam
+  // 1.7-2.9; the core logs the idle pressure range every minute.
   {
     const bool idle_home = !busy && !strcmp(d->mode, "HOME");
     const bool was = g_press_warn;
@@ -174,9 +176,7 @@ void ui_set_live(const LiveData *d, int link) {
         else if (lv_tick_elaps(s_low_since) >= PRESS_OFF_MS) { g_press_warn = false; s_low_since = 0; }
       }
     }
-    if (g_press_warn != was) {
-      bd_log("ui: pressure warning %s (%.2f bar)", g_press_warn ? "on" : "off", d->pressure);
-    }
+    if (g_press_warn != was) bd_log("ui: pressure warning %s (%.2f bar)", g_press_warn ? "on" : "off", d->pressure);
     g_press_val = d->pressure;
     // the pressure pill: orange while the warning is on, else grey with the blue gauge (pressure colour)
     snprintf(b, sizeof b, "%.1f bar", d->pressure < 0 ? 0.0f : d->pressure);
@@ -193,12 +193,13 @@ void ui_set_live(const LiveData *d, int link) {
   g_can_tare = g_can_select && d->scales_present;
   set_tc(g_tare_lbl, g_can_tare ? COL_TEXT : COL_OUTLINE);
   if (busy) set_pill(COL_BLUE_BG, COL_BLUE, COL_BLUE, state);
-  else if (heating) set_pill(lv_color_hex(0x2A2210), COL_GOLD, COL_GOLD, (heating_now ? rd : s_hold_rd) == 1 ? "Warming up" : "Heating");
+  else if (heating)
+    set_pill(lv_color_hex(0x2A2210), COL_GOLD, COL_GOLD,
+             (heating_now ? rd : s_hold_rd) == 1 ? "Warming up" : "Heating");
   else if (rd == 4) set_pill(COL_CARD, COL_MUTED, COL_PALE_TX, "Standby");
   else if (rd == 0) set_pill(COL_CARD, COL_MUTED, COL_PALE_TX, "Waiting");
   else if (rd == 7) set_pill(COL_BLUE_BG, COL_BLUE, COL_BLUE, "Maintenance");
-  else if (cooling)   // after steam
-    set_pill(COL_CARD, COL_BLUE, COL_PALE_TX, "Cooling");
+  else if (cooling) set_pill(COL_CARD, COL_BLUE, COL_PALE_TX, "Cooling");   // after steam
   else set_pill(COL_PILL_BG, COL_GREEN, COL_PILL_TX, "Ready");
 
   // temperature (the state is the pill's job)
@@ -228,9 +229,8 @@ void ui_set_live(const LiveData *d, int link) {
     if (strcmp(d->profile, g_pend_name) == 0) g_pend_id = 0;          // confirmed by the machine
   }
   if (d->profile[0] && !g_pend_id) show_profile(d->profile);
-  // the profile the values below belong to: a pick made here counts at once, so the machine's d_act_prof (WS, pushed
-  // right at the switch) is taken without waiting for the REST status (~1 s poll) to name it too (temp
-  // and stop weight took ~1 s to follow a pick otherwise; measured: d_act_prof at the switch, REST 0.3-0.4 s later + poll)
+  // the profile the values below belong to: a pick made here counts at once, so the machine's running profile (pushed
+  // right at the switch) is taken without waiting ~1 s for the status poll to name it too
   const char *vals_for = g_pend_id ? g_pend_name : d->profile;
   // brew temperature: the active profile's (d_act_prof), REST targetTemperature until that is known; a pending
   // -/+ change is kept until it is sent
@@ -243,7 +243,7 @@ void ui_set_live(const LiveData *d, int link) {
       if (!timer_pending(g_temp_tm)) { g_tset = t; refresh_tset(); }
     }
   }
-  // target weight: the ACTIVE profile's (d_act_prof) wins over the stored one (REST): a weight set from this screen
+  // stop weight: the ACTIVE profile's (d_act_prof) wins over the stored one (REST): a weight set from this screen
   // or the web UI's dashboard lives only in the active profile. Taken over when it changes, like ui_set_shape.
   // 0 = the profile has no stop weight (d_act_prof is known once its temperature is)
   if ((d->act_weight > 0 || d->act_temp > 0) && !strcmp(d->act_profile, vals_for)) {
@@ -256,16 +256,19 @@ void ui_set_live(const LiveData *d, int link) {
       }
     }
   }
-  if (!lv_obj_is_hidden(g_pick)) picker_rebuild();   // open: the rows follow the machine (rebuilt only when what they show changed)
+  // Profiles page open: the rows follow the machine (rebuilt only when what they show changed)
+  if (!lv_obj_is_hidden(g_pick)) picker_rebuild();
   // a restore waiting for its profile to become active (Profiles page, snap_*): send its values once the machine runs
-  // it (the core checks the active profile too), or give up after 10 s
+  // it (the core checks the active profile too), or give up after RESTORE_WAIT_MS
   if (g_rst.id) {
     if (!strcmp(d->act_profile, g_rst.name) && g_can_select) snap_apply();
-    else if (lv_tick_elaps(g_rst.t) > RESTORE_WAIT_MS) { g_rst.id = 0; bd_log("ui: restore dropped (profile not active)"); }
+    else if (lv_tick_elaps(g_rst.t) > RESTORE_WAIT_MS) {
+      g_rst.id = 0;
+      bd_log("ui: restore dropped (profile not active)");
+    }
   }
-  // no scale connected: the machine keeps reporting the last reading (seen: 389.4 g long after the scale went
-  // away), so the weight is hidden and the pill says "No scale"
-  // scale pill: predictive (no scale used, the weight is only estimated during a shot) / connected / not connected
+  // scale pill: predictive (no scale used, the weight is only estimated during a shot) / connected / not connected.
+  // With no scale connected the machine keeps reporting the last reading, so the weight is hidden.
   const bool pred = d->scale_type == SCALE_PREDICTIVE;
   const int ic = pred ? 2 : (d->scale_type == SCALE_BT ? 0 : 1);
   // "No scale" is orange like "Refill" (a missing scale is a problem); predictive is a choice: grey
@@ -288,7 +291,7 @@ void ui_set_live(const LiveData *d, int link) {
   }
 }
 
-// ---- test hooks --------------------------------------------------------------------------------
+// ---- test hooks -----------------------------------------------------------------------------------------------------
 void ui_test_open_editor(void) { editor_open(false); }
 void ui_test_open_temp_editor(void) { editor_open(true); }
 void ui_test_key(char key)     { editor_key(key); }
@@ -307,10 +310,10 @@ const char *ui_bench_show(int i) {
   ui_test_wake();
   switch (i) {
     case 1: ui_test_profiles(1, 0); break;
-    case 2: ui_test_menu(-1); break;
-    case 3: ui_test_menu(3); break;
-    case 4: ui_test_menu(2); break;
-    case 5: ui_test_menu(7); break;
+    case 2: ui_test_menu(MP_LIST); break;
+    case 3: ui_test_menu(MP_ABOUT); break;
+    case 4: ui_test_menu(MP_WIFI); break;
+    case 5: ui_test_menu(MP_HISTORY); break;
     case 6: ui_test_open_editor(); break;
     case 7: ui_test_idle(); break;
     case 8: ui_bench_glow(true); break;
@@ -318,7 +321,8 @@ const char *ui_bench_show(int i) {
   }
   return N[i];
 }
-void ui_test_home(void) {                     // close every overlay: back to Ready/Heating (emulator)
+// close every overlay: back to Ready (emulator)
+void ui_test_home(void) {
   if (g_br_state != BR_HIDDEN) br_hide();
   menu_close();
   picker_close();
@@ -333,7 +337,8 @@ void ui_test_wifi_password(const char *ssid) {
   g_layer = 0; g_shift = g_caps = false; g_pw_show = true;
   menu_show_page(MP_PASSWORD);
 }
-void ui_test_menu(int page) {                // -2 close, -1 main list, 0.. pages
+// -2 close, -1 the menu list, 0.. a page (MP_*)
+void ui_test_menu(int page) {
   if (page == -2) { menu_close(); return; }
   if (page == MP_ADDRESS) { open_address_page(); return; }
   on_menu_open(NULL);

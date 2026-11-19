@@ -1,6 +1,5 @@
+// Brewdeck's screens (LVGL 9): fed through ui_set_* by ui_bridge.cpp; commands go to the core with bd_* directly.
 #pragma once
-// Brewdeck's screens (LVGL 9.6). Fed through ui_set_* by ui_bridge.cpp (state and events from the core); sends
-// commands with the core's bd_* functions (brewdeck_core.h).
 
 #include "../core/live.h"   // the plain data types the screens take (shared with the core's network code)
 
@@ -9,18 +8,19 @@ extern "C" {
 #endif
 
 void ui_init(void);
-void ui_splash(void);   // the boot splash (Brewdeck, unofficial), 5 s or until a tap; called at start if the setting is on
+// the boot splash (Brewdeck, unofficial): 5 s or until a tap; called at start when the setting is on
+void ui_splash(void);
 void ui_set_live(const LiveData *d, int link);   // link: LINK_CONNECTING / LINK_NO_MACHINE / LINK_ONLINE
 void ui_set_profiles(const ProfileList *l);      // list for the profile picker (display only, never selects)
-void ui_set_shape(const ProfileShape *s);        // active profile: preview graph + target weight (display only)
+void ui_set_shape(const ProfileShape *s);        // active profile: preview graph + stop weight (display only)
 void ui_shot(const WsShot *s);                   // each shot snapshot in order: opens / feeds the brewing screen
 // each profile's original values (the UI's storage): "edited" marks, "Reset to ..." in the keypad, Restore on the
 // Profiles page. load: false if none kept; save: keep these as the profile's original
 void ui_on_originals(bool (*load)(const char *profile, int *w10, int *deg),
                      void (*save)(const char *profile, int w10, int deg));
 void ui_set_clock(int h, int m);                          // local time for the idle screen (-1: not known yet)
-// menu changed a screen setting (to be saved); bounce: idle clock bounces around (DVD style) instead of standing still
-// splash: show the boot splash (read at start: ui_splash is called only when on)
+// the menu changed a screen setting (to be saved). bounce: the idle clock bounces around instead of standing still;
+// splash: show the boot splash at start
 void ui_on_settings(void (*cb)(int bright, int idle_min, bool bounce, bool splash));
 void ui_set_settings(int bright, int idle_min, bool bounce, bool splash);   // saved settings at boot
 void ui_set_wifi(const char *ssid, int rssi, int channel, const char *ap);   // menu: Wi-Fi page
@@ -31,18 +31,20 @@ void ui_set_offline_reason(int why, const char *ip);     // WHY_* (live.h): why 
 void ui_set_wifi_target(const char *ssid);                // network the screen tries to join ("" = none set up)
 void ui_set_machine_host(const char *host);               // configured machine address (shown, prefilled)
 void ui_set_addr(const char *screen_ip, const char *machine);   // shown on the offline screen
-void ui_set_prev(int state, const ShotTrace *t); // answer: bd_load (BD_LOAD_*); t is copied when state is BD_LOAD_OK
+void ui_set_prev(int state, const ShotTrace *t);  // previous shot: bd_load (BD_LOAD_*); t is copied when BD_LOAD_OK
 // shot history (menu): the machine's index of stored shots; a tap asks the core for one, the answer opens the review
 void ui_set_shot_index(const WsShotIndex *ix);
 // machine notification (an ordinary one): banner for ~5 s, wakes the screen; type BD_NOTICE_* (brewdeck_core.h)
 void ui_notify(int type, const char *msg);
-void ui_flush_filter(int x1, int y1, int x2, int y2, uint16_t *px, int stride);   // the pressure-release glow, on a finished area
+// the pressure-release glow, applied to a finished area just before it goes to the panel
+void ui_flush_filter(int x1, int y1, int x2, int y2, uint16_t *px, int stride);
 void ui_command_answer(int cmd, int answer);       // BD_EV_COMMAND (bd_command, bd_answer): not taken -> revert
 void ui_pressure_release(int count);              // countdown beat N (>= 0) or releasing (-1): glow + banner
 void ui_update_notice(int type, const char *release);   // the machine's update notice (release name, "" if not given)
+// a stored shot asked for from the shot history (bd_load states): opens the review on it
 void ui_set_hist(int state, const ShotTrace *s, const ProfileShape *sh, const ShotTrace *prev, int prev_state);
 
-// Hooks used by the desktop render test (harmless on the device).
+// hooks for the desktop render test, the emulator and the debug benchmark (harmless on the device)
 void ui_test_open_editor(void);
 void ui_test_open_temp_editor(void);
 void ui_test_key(char key);       // '0'-'9', '.', or 'b' for backspace
@@ -52,8 +54,8 @@ void ui_test_step(int tenths);    // +/- target weight in tenths of a gram
 void ui_test_cursor(int on);
 void ui_test_profiles(int open, int all);   // open / close the profile picker; all: ignored (one list)
 void ui_test_idle(void);          // go to the idle screen now (the next touch wakes it)
-void ui_test_wake(void);         // test hook: like a touch on the idle clock (it only goes away on a touch)
-void ui_test_screen_off(void);   // test hook: screen off now
+void ui_test_wake(void);         // like a touch on the idle clock
+void ui_test_screen_off(void);   // screen off now
 void ui_test_splash_end(void);    // close the boot splash now (the desktop emulator starts without it)
 const char *ui_bench_show(int i);   // debug benchmark: show screen i (0..), NULL past the last
 void ui_bench_glow(bool on);        // debug benchmark: the pressure-release glow held at 60 % / off

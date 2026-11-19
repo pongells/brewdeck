@@ -1,7 +1,7 @@
 // The Profiles page (one row per profile), the originals of edited values and the profile snapshots (restore panel).
 #include "../ui_int.h"
 
-// ---- profile picker (a full page) ----------------------------------------------------------------------------------
+// ---- profile picker (a full page) -----------------------------------------------------------------------------------
 // The active profile first, then recently used (newest shot of each profile in the machine's shot index, the newest
 // 50 shots), then the rest by name. A tap selects the profile with bd_select_profile (only while online and idle in
 // HOME; otherwise the tap only closes the page); the header and the check mark follow once the machine reports it.
@@ -42,13 +42,14 @@ void picker_open(void) {
 }
 void on_pick_open(lv_event_t *e)  { (void)e; picker_open(); }
 static void on_pick_close(lv_event_t *e) { (void)e; picker_close(); }
-// ---- originals and "edited" ----------------------------------------------------------------------------------------
+// ---- originals and "edited" -----------------------------------------------------------------------------------------
 // Changes made here are saved on the machine (bd_set_* with save = true), so they outlive a machine restart. To get
 // back, the screen keeps a snapshot of each profile's stop weight and brew temperature (its "original": the stored
 // values the first time the screen sees the profile, or from before its first change here; ui_bridge.cpp keeps them
 // in the UI's storage, key = the profile name). While a value differs from it, Ready says "Brew temp - edited" /
-// "Stop weight - edited", the keypad has "Reset to <original>", and on the Profiles page the edited values are
-// blue with a Restore button (a long press on the row too), which offers Restore original / Keep current (snap_*). The snapshot is never dropped.
+// "Stop weight - edited", the keypad has "Reset to <original>", and on the Profiles page the edited values are blue
+// with a Restore button (a long press on the row too), which offers Restore original / Keep current (snap_*). The
+// snapshot is never dropped.
 static bool (*g_orig_load)(const char *profile, int *w10, int *deg) = NULL;
 static void (*g_orig_save)(const char *profile, int w10, int deg) = NULL;
 static char g_orig_name[48] = "\x01";     // profile the cache below is for (never a real name at start)
@@ -119,7 +120,11 @@ static void snap_capture(void) {
 }
 // a profile's current values: what the machine runs for the active one, else the stored ones
 static void prof_now(const ProfileInfo *p, int *w10, int *deg) {
-  if (p->selected && !g_pend_id && g_act_weight10 >= 0 && g_act_temp > 0) { *w10 = g_act_weight10; *deg = g_act_temp; return; }
+  if (p->selected && !g_pend_id && g_act_weight10 >= 0 && g_act_temp > 0) {
+    *w10 = g_act_weight10;
+    *deg = g_act_temp;
+    return;
+  }
   *w10 = (int)(p->weight * 10.0f + 0.5f);
   *deg = (int)(p->temp + 0.5f);
 }
@@ -136,7 +141,7 @@ static void snap_values(char *out, size_t n, int w10, int deg) {
 }
 
 // restore: the machine changes only the active profile, so another profile is selected first and its values are
-// sent once the machine reports it active (ui_set_live, within 10 s); both are saved like any change here
+// sent once the machine reports it active (ui_set_live, within RESTORE_WAIT_MS); both are saved like any change here
 static bool pick_profile(int id);
 Restore g_rst;
 void snap_apply(void) {
@@ -242,8 +247,9 @@ static void on_pick_hold(lv_event_t *e) {           // a long press on an edited
   set_text(g_rs_orig, v);
   snap_values(v, sizeof v, cw, cd);
   set_text(g_rs_now, v);
-  set_text(g_rs_note, p->selected ? "Restore sets the original values and saves them on the machine."
-                                  : "Restore selects this profile, then sets the original values and saves them on the machine.");
+  set_text(g_rs_note,
+           p->selected ? "Restore sets the original values and saves them on the machine."
+                       : "Restore selects this profile, then sets the original values and saves them on the machine.");
   lv_obj_set_hidden(g_rs_back, false);
 }
 static void on_pick_row(lv_event_t *e) {
@@ -255,8 +261,8 @@ static void on_pick_row(lv_event_t *e) {
 static bool pick_profile(int id) {
   const ProfileInfo *p = prof_by_id(id);
   if (!p || p->selected || !g_can_select) return false;
-  // a -/+ change still waiting for its 1 s belongs to the OLD profile: send it now, before the switch (the core refuses
-  // it if the machine has already switched), so it can never land on the new profile or poison its originals
+  // a -/+ change still waiting to be sent belongs to the OLD profile: send it now, before the switch (the core
+  // refuses it if the machine has already switched), so it can never land on the new profile or poison its originals
   if (timer_pending(g_weight_tm)) weight_commit(NULL);
   if (timer_pending(g_temp_tm)) temp_commit(NULL);
   // saved as the boot profile once the machine has taken it; refused (offline, busy): nothing to show
@@ -332,13 +338,16 @@ static void add_row(lv_obj_t *list, const ProfileInfo *p) {
   // from the profile's original (Restore puts it back)
   int cw = 0, cd = 0, sw = -1, sd = -1;
   if (p->detail) prof_now(p, &cw, &cd);
-  if (cd > 0) {                                    // values known (a profile's details come a few seconds after the list)
+  // values known (a profile's details come a few seconds after the list)
+  if (cd > 0) {
     const bool snap = snap_get(p->name, &sw, &sd);
     char b[16];
     if (cw > 0) {
       if (cw % 10) snprintf(b, sizeof b, "%d.%d g", cw / 10, cw % 10); else snprintf(b, sizeof b, "%d g", cw / 10);
       pk_cell(row, b, PK_STOP_R, 64, snap && cw != sw ? COL_BLUE : COL_TEXT);
-    } else pk_cell(row, "\xE2\x88\x9E", PK_STOP_R, 64, snap && cw != sw ? COL_BLUE : COL_MUTED);   // no stop weight: infinity
+    } else {                                       // no stop weight: infinity
+      pk_cell(row, "\xE2\x88\x9E", PK_STOP_R, 64, snap && cw != sw ? COL_BLUE : COL_MUTED);
+    }
     snprintf(b, sizeof b, "%d\xC2\xB0", cd);
     pk_cell(row, b, PK_TEMP_R, 52, snap && cd != sd ? COL_BLUE : COL_TEXT);
   }
@@ -362,8 +371,8 @@ static void add_row(lv_obj_t *list, const ProfileInfo *p) {
   }
 }
 
-// fingerprint of everything the rows show: rebuilding ~100 objects took ~170 ms of the page's ~280 ms opening, and
-// usually nothing has changed since the last time (the day is in it for "today" / "yesterday")
+// fingerprint of everything the rows show: rebuilding ~100 objects is most of the page's opening time, and usually
+// nothing has changed since the last time (the day is in it for "today" / "yesterday")
 static uint32_t picker_sig(void) {
   uint32_t h = FNV_SEED;
   auto mix = [&h](const void *p, size_t n) { h = fnv1a(h, p, n); };
@@ -375,7 +384,8 @@ static uint32_t picker_sig(void) {
     mix(&p->phases, sizeof p->phases); mix(&p->weight, sizeof p->weight); mix(&p->temp, sizeof p->temp);
     const uint32_t used = prof_last_used(p->name);
     mix(&used, sizeof used);
-    int sw = -1, sd = -1, cw, cd;                   // its snapshot and current values (edited ones blue, Restore button)
+    // its snapshot and current values (edited ones blue, Restore button)
+    int sw = -1, sd = -1, cw, cd;
     snap_get(p->name, &sw, &sd);
     prof_now(p, &cw, &cd);
     mix(&sw, sizeof sw); mix(&sd, sizeof sd); mix(&cw, sizeof cw); mix(&cd, sizeof cd);
