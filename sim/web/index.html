@@ -41,6 +41,33 @@ button[aria-pressed="true"] { background: #0F2233; color: var(--blue); }
 .note > a:hover { text-decoration: underline; }
 a { color: var(--blue); }
 kbd { font: inherit; font-size: 13px; padding: 1px 6px; border-radius: 6px; background: var(--card); color: var(--text); }
+/* how it works: a layer stack, then two cards */
+.how { margin-top: 56px; display: flex; flex-direction: column; gap: 16px; }
+.how > h2, .make > h2 { font-size: 26px; font-weight: 300; color: var(--text); margin: 0; }
+.how > p, .make > p { margin: 0; color: var(--muted); max-width: 68ch; }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
+.stack { display: grid; gap: 6px; }
+.tier { display: grid; grid-template-columns: 150px 1fr; gap: 6px 20px; align-items: baseline; background: var(--desk);
+  border: 1px solid var(--line); border-radius: 16px; padding: 14px 18px; border-left-width: 3px; }
+.tier b { font-size: 18px; font-weight: 400; }
+.tier span { color: var(--muted); font-size: 15px; }
+.tier.ui { border-left-color: var(--gold); }
+.tier.core { border-left-color: var(--blue); }
+.tier.board { border-left-color: var(--faint); }
+.tier.machine { border-left-color: #4ADE80; }
+.joint { padding-left: 20px; color: var(--faint); font-size: 13px; }
+code { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.86em; background: var(--card);
+  color: var(--text); padding: 1px 5px; border-radius: 5px; overflow-wrap: anywhere; }
+.make { margin-top: 56px; display: flex; flex-direction: column; gap: 16px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.card { background: var(--desk); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; display: flex;
+  flex-direction: column; gap: 10px; min-width: 0; }
+.card h3 { margin: 0; font-size: 18px; font-weight: 600; }
+.card p { margin: 0; color: var(--muted); font-size: 15px; }
+.card ol { margin: 0; padding-left: 20px; color: var(--muted); font-size: 15px; display: flex; flex-direction: column; gap: 6px; }
+.card a.more { font-weight: 600; text-decoration: none; margin-top: auto; }
+.card a.more:hover { text-decoration: underline; }
+@media (max-width: 560px) { .tier { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -93,6 +120,60 @@ kbd { font: inherit; font-size: 13px; padding: 1px 6px; border-radius: 6px; back
     </section>
   </div>
   <div class="status" id="status" aria-live="polite"></div>
+
+  <section class="how">
+    <div class="eyebrow">How it works</div>
+    <h2>Three layers, one contract between them</h2>
+    <p>Brewdeck is a separate touchscreen. It is not wired to the machine: it reads it over Wi-Fi through Gaggiuino's
+      documented REST and WebSocket API. The firmware is split so each part can be replaced on its own. Only the core
+      talks to the machine, and it checks every command before sending it.</p>
+    <div class="stack">
+      <div class="tier ui"><b>UI</b><span>The screens you see above. Any graphics library; Brewdeck's own uses LVGL 9.
+        It reads plain state, asks the core for things and gets told what happened.</span></div>
+      <div class="joint">↕ <code>brewdeck_core.h</code>, the core API (version 1)</div>
+      <div class="tier core"><b>Core</b><span>Wi-Fi, finding the machine, REST and WebSocket, shot start and end, settings.
+        The only part that sends anything, and only a short list: pick a profile, stop weight, brew temperature, save
+        them, flush, tare. Never pumps, valves, heater or steam.</span></div>
+      <div class="joint">↕ panel, touch, backlight, memory</div>
+      <div class="tier board"><b>Board</b><span>One folder per screen model: the Sunton ESP32-S3 4.3″ (800 × 480), and an
+        experimental Guition ESP32-P4 port.</span></div>
+      <div class="joint">↕ Wi-Fi</div>
+      <div class="tier machine"><b>Machine</b><span>Gaggiuino's own firmware, untouched. On this page the machine is fake: it
+        replays a recorded shot and steam session.</span></div>
+    </div>
+  </section>
+
+  <section class="make">
+    <div class="eyebrow">Make it yours</div>
+    <h2>A new look, or a new screen</h2>
+    <p>Because the layers are separate, you can replace the UI without touching the network code, or bring Brewdeck to
+      another ESP32 panel without touching the UI.</p>
+    <div class="cards">
+      <div class="card">
+        <h3>Write your own UI</h3>
+        <p>A UI implements four functions (<code>bd_ui_init</code>, <code>tick</code>, <code>event</code>,
+          <code>wake</code>) and calls the rest of the core API.</p>
+        <ol>
+          <li>Copy <code>firmware/src/ui_minimal</code>, a 150-line example (MIT licensed).</li>
+          <li>Try it against the fake machine: <code>UI=myui sim/build-emu.sh</code></li>
+          <li>Build the firmware: <code>UI=myui ./build.sh ui</code></li>
+        </ol>
+        <a class="more" href="https://github.com/pongells/brewdeck/blob/main/docs/custom-ui.md">Custom UI guide →</a>
+      </div>
+      <div class="card">
+        <h3>Bring it to another screen</h3>
+        <p>A board folder provides the panel, touch, backlight and memory. The core and the UI stay the same; the P4
+          port was done this way.</p>
+        <ol>
+          <li>Start from <code>firmware/src/board/s3</code> (RGB panel) or <code>board/p4</code> (DSI panel).</li>
+          <li>Add an environment in <code>platformio.ini</code> with its own <code>custom_board</code>.</li>
+          <li>Touch is shared (GT911); other controllers go in <code>board/common</code>.</li>
+        </ol>
+        <a class="more" href="https://github.com/pongells/brewdeck/blob/main/docs/architecture.md">Architecture notes →</a>
+      </div>
+    </div>
+    <p>There is no step-by-step porting guide yet. If you want to try a screen, open a discussion on GitHub.</p>
+  </section>
 
   <footer class="note">
     <div>
