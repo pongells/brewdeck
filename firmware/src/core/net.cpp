@@ -356,120 +356,153 @@ void net_get_machine(char *out, size_t cap) {
   snprintf(out, cap, "%s", g_mhost);
   xSemaphoreGive(g_net_mtx);
 }
-static void task(void *) {
-  static char buf[8192];   // a full profile is ~0.7-3 KB, the status ~1 KB
-  static LiveData d;
+// ---- the network task: one pass of its loop, step by step ------------------------------------------------------
+// The loop's state (only this task touches it).
+static struct {
+  char buf[8192];                                   // a full profile is ~0.7-3 KB, the status ~1 KB
+  LiveData d;                                       // the last status reply
   IPAddress ip;
-  bool have_ip = false;
-  int fails = 0;
+  bool have_ip;
+  int fails;                                        // status requests failed in a row
+} g_loop;
+
+// Wi-Fi: join, rejoin, roaming, the screen's own Wi-Fi requests. true = it did something: start the pass again
+static bool loop_wifi(void) {
+  static bool rest_idle = true;                     // from the last status reply
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
+  const bool idle = rest_idle && g_prev_tries <= 0 && millis() - data_last_shot_ms() > 90000;
+  xSemaphoreGive(g_net_mtx);
+  if (wifi_step(idle)) { g_loop.have_ip = false; g_loop.fails = 0; return true; }
+  rest_idle = !g_loop.d.brew_active && !g_loop.d.steam_active && !g_loop.d.hot_water_active;
+  return false;
+}
+
+// a new machine address from the screen: saved, then looked up from scratch
+static void loop_machine_addr(void) {
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
+  const bool hreq = g_mhost_req;
+  char nh[64];
+  memcpy(nh, g_mhost_new, sizeof nh);
+  g_mhost_req = false;
+  xSemaphoreGive(g_net_mtx);
+  if (!hreq) return;
+  Preferences p;
+  if (p.begin("machine", false)) { p.putString("host", nh); p.end(); }
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
+  snprintf(g_mhost, sizeof g_mhost, "%s", nh);
+  g_have_ip = false;
+  xSemaphoreGive(g_net_mtx);
+  g_last_ip = IPAddress();
+  g_loop.have_ip = false;
+  g_loop.fails = 0;
+  Log.printf("net: machine address set to \"%s\" (saved)\n", nh);
+  data_publish(NULL, BD_LINK_NO_MACHINE);
+}
+
+// no Wi-Fi: say why, wait. true = down
+static bool loop_wifi_down(void) {
+  int why;
+  if (!wifi_down_why(&why)) return false;
+  data_set_why(why, IPAddress());
+  data_publish(NULL, BD_LINK_CONNECTING);
+  g_loop.have_ip = false;
+  delay(500);
+  return true;
+}
+
+// the machine's address (mDNS name or IP; the last one found while the name does not answer). false = not found
+static bool loop_find_machine(void) {
+  if (g_loop.have_ip) return true;
+  static bool mdns_up = false;
+  if (!mdns_up) mdns_up = MDNS.begin(board_hostname());
+  IPAddress ip;
+  bool found = resolve(&ip);
+  if (!found && (uint32_t)g_last_ip != 0) {
+    Log.printf("net: mDNS no answer, keeping %s\n", g_last_ip.toString().c_str());
+    ip = g_last_ip;
+    found = true;
+  }
+  if (!found) {
+    static uint32_t t_log;
+    if (!t_log || millis() - t_log > 30000) {        // every 30 s, so the log shows the task is still trying
+      t_log = stamp_nz(millis());
+      Log.printf("net: \"%s\" not found (mDNS), retrying\n", g_mhost);
+    }
+    data_set_why(BD_WHY_NAME_UNKNOWN, IPAddress());
+    data_publish(NULL, BD_LINK_NO_MACHINE);
+    delay(1500);
+    return false;
+  }
+  g_loop.ip = ip;
+  g_loop.have_ip = true;
+  g_last_ip = ip;
+  Log.printf("machine at %s\n", ip.toString().c_str());
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
+  g_ip = ip;
+  g_have_ip = true;
+  xSemaphoreGive(g_net_mtx);
+  return true;
+}
+
+// a Wi-Fi scan (roaming, or the Wi-Fi page) takes the radio off the channel for 1-4 s: a request then fails and
+// counted towards "machine not answering". Wait for the scan instead; the WebSocket keeps the last values meanwhile.
+// true = waiting
+static bool loop_scan_wait(void) {
+  static uint32_t scan_wait = 0;                    // at most 6 s: a scan that never ends must not stop the polling
+  if (WiFi.scanComplete() == WIFI_SCAN_RUNNING && (!scan_wait || millis() - scan_wait < 6000)) {
+    if (!scan_wait) scan_wait = stamp_nz(millis());
+    delay(100);
+    return true;
+  }
+  scan_wait = 0;
+  return false;
+}
+
+// the status poll (~1 s) and what follows it: a pick, the previous shot, a history tap, the profiles
+static void loop_poll(void) {
+  LiveData *d = &g_loop.d;
+  const IPAddress ip = g_loop.ip;
+  // a shot-history tap first (it woke the task): judged on the last status (< ~1 s old, it must have succeeded),
+  // so the shot is not delayed by this status request; the call after the status below covers the other case
+  if (g_loop.fails == 0 && d->mode[0]) hist_step(ip, d);
+  if (fetch(ip, "/api/system/status", g_loop.buf, sizeof g_loop.buf) && strchr(g_loop.buf, '{')) {
+    parse_status(g_loop.buf, d);
+    data_set_why(BD_WHY_NONE, IPAddress());
+    data_publish(d, BD_LINK_ONLINE);
+    g_loop.fails = 0;
+    select_step(ip, g_loop.buf, sizeof g_loop.buf, d);
+    {   // remember the newest stored shot while idle and no lookup is pending (see g_before_id)
+      const uint32_t newest = data_newest_shot();
+      xSemaphoreTake(g_net_mtx, portMAX_DELAY);
+      if (!d->brew_active && g_prev_tries <= 0 && newest) g_before_id = newest;
+      xSemaphoreGive(g_net_mtx);
+    }
+    prev_step(ip, d);
+    hist_step(ip, d);
+    profiles_step(ip, g_loop.buf, sizeof g_loop.buf, d);
+    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(900));   // ~1 s poll; a profile tap wakes it at once
+  } else {
+    ++g_loop.fails;
+    Log.printf("net: status request %d failed (rssi %d)\n", g_loop.fails, WiFi.RSSI());
+    if (g_loop.fails >= 3) {
+      Log.println("net: machine not answering, looking it up again");
+      data_set_why(BD_WHY_NO_REPLY, ip);
+      data_publish(NULL, BD_LINK_NO_MACHINE);
+      g_loop.have_ip = host_is_ip(g_mhost);
+    }
+    delay(700);
+  }
+}
+
+static void task(void *) {
   wifi_start();
   for (;;) {
-    {
-      static bool rest_idle = true;                 // from the last status reply
-      xSemaphoreTake(g_net_mtx, portMAX_DELAY);
-      const bool idle = rest_idle && g_prev_tries <= 0 && millis() - data_last_shot_ms() > 90000;
-      xSemaphoreGive(g_net_mtx);
-      if (wifi_step(idle)) { have_ip = false; fails = 0; continue; }
-      rest_idle = !d.brew_active && !d.steam_active && !d.hot_water_active;
-    }
-    {
-      xSemaphoreTake(g_net_mtx, portMAX_DELAY);
-      const bool hreq = g_mhost_req;
-      char nh[64];
-      memcpy(nh, g_mhost_new, sizeof nh);
-      g_mhost_req = false;
-      xSemaphoreGive(g_net_mtx);
-      if (hreq) {
-        Preferences p;
-        if (p.begin("machine", false)) { p.putString("host", nh); p.end(); }
-        xSemaphoreTake(g_net_mtx, portMAX_DELAY);
-        snprintf(g_mhost, sizeof g_mhost, "%s", nh);
-        g_have_ip = false;
-        xSemaphoreGive(g_net_mtx);
-        g_last_ip = IPAddress();
-        have_ip = false;
-        fails = 0;
-        Log.printf("net: machine address set to \"%s\" (saved)\n", nh);
-        data_publish(NULL, BD_LINK_NO_MACHINE);
-      }
-    }
-    {
-      int why;
-      if (wifi_down_why(&why)) {
-        data_set_why(why, IPAddress());
-        data_publish(NULL, BD_LINK_CONNECTING);
-        have_ip = false;
-        delay(500);
-        continue;
-      }
-    }
-    if (!have_ip) {
-      static bool mdns_up = false;
-      if (!mdns_up) mdns_up = MDNS.begin(board_hostname());
-      have_ip = resolve(&ip);
-      if (!have_ip && (uint32_t)g_last_ip != 0) {
-        Log.printf("net: mDNS no answer, keeping %s\n", g_last_ip.toString().c_str());
-        ip = g_last_ip;
-        have_ip = true;
-      }
-      if (have_ip) {
-        g_last_ip = ip;
-        Log.printf("machine at %s\n", ip.toString().c_str());
-        xSemaphoreTake(g_net_mtx, portMAX_DELAY);
-        g_ip = ip;
-        g_have_ip = true;
-        xSemaphoreGive(g_net_mtx);
-      }
-      else {
-        static uint32_t t_log;
-        if (!t_log || millis() - t_log > 30000) {    // every 30 s, so the log shows the task is still trying
-          t_log = stamp_nz(millis());
-          Log.printf("net: \"%s\" not found (mDNS), retrying\n", g_mhost);
-        }
-        data_set_why(BD_WHY_NAME_UNKNOWN, IPAddress()); data_publish(NULL, BD_LINK_NO_MACHINE); delay(1500); continue;
-      }
-    }
-    // a Wi-Fi scan (roaming, or the Wi-Fi page) takes the radio off the channel for 1-4 s: a request then fails and
-    // counted towards "machine not answering". Wait for the scan instead; the WebSocket keeps the last values meanwhile
-    {
-      static uint32_t scan_wait = 0;                // at most 6 s: a scan that never ends must not stop the polling
-      if (WiFi.scanComplete() == WIFI_SCAN_RUNNING && (!scan_wait || millis() - scan_wait < 6000)) {
-        if (!scan_wait) scan_wait = stamp_nz(millis());
-        delay(100);
-        continue;
-      }
-      scan_wait = 0;
-    }
-    // a shot-history tap first (it woke the task): judged on the last status (< ~1 s old, it must have succeeded),
-    // so the shot is not delayed by this status request; the call after the status below covers the other case
-    if (fails == 0 && d.mode[0]) hist_step(ip, &d);
-    if (fetch(ip, "/api/system/status", buf, sizeof buf) && strchr(buf, '{')) {
-      parse_status(buf, &d);
-      data_set_why(BD_WHY_NONE, IPAddress());
-      data_publish(&d, BD_LINK_ONLINE);
-      fails = 0;
-      select_step(ip, buf, sizeof buf, &d);
-      {   // remember the newest stored shot while idle and no lookup is pending (see g_before_id)
-        const uint32_t newest = data_newest_shot();
-        xSemaphoreTake(g_net_mtx, portMAX_DELAY);
-        if (!d.brew_active && g_prev_tries <= 0 && newest) g_before_id = newest;
-        xSemaphoreGive(g_net_mtx);
-      }
-      prev_step(ip, &d);
-      hist_step(ip, &d);
-      profiles_step(ip, buf, sizeof buf, &d);
-      ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(900));   // ~1 s poll; a profile tap wakes it at once
-    } else {
-      ++fails;
-      Log.printf("net: status request %d failed (rssi %d)\n", fails, WiFi.RSSI());
-      if (fails >= 3) {
-        Log.println("net: machine not answering, looking it up again");
-        data_set_why(BD_WHY_NO_REPLY, ip);
-        data_publish(NULL, BD_LINK_NO_MACHINE);
-        have_ip = host_is_ip(g_mhost);
-      }
-      delay(700);
-    }
+    if (loop_wifi()) continue;
+    loop_machine_addr();
+    if (loop_wifi_down()) continue;
+    if (!loop_find_machine()) continue;
+    if (loop_scan_wait()) continue;
+    loop_poll();
   }
 }
 

@@ -145,39 +145,43 @@ static void log_ap(const char *what) {
   Log.printf("wifi: %s AP %s, channel %d, %d dBm\n", what, WiFi.BSSIDstr().c_str(), (int)WiFi.channel(), (int)WiFi.RSSI());
 }
 
-// called every pass of the net task; idle = nothing running on the machine and no review / lookup / user scan
-static void roam_step(bool idle) {
-  const uint32_t now = millis();
-  if (WiFi.status() != WL_CONNECTED) {
-    if (!g_down_ms) g_down_ms = stamp_nz(now);
-    // the first join after boot dropped: try again after 1 s, up to 3 times, instead of waiting 15 s (an ESP32-P4
-    // board whose ESP32-C6 runs older ESP-Hosted firmware drops the first join at every boot)
-    static uint8_t quick = 0;
-    if (!g_ever_joined && g_disc_ms && now - g_disc_ms > 1000 && quick < 3 && g_ssid[0]) {
-      quick++;
-      g_disc_ms = 0;
-      Log.printf("wifi: first join dropped (reason %u), trying again now (%u of 3)\n", (unsigned)g_disc_reason,
-                 (unsigned)quick);
-      WiFi.disconnect(false);
-      delay(100);
-      WiFi.begin(g_ssid, g_pass);
-      g_down_ms = stamp_nz(now);
-      return;
-    }
-    // down for 15 s: join again ourselves, every 15 s. The Arduino core's auto-reconnect skips some reasons: reason 8
-    // (ASSOC_LEAVE, sent by access points being re-provisioned) left the screen offline for good.
-    if (now - g_down_ms > 15000 && g_ssid[0]) {
-      Log.printf("wifi: not connected for 15 s (last reason %u)%s, joining again\n", (unsigned)g_disc_reason,
-                    g_pinned ? ", leaving the pinned AP" : "");
-      g_pinned = false;
-      WiFi.disconnect(false);
-      delay(100);
-      WiFi.begin(g_ssid, g_pass);
-      g_down_ms = stamp_nz(now);
-    }
-    g_rssi_avg = 0;
+// leave the current AP and join again: any AP of the network (bssid NULL), or that one on its channel
+static void rejoin(const uint8_t *bssid, int ch) {
+  WiFi.disconnect(false);
+  delay(100);
+  if (bssid) WiFi.begin(g_ssid, g_pass, ch, bssid);
+  else WiFi.begin(g_ssid, g_pass);
+}
+
+// not connected: retry a dropped first join quickly, otherwise join again every 15 s
+static void roam_down(uint32_t now) {
+  if (!g_down_ms) g_down_ms = stamp_nz(now);
+  // the first join after boot dropped: try again after 1 s, up to 3 times, instead of waiting 15 s (an ESP32-P4
+  // board whose ESP32-C6 runs older ESP-Hosted firmware drops the first join at every boot)
+  static uint8_t quick = 0;
+  if (!g_ever_joined && g_disc_ms && now - g_disc_ms > 1000 && quick < 3 && g_ssid[0]) {
+    quick++;
+    g_disc_ms = 0;
+    Log.printf("wifi: first join dropped (reason %u), trying again now (%u of 3)\n", (unsigned)g_disc_reason,
+               (unsigned)quick);
+    rejoin(NULL, 0);
+    g_down_ms = stamp_nz(now);
     return;
   }
+  // down for 15 s: join again ourselves, every 15 s. The Arduino core's auto-reconnect skips some reasons: reason 8
+  // (ASSOC_LEAVE, sent by access points being re-provisioned) left the screen offline for good.
+  if (now - g_down_ms > 15000 && g_ssid[0]) {
+    Log.printf("wifi: not connected for 15 s (last reason %u)%s, joining again\n", (unsigned)g_disc_reason,
+               g_pinned ? ", leaving the pinned AP" : "");
+    g_pinned = false;
+    rejoin(NULL, 0);
+    g_down_ms = stamp_nz(now);
+  }
+  g_rssi_avg = 0;
+}
+
+// connected: note a (re)join, and keep a smoothed signal level (one sample per 2 s)
+static void roam_signal(uint32_t now) {
   if (g_down_ms || !g_join_ms) {                    // (re)joined
     g_ever_joined = true;
     g_down_ms = 0;
@@ -185,27 +189,36 @@ static void roam_step(bool idle) {
     log_ap("joined");
   }
   static uint32_t t_s;
-  if (now - t_s >= 2000) {                          // smoothed signal, one sample per 2 s
+  if (now - t_s >= 2000) {
     t_s = now;
     const int r = WiFi.RSSI();
     if (r < 0) g_rssi_avg = g_rssi_avg == 0 ? r : g_rssi_avg * 0.9f + r * 0.1f;
   }
-  if (!g_roam_scanning) {
-    const bool force = g_roam_force;
-    const bool due = idle && g_rssi_avg != 0 && g_rssi_avg < ROAM_WEAK_DBM && now - g_join_ms > ROAM_SETTLE_MS &&
-                     (!g_roam_last || now - g_roam_last > ROAM_EVERY_MS);
-    if (!force && !due) return;
-    if (g_scanning || g_scan_req || WiFi.scanComplete() == WIFI_SCAN_RUNNING) return;   // the Wi-Fi page scans
-    g_roam_force = false;
-    g_roam_last = stamp_nz(now);
-    WiFi.scanDelete();
-    // active scan, 120 ms per channel (default 300): ~1.6 s for 13 channels, the station goes back to its own
-    // channel between them
-    if (WiFi.scanNetworks(true, false, false, 120) == WIFI_SCAN_FAILED) { Log.println("wifi: roaming scan failed to start"); return; }
-    g_roam_scanning = true;
-    Log.printf("wifi: roaming scan (%s, average %.0f dBm on %s)\n", force ? "asked" : "weak signal", g_rssi_avg, WiFi.BSSIDstr().c_str());
+}
+
+// start a roaming scan when asked (debug /roam) or when the signal is weak while idle
+static void roam_scan_start(uint32_t now, bool idle) {
+  const bool force = g_roam_force;
+  const bool due = idle && g_rssi_avg != 0 && g_rssi_avg < ROAM_WEAK_DBM && now - g_join_ms > ROAM_SETTLE_MS &&
+                   (!g_roam_last || now - g_roam_last > ROAM_EVERY_MS);
+  if (!force && !due) return;
+  if (g_scanning || g_scan_req || WiFi.scanComplete() == WIFI_SCAN_RUNNING) return;   // the Wi-Fi page scans
+  g_roam_force = false;
+  g_roam_last = stamp_nz(now);
+  WiFi.scanDelete();
+  // active scan, 120 ms per channel (default 300): ~1.6 s for 13 channels, the station goes back to its own
+  // channel between them
+  if (WiFi.scanNetworks(true, false, false, 120) == WIFI_SCAN_FAILED) {
+    Log.println("wifi: roaming scan failed to start");
     return;
   }
+  g_roam_scanning = true;
+  Log.printf("wifi: roaming scan (%s, average %.0f dBm on %s)\n", force ? "asked" : "weak signal", g_rssi_avg,
+             WiFi.BSSIDstr().c_str());
+}
+
+// the roaming scan's result: move to the network's strongest other AP if it is ROAM_GAIN_DB stronger
+static void roam_scan_done(void) {
   const int16_t n = WiFi.scanComplete();
   if (n == WIFI_SCAN_RUNNING) return;
   g_roam_scanning = false;
@@ -218,7 +231,8 @@ static void roam_step(bool idle) {
   for (int i = 0; i < n; i++) {
     if (WiFi.SSID(i) != g_ssid) continue;
     const bool same = memcmp(WiFi.BSSID(i), cur, 6) == 0;
-    Log.printf("wifi:   %s channel %d %d dBm%s\n", WiFi.BSSIDstr(i).c_str(), (int)WiFi.channel(i), (int)WiFi.RSSI(i), same ? " (current)" : "");
+    Log.printf("wifi:   %s channel %d %d dBm%s\n", WiFi.BSSIDstr(i).c_str(), (int)WiFi.channel(i), (int)WiFi.RSSI(i),
+               same ? " (current)" : "");
     if (same) cur_rssi = WiFi.RSSI(i);
     else if (WiFi.RSSI(i) > best_rssi) { best = i; best_rssi = WiFi.RSSI(i); }
   }
@@ -226,17 +240,25 @@ static void roam_step(bool idle) {
     uint8_t bssid[6];
     memcpy(bssid, WiFi.BSSID(best), 6);
     const int ch = WiFi.channel(best);
-    Log.printf("wifi: moving to AP %s, channel %d (%d dBm, now %d)\n", WiFi.BSSIDstr(best).c_str(), ch, best_rssi, cur_rssi);
+    Log.printf("wifi: moving to AP %s, channel %d (%d dBm, now %d)\n", WiFi.BSSIDstr(best).c_str(), ch, best_rssi,
+               cur_rssi);
     WiFi.scanDelete();
-    WiFi.disconnect(false);
-    delay(100);
-    WiFi.begin(g_ssid, g_pass, ch, bssid);
+    rejoin(bssid, ch);
     g_pinned = true;
     g_down_ms = stamp_nz(millis());
   } else {
     Log.printf("wifi: staying (best other AP %d dBm, this one %d)\n", best_rssi, cur_rssi);
     WiFi.scanDelete();
   }
+}
+
+// called every pass of the net task; idle = nothing running on the machine and no review / lookup / user scan
+static void roam_step(bool idle) {
+  const uint32_t now = millis();
+  if (WiFi.status() != WL_CONNECTED) { roam_down(now); return; }
+  roam_signal(now);
+  if (!g_roam_scanning) roam_scan_start(now, idle);
+  else roam_scan_done();
 }
 
 static bool wifi_join_step(void) {
