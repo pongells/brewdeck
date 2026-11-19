@@ -1,4 +1,5 @@
-# Keeps the GitHub Actions in .github/workflows current (they are pinned to commits; Dependabot updates the pins).
+# Keeps the GitHub Actions in .github/workflows current: GitHub's own actions by major version, third-party ones pinned
+# to a commit (Dependabot updates both).
 version: 2
 updates:
   - package-ecosystem: github-actions

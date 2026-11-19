@@ -8,9 +8,13 @@ on:
 permissions:
   contents: read
 
+concurrency:   # a newer push to the same branch or PR replaces the running checks
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   tests:
-    name: Unit tests (parsers and decoders, ASan + UBSan)
+    name: Unit tests (parsers, decoders, command rules; ASan + UBSan)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -39,7 +43,7 @@ jobs:
           path: sim/out/*.png
 
   firmware:
-    name: Firmware (release and debug builds, the example UI)
+    name: Firmware (release and debug builds, the example UI, the touch test)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -48,6 +52,7 @@ jobs:
         with:
           path: ~/.platformio
           key: platformio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+          restore-keys: platformio-${{ runner.os }}-
       - name: Build (first run downloads the toolchain and recompiles the core)
         working-directory: firmware
         run: |
@@ -55,6 +60,7 @@ jobs:
           ./build-pio.sh ui || { uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0 && ./build-pio.sh ui; }
           ./build-pio.sh ui-debug
           UI=ui_minimal ./build-pio.sh ui   # the example UI: proves a UI builds on the core API alone
+          ./build-pio.sh touchtest
 
   firmware-p4:
     # separate job and cache: the two boards need differently compiled Arduino libraries, and pioarduino keeps one copy
@@ -67,6 +73,7 @@ jobs:
         with:
           path: ~/.platformio
           key: platformio-p4-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+          restore-keys: platformio-p4-${{ runner.os }}-
       - name: Build
         working-directory: firmware
         run: |
