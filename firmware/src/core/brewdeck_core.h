@@ -43,7 +43,7 @@
 extern "C" {
 #endif
 
-#define BD_API_VERSION 1          // 1 = first stable (2026-11-18)
+#define BD_API_VERSION 1          // 1 = the first stable API
 
 // ---- results ------------------------------------------------------------------------------------------------------
 typedef enum {
@@ -291,7 +291,7 @@ typedef struct {
 typedef struct {
   const char *name;         // shown in the log and Menu-like places; also the storage namespace (max 15 chars)
   const char *version;
-  int         api_version;  // BD_API_VERSION it was built against
+  int         api_version;  // the API version the UI was written for, as a literal (not BD_API_VERSION)
 } bd_ui_desc;
 extern const bd_ui_desc BD_UI;
 void bd_ui_init(void);                      // once, after the display, touch and the core are up (build the screens)

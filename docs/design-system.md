@@ -7,7 +7,7 @@ The rules every screen follows. The tokens live in `firmware/src/ui/theme.h`; us
 
 - **Read at a glance from a metre away.** Each screen answers one question (can I pull now, what is the shot
   doing, how did it go). One big number per screen; everything else stays quiet.
-- **One colour per value.** Pressure is blue, flow gold, water temperature red, weight white, on every screen and in
+- **One colour per value.** Pressure is blue, flow gold, brew temperature red, weight white, on every screen and in
   every chart. A colour never changes within a value.
 - **Controls and information look different.** Things you can tap are rounded rectangles on a card background.
   Information is plain text, and becomes a pill only while it needs attention.
@@ -18,8 +18,8 @@ The rules every screen follows. The tokens live in `firmware/src/ui/theme.h`; us
 
 ## Type
 
-One family, [Inter Tight](https://github.com/rsms/inter), in six steps and three weights (four with the hero's
-200). Weight 300 is for large numbers, 400 for text, 600 for emphasis (pills, buttons, the selected row).
+One family, [Inter Tight](https://github.com/rsms/inter-tight), in seven sizes and four weights (200 only for the hero
+and the splash). Weight 300 is for large numbers, 400 for text, 600 for emphasis (pills, buttons, the selected row).
 
 | Token | Size / weight | Use |
 |---|---|---|
@@ -120,7 +120,7 @@ saucer with the logo's three wisps as steam, and the Wi-Fi arcs. While trying th
 2.4 s; arcs light up from the inside, 1.8 s); when something is wrong the drawing turns grey and a 30 px badge sits on
 the tile's corner: orange "?" / "!" for a problem, gold "+" for something to set up. The title stays white. The cup
 and saucer are pre-rendered (LVGL draws no ellipses): `python3 tools/gen_cup.py` writes `screens/cup_art.h`; the steam
-and arcs are drawn live. Positions are fixed in every state (tile 72, title 212, text 256, buttons 328, details 430),
+and arcs are drawn live. Positions are fixed in every state (LVGL y: tile 72, title 211, text 257, buttons 328, details 430),
 so nothing moves when the buttons change; the splash uses the same details line for its build date.
 
 ## Layout
@@ -170,5 +170,7 @@ so nothing moves when the buttons change; the splash uses the same details line 
 ## Writing
 
 - Plain words from the user's side: "Stop weight", not "target weight"; "Machine not found", not an error code.
+- Names in the docs: Brewdeck or "the screen" for the device, "panel" only for the LCD itself, "the machine's
+  built-in screen" for Gaggiuino's own; "brew temperature" in prose (*Brew temp* when quoting the UI).
 - Say what to do: an error names the fix ("Machine address", "Try again").
 - Brewdeck is unofficial: it never claims to be part of Gaggiuino.

@@ -10,27 +10,26 @@ README ("What Brewdeck sends to the machine"), only while the machine is idle.
 
 - **Do not add new machine commands** (pump, valve, heater, steam, brewing, descaling, calibration, deleting
   anything, settings) in a pull request. If you think one is needed, open an issue first to discuss it.
-- Changes to the core (`firmware/src/core/`: `ws.cpp`, `net.cpp`, `pb.cpp`, `core.cpp`, `core_state.cpp`) or anything
-  that sends to the machine get a careful review
-  and are tested on real hardware before they are merged.
+- Changes to the core (`firmware/src/core/`, especially `core_state.cpp` with the command rules, `ws.cpp`, `pb.cpp`
+  and `net.cpp`) or anything that sends to the machine get a careful review and are tested on real hardware before
+  they are merged.
 
 ## Before you open a pull request
 
 You do not need the hardware to work on most of Brewdeck:
 
 ```sh
-tests/run.sh                                               # unit tests (parsers and decoders)
+tests/run.sh                                               # unit tests
 sim/build.sh && sim/render sim/out && python3 sim/topng.py sim/out   # renders every screen to PNG
 sim/build-emu.sh && sim/emu                                # the real UI in a desktop window, fake machine
 ```
 
-The fake machine plays a recorded shot and a recorded steam session (see the README for prerequisites). For a UI
-change, look at the renders or the emulator and include a screenshot in the pull request; if the user manual's
-animations change, `python3 tools/gen_manual.py` re-records them.
+Prerequisites, the other tools and the debug builds: [docs/development.md](docs/development.md). For a UI change, look
+at the renders or the emulator and include a screenshot in the pull request; if the user manual's animations change,
+`python3 tools/gen_manual.py` re-records them.
 
-Firmware builds: `cd firmware && ./build-pio.sh ui` (and `ui-debug`). Every pull request runs the unit tests, the
-simulator, the release and debug firmware builds and the example UI (firmware and emulator) automatically; the
-renders are attached to the run.
+Every pull request runs the unit tests, the renders, the release and debug firmware builds for both boards, the
+example UI (firmware and emulator) and the P4 C6 updater automatically; the renders are attached to the run.
 
 ## Hardware
 
@@ -40,7 +39,10 @@ release; please say in your pull request what you tested and how (emulator, sim,
 ## Style
 
 - Keep changes small and focused; one topic per pull request.
-- Comments explain *why* something is done, in plain language.
+- Comments explain *why* something is done, in plain language, and stay short. A file starts with a comment saying
+  what it is; section banners are `// ---- name ----` padded to 120 columns. No dates or "was ..." history: that is
+  what the commit log is for.
+- C / C++: 2-space indent, lines up to 120 columns (see `.editorconfig`).
 - The UI follows the design system in [docs/design-system.md](docs/design-system.md): take fonts, colours and
   radii from `firmware/src/ui/theme.h` by name, never as raw values.
 - Never commit Wi-Fi credentials (`firmware/include/wifi_config.h` is git-ignored) or a backup of a screen's flash.

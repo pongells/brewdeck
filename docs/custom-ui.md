@@ -25,7 +25,7 @@ Brewdeck's own UI (`firmware/src/ui`) is the large example: every screen, the se
 
 ## What a UI implements
 
-```c
+```cpp
 extern "C" const bd_ui_desc BD_UI = {"myui", "1.0", 1};   // name, your version, the API version you wrote it for
 void bd_ui_init(void);                 // once at start: set up the display and build your screens
 void bd_ui_tick(uint32_t now_ms);      // every loop pass (~5 ms): look at what changed, draw
@@ -96,21 +96,21 @@ Live values are meaningful only while `link == BD_LINK_ONLINE`.
   needs it, so keep only small, hot things there.
 - **Settings:** `bd_store_get_int` / `bd_store_set_int` and the `_blob` pair keep values in flash, in your UI's own
   namespace (keys at most 15 characters). Other UIs' settings and the core's (Wi-Fi, the machine address) are separate.
-- **Logs:** `bd_log("...")` writes to the serial log with the time in front. Debug builds also have a small web server
-  (screenshots, memory); `bd_debug_route("/mypath", fn)` adds one page of your own to it.
+- **Logs:** `bd_log("...")` writes to the [serial log](development.md#serial-log) with the time in front. Debug builds
+  also have a small [web server](development.md#debug-web-server); `bd_debug_route("/mypath", fn)` adds one page of
+  your own to it.
 
 ## Testing
 
 - **Emulator:** `UI=myui sim/build-emu.sh && sim/emu-myui` runs your UI in a window against a fake machine with
-  recorded data. Keys: `S` plays a real shot, `M` a real steam session, `O` takes the machine offline, `N` the Wi-Fi,
-  `H` heating, `B` the scale, `L` the water. The panel's "Fake machine" buttons work with any UI; its "Go to screen"
-  buttons are Brewdeck's own. For scripts, it reads commands on stdin (`tap x y`, `key s`, `wait ms`, `save f.raw`: the
-  list is under "stdin commands" in `sim/emu.cpp`).
+  recorded data ([keys and script commands](development.md#without-hardware)). The panel's "Fake machine" buttons
+  work with any UI; its "Go to screen" buttons only with Brewdeck's. LVGL's configuration is shared (`firmware/include/lv_conf.h`); fonts a UI does not use are dropped from
+  its firmware.
 - **Firmware:** `UI=myui ./build-pio.sh ui` builds it; CI builds the example UI on every change, so a change to the
   core that breaks a UI shows up there.
-- **On the screen:** a debug build (`./build-pio.sh ui-debug`) serves `http://brewdeck.local/screen.bmp`, a
-  screenshot of what the panel shows (`tools/screenshot.sh`). It also takes remote touches (`/touch?x=&y=`): it has no password, so
-  anyone on your network can press the screen; use debug builds only on a network you trust.
+- **On the screen:** a debug build (`UI=myui ./build-pio.sh ui-debug`) takes screenshots, records the screen and
+  accepts remote touches ([debug web server](development.md#debug-web-server)); it has no password, so use it only on
+  a network you trust.
 
 ## License
 

@@ -10,9 +10,10 @@ Brewdeck sends to the machine" in the [README](README.md)), to read the Wi-Fi pa
 run code on the screen over the network.
 
 Known and by design:
-- **Debug builds** (`./build-pio.sh ui-debug`) run a small web server with no password: screenshots, memory, Wi-Fi
-  details and remote touch, so anyone on the network can press the screen. Use them only for development, on a
-  network you trust. Release builds (`ui`) leave the server out.
+- **Debug builds** (`ui-debug`, `ui-p4-debug`) run a small web server with no password
+  ([routes](docs/development.md#debug-web-server)): anyone on the network can see the screen, press it, change the
+  backlight or start a Wi-Fi roaming check. Use them only for development, on a network you trust. Release builds
+  leave the server out.
 - **Gaggiuino's own interfaces** (REST, WebSocket) have no authentication. That is the machine's design, outside
   Brewdeck: keep the machine on a trusted network. Problems in the machine's firmware belong to the
   [Gaggiuino project](https://github.com/Zer0-bit/gaggiuino).

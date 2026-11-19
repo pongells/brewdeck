@@ -68,18 +68,20 @@ flowchart TB
 | `ws` | 0 | the WebSocket session: live data in, the allowed commands out |
 | `debug_http` | 0 | debug builds only (`debug_http.cpp`): screenshots, the screen recorder (frames kept in PSRAM), remote touch, memory over HTTP |
 
-The network tasks hand data to the UI task through one mutex (`net_data.cpp` keeps what they publish; `net_int.h`). Big buffers (shot traces, chart data, the frame buffer)
-are in PSRAM; internal RAM is kept for Wi-Fi and the draw strip.
+The network tasks hand data to the UI task through one mutex (`net_data.cpp` keeps what they publish; the lock is in
+`net_int.h`). Big buffers (shot traces, chart data, the frame buffer) are in PSRAM; internal RAM is kept for Wi-Fi and
+the draw strip.
 
 ## Commands
 
 The UI never talks to the machine directly. A command (`bd_select_profile`, `bd_set_stop_weight`,
-`bd_set_brew_temp`, `bd_flush_mode`, `bd_tare`) returns at once: either refused with a reason (offline, busy, out of
-range, busy) or queued. The core sends it only while the machine is online and idle, checks again just before
-sending, and the machine's answer comes back later as a `BD_EV_COMMAND` event: done once the machine reports the
-change, or not taken when it did not within a few seconds. Nothing else can be sent: no pump, valve, heater,
-steam, descale or delete commands exist in the API. The full list is in the README, "What Brewdeck sends to the
-machine".
+`bd_set_brew_temp`, `bd_flush_mode`, `bd_tare`) returns at once: either refused with a reason (a `bd_result`: offline,
+busy, out of range, profile changed, ...) or queued. Each command's rules (machine online, idle in HOME, the value's
+range) are in one place, `cs_cmd_*` in `core_state.cpp`, shared with the emulator. The sending task checks them again
+on the newest data just before sending, and the message builders in `pb.cpp` refuse out-of-range values a third time.
+The machine's answer comes back later as a `BD_EV_COMMAND` event: done once the machine reports the change, or not
+taken when it did not within a few seconds. Nothing else can be sent: no pump, valve, heater, steam, descale or delete
+commands exist in the API. The full list is in the README, "What Brewdeck sends to the machine".
 
 ## Without hardware
 
@@ -116,22 +118,6 @@ directly, and takes its memory with `bd_alloc` (only the debug-build `/bench` ti
 
 ## Writing another UI
 
-The guide is [Writing your own UI](custom-ui.md); the API (version 1) is
-[`brewdeck_core.h`](../firmware/src/core/brewdeck_core.h). A UI is a folder under `firmware/src/` that implements
-`bd_ui_init`, `bd_ui_tick`, `bd_ui_event` and `bd_ui_wake` and declares itself in `BD_UI` (name, version, API
-version). Start from the example,
-[`firmware/src/ui_minimal`](../firmware/src/ui_minimal/minimal.cpp): one LVGL 9 screen with the live values, the
-profile list (a tap selects a profile) and the running shot, in about 150 lines.
-
-| | Brewdeck's UI | Another UI folder |
-|---|---|---|
-| Firmware | `./build-pio.sh ui [--flash]` | `UI=ui_minimal ./build-pio.sh ui [--flash]` |
-| Emulator | `sim/build-emu.sh && sim/emu` | `UI=ui_minimal sim/build-emu.sh && sim/emu-ui_minimal` |
-
-The emulator's "Go to screen" buttons only work with Brewdeck's UI; the fake machine (shot, steam, offline, the
-profile and weight commands) works with any. LVGL's configuration is shared (`firmware/include/lv_conf.h`); fonts a
-UI does not use are dropped from its firmware. CI builds the example both ways, so a change to the core that breaks a
-UI on the API alone shows up there.
-
-Brewdeck is not made by or affiliated with the Gaggiuino project, and neither is a UI built on this core: please say
-so in yours.
+A UI is a folder under `firmware/src/` that implements `bd_ui_init`, `bd_ui_tick`, `bd_ui_event` and `bd_ui_wake` on
+the API in [`brewdeck_core.h`](../firmware/src/core/brewdeck_core.h). The guide, starting from the example UI:
+[Writing your own UI](custom-ui.md).

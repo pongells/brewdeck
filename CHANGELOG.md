@@ -12,6 +12,10 @@ Each release has a section here; its text becomes the release notes on GitHub.
 - `flash.sh` refuses images built for another chip and writes the bootloader where that chip expects it.
 - The screen's Wi-Fi status is read by the network task, not the UI task; a dropped first Wi-Fi join is retried after
   1 s instead of 15 s.
+- The brewing chart's time axis starts at 30 s and grows in 15 s steps (fewer full redraws during a shot).
+- Shot history: a stored shot with a larger stop weight than the active profile's is drawn to its own scale.
+- For developers: a screen recorder in debug builds (`tools/record.sh`), [docs/development.md](docs/development.md),
+  shared command rules between the device and the emulator.
 
 ## v0.1.0
 

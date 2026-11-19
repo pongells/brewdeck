@@ -4,11 +4,15 @@
 
 **Unofficial Wi-Fi screen for Gaggiuino machines.**
 
+[![CI](https://github.com/pongells/brewdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/pongells/brewdeck/actions/workflows/ci.yml)
+[License: PolyForm Noncommercial 1.0.0](#license) · [Web demo](https://pongells.github.io/brewdeck/) ·
+[User manual](docs/manual.md)
+
 Brewdeck is a touchscreen that sits next to a [Gaggiuino](https://gaggiuino.github.io/)-modded espresso machine and
 talks to it over Wi-Fi. It shows the machine at a glance, draws every shot live, lets you review it against the
 profile or your previous shot, and handles the everyday controls: profile, brew temperature, stop weight, flushing.
 
-The machine's own built-in display does not take custom firmware, so Brewdeck takes the other route: it is a separate
+The machine's built-in screen does not take custom firmware, so Brewdeck takes the other route: it is a separate
 screen on the same network, using the machine's documented network API (REST and the WebSocket the official web UI
 uses). Nothing on the machine is rewired or reflashed; the changes you make on Brewdeck (profile, brew temperature, stop
 weight) are saved on the machine, as the web UI saves them.
@@ -32,9 +36,7 @@ A tour of every screen, with animations: **[User manual](docs/manual.md)**.
   preview of its pressure and flow curve, pressure / scale / water status, and a warning while pressure is left in the
   system.
 - **Everyday controls**: pick a profile, set brew temperature and stop weight (+/- or a keypad). Changes are saved on
-  the machine, and each profile keeps its original values on the screen, so **Reset** brings them back. Before
-  saving, Brewdeck checks the stored profile: if the web UI changed the other value only temporarily, Brewdeck saves
-  nothing (it would save that too) and says so.
+  the machine, and each profile keeps its original values on the screen, so **Reset** brings them back.
 - **Live shots**: pressure, flow, weight and temperature drawn as the shot runs, with the profile's targets dashed.
 - **Shot review**: scrub through the finished shot and compare it with the profile's targets or your previous shot of
   the same profile. The machine's stored shots are one tap away in **Shot history**.
@@ -67,35 +69,24 @@ It never sends brewing, steam, pump, valve, heater, descaling or calibration com
 > screen also runs the machine's Wi-Fi, web UI and network API, which Brewdeck itself needs. Use a spare screen.
 
 - **Screen**: a Sunton ESP32-8048S043-style 4.3" 800x480 RGB panel with an ESP32-S3 (16 MB flash, 8 MB PSRAM) and
-  GT911 capacitive touch, powered over USB-C. Pins and timings are in [`firmware/src/board/s3/board.h`](firmware/src/board/s3/board.h).
-- **Experimental**: the Guition JC4880P443 (ESP32-P4, 4.3" 480x800 MIPI-DSI shown in landscape, Wi-Fi through its
-  ESP32-C6), a retail board with no flash encryption: `./build-pio.sh ui-p4 --flash`. It runs Brewdeck's screens live
-  from the machine; a full shot on it has not been tested yet. On the network it is `brewdeck-p4` (the S3 screen is
-  `brewdeck`). Its backup (Installing, step 2) goes to `backup/p4-guition-original.bin` (or point `GAGGI_BACKUP` at
-  it); as a plain board it can also be flashed without one (`NO_BACKUP=1`). These boards ship with old firmware on their Wi-Fi chip (an ESP32-C6): if the first Wi-Fi join drops
-  at every start, update it once with `./build-pio.sh p4-c6-update --flash` (it uses the network saved on the screen;
-  progress in the serial log), then flash `ui-p4` again. Pins in
-  [`firmware/src/board/p4/board.h`](firmware/src/board/p4/board.h).
+  GT911 capacitive touch, powered over USB-C. Pins and timings: [`firmware/src/board/s3/board.h`](firmware/src/board/s3/board.h).
+  Experimental: the Guition JC4880P443 (ESP32-P4), see [below](#esp32-p4-board-experimental).
 - **Machine**: a Gaggiuino machine with its Wi-Fi web UI, on the same 2.4 GHz network as the screen. Tested with one
   machine (Gaggiuino core 8aaf6f0 on an STM32U585 board, release c929939); a Gaggiuino update can change the protocol.
   Brewdeck keeps one of the machine's three WebSocket connections open and shows up to 24 profiles.
 
-**Tested on one screen only**: a spare Gaggiuino Gen 3 screen (the Sunton ESP32-8048S043 hardware above) that had not
-yet received Gaggiuino's update [v.8aaf6f0](https://github.com/Zer0-bit/gaggiuino/releases/tag/main-8aaf6f0) (3 November
-2026). That update locks the Gen 3 screen it runs on (it migrates the partitions and sets eFuses), so a screen that has
-had it cannot take other firmware; that is Gaggiuino's choice for their hardware. A spare Gen 3 screen can run Brewdeck
-only if it has never received that update; keep your machine itself on whatever Gaggiuino recommends. The Gen 3.5 screen
-is locked too. The same Sunton model bought on its own should work (the flash script then writes it plainly, see
-below), but that is untested.
-
-**Planned**: other screens, starting with an unlocked ESP32-P4 board (Guition JC4880P443, 4.3" 480x800) bought on its
-own: not the Gaggiuino Gen 3.5 screen, which uses a similar P4 board but is locked the same way.
+**Tested on one screen only**: a spare Gaggiuino Gen 3 screen (the Sunton hardware above) that had not yet received
+Gaggiuino's update [v.8aaf6f0](https://github.com/Zer0-bit/gaggiuino/releases/tag/main-8aaf6f0). That update locks the
+Gen 3 screen it runs on (it migrates the partitions and sets eFuses), so a screen that has had it cannot take other
+firmware; the Gen 3.5 screen is locked too. The same Sunton model bought on its own should work (the flash script then
+writes it plainly), but that is untested.
 
 ## Installing
 
-You need [esptool](https://github.com/espressif/esptool) v5 (`brew install esptool` or `pip install esptool`; esptool
-4.x spells the commands `read_flash` / `write_flash`) and bash (macOS, Linux; on Windows untested, WSL may work). The
-serial port is `/dev/cu.usbserial-…` on macOS, `/dev/ttyUSB0` or similar on Linux.
+For the Sunton ESP32-S3 screen; the P4 board is [below](#esp32-p4-board-experimental). You need
+[esptool](https://github.com/espressif/esptool) v5 (`brew install esptool` or `pip install esptool`; esptool 4.x spells
+the commands `read_flash` / `write_flash`) and bash (macOS, Linux; on Windows untested, WSL may work). The serial port
+is `/dev/cu.usbserial-…` on macOS, `/dev/ttyUSB0` or similar on Linux.
 
 **1. Check the screen** (reads only, writes nothing). "Flash Encryption: Enabled" is a Gaggiuino Gen 3 screen,
 "Disabled" a plain board; "Secure download mode" means it is locked and cannot take other firmware.
@@ -135,12 +126,30 @@ screen restarts by itself after flashing; if the picture looks wrong, unplug and
 **4. Set it up on the screen.** It starts on "No Wi-Fi set up": choose your network and type the password. It then
 looks for the machine as `gaggiuino.local`; another name or an IP can be set under Menu > Wi-Fi.
 
+**Updating**: flash the new release the same way (step 3). The backup stays valid, and the screen keeps its Wi-Fi,
+machine address and settings.
+
 **Back to the original firmware**: check the backup's size again (a short file would leave the screen unbootable), then
 write it back as it is, **without** `--encrypt` (a Gen 3 backup already holds the encrypted contents):
 
 ```sh
 esptool --port /dev/cu.usbserial-XXXX --baud 460800 write-flash 0x0 backup/gaggiuino-screen-backup.bin
 ```
+
+### ESP32-P4 board (experimental)
+
+The Guition JC4880P443 (ESP32-P4, 4.3" 480x800 MIPI-DSI panel shown in landscape, Wi-Fi through an ESP32-C6) is a
+retail board with no flash encryption. It runs every screen live from the machine; a full shot on it has not been
+tested yet. There is no release package for it: build it (next section), from `firmware/`:
+
+1. Back up its flash as in step 2, to `backup/p4-guition-original.bin` (or point `GAGGI_BACKUP` at it; a plain board
+   can also be flashed without one, `NO_BACKUP=1`). Its port is `/dev/cu.usbmodem…` on macOS, `/dev/ttyACM0` on Linux.
+2. `./build-pio.sh ui-p4 --flash`, then join Wi-Fi on the screen. On the network it is `brewdeck-p4`.
+3. If the first Wi-Fi join drops at every start, the board's ESP32-C6 runs old firmware: update it once with
+   `./build-pio.sh p4-c6-update --flash` (it uses the network saved on the screen and installs Espressif's image only
+   if its checksum matches; progress in the [serial log](docs/development.md#serial-log)), then flash `ui-p4` again.
+
+Pins: [`firmware/src/board/p4/board.h`](firmware/src/board/p4/board.h).
 
 ## Building
 
@@ -159,30 +168,22 @@ Make the backup first (step 2 above, from the repository root), then:
 
 ```sh
 cd firmware
-./build-pio.sh ui            # first run creates include/wifi_config.h: your Wi-Fi and the machine's name or IP (optional)
+./build-pio.sh ui            # the first run creates include/wifi_config.h (see below)
 ./build-pio.sh ui --flash    # build, then flash with flash.sh (env PORT=..., GAGGI_BACKUP=path to the backup)
 ```
 
 `build-pio.sh --flash` runs the same `flash.sh` as a release, on the build's images. Never flash with
-`pio run -t upload`: it skips all these checks. You can leave `wifi_config.h` as it is and choose the network on the
-screen. A release package is made with `tools/make_release.sh <version>` (CI does it for each `v*` tag; notes from
+`pio run -t upload`: it skips all these checks. `include/wifi_config.h` (git-ignored) can hold your Wi-Fi network and
+the machine's name or IP; left as created, the screen starts on "No Wi-Fi set up" and you choose the network there.
+Other envs (debug builds, the P4, the touch test) and the debug tools: [development](docs/development.md). A release
+package is made with `tools/make_release.sh <version>` (CI does it for each `v*` tag; notes from
 [CHANGELOG.md](CHANGELOG.md)).
 
 ## Without hardware
 
-Needs a C++ compiler, git and network on the first build (LVGL 9.6.0 is cloned into `sim/lvgl`), SDL2 for the
-emulator (`brew install sdl2`) and Pillow for the PNG conversion (`pip install pillow`).
-
-- **Emulator**: `sim/build-emu.sh && sim/emu` runs the real UI code in a desktop window (SDL2) against a fake machine
-  that plays recorded data: a real shot and a real steam session. Mouse = finger.
-  `python3 -I tools/community_profiles.py <dir>` makes a fake machine with the 24 longest-named profiles of
-  Gaggiuino's community library; run it with `EMU_DATA=<dir> sim/emu` (tests long names).
-- **Web demo**: `sim/web/build.sh` compiles the same UI and fake machine to WebAssembly (needs Emscripten,
-  `brew install emscripten`); serve `sim/web/dist` (`python3 -m http.server -d sim/web/dist`) and open it in a browser.
-- **Renders**: `sim/build.sh && sim/render sim/out && python3 sim/topng.py sim/out` draws the screens to PNG files.
-- **Manual animations**: `python3 tools/gen_manual.py` re-records the GIFs and stills of the user manual from the
-  emulator (after a UI change; build the emulator first, `sim/build-emu.sh`).
-- **Tests**: `tests/run.sh` runs the parsers and decoders against real machine replies (`sim/data/`).
+The emulator runs the real UI code in a desktop window against a fake machine that plays a recorded shot and steam
+session (`sim/build-emu.sh && sim/emu`, needs SDL2). The same runs in a browser as the
+[web demo](https://pongells.github.io/brewdeck/). Tests, renders and the other tools: [development](docs/development.md).
 
 ## Project layout
 
@@ -190,19 +191,18 @@ How the parts fit together (board, core, UI, the network tasks, the emulator): [
 
 | Path | What |
 |---|---|
-| `firmware/src/core/` | the core: `brewdeck_core.h` (the API a UI is built on), `core.cpp` (setup, loop, commands, settings), `core_state.cpp` (machine state, events), the network and machine API (`net.cpp`, `ws.cpp`, `pb.cpp`, `parse.cpp`), profile previews (`preview.cpp`), the debug web server (`shot.cpp`) |
+| `firmware/src/core/` | the core: `brewdeck_core.h` (the API a UI is built on), `core.cpp` (setup, loop, settings), `core_state.cpp` (machine state, events, the command rules), the network task (`net.cpp`: finding the machine, REST; `wifi.cpp`: the screen's Wi-Fi; `net_data.cpp`: hand-over to the loop), the WebSocket (`ws.cpp`, decoder `pb.cpp`), REST parsers (`parse.cpp`), profile previews (`preview.cpp`), the debug web server (`debug_http.cpp`) |
 | `firmware/src/board/` | the board layer: `common/` (start-up, GT911 touch, memory: shared by both boards), `s3/` (the Sunton ESP32-S3 RGB panel), `p4/` (the Guition ESP32-P4 DSI panel); each board folder has its `board.h` (pins) |
 | `firmware/src/ui_minimal/` | an example UI on the core API alone, to start your own from ([writing your own UI](docs/custom-ui.md)) |
+| `firmware/src/touchtest/`, `firmware/src/c6update/` | one-off firmware: a raw touch test (S3), the P4 board's Wi-Fi chip updater |
 | `firmware/src/ui/` | Brewdeck's UI: `ui_bridge.cpp` (the core's `bd_ui_*` entry points), screens (`screens/`, one file per screen; `ui.cpp` starts them and takes the live data; `ui_int.h` is what they share; design tokens in `theme.h`) |
 | `sim/` | emulator, renderer and recorded machine data |
 | `tests/` | host unit tests |
-| `docs/` | the [user manual](docs/manual.md) and its animations, the [architecture](docs/architecture.md), [writing your own UI](docs/custom-ui.md), the [design system](docs/design-system.md), machine API notes, the WebSocket protocol |
+| `docs/` | the [user manual](docs/manual.md) and its animations, [development](docs/development.md), the [architecture](docs/architecture.md), [writing your own UI](docs/custom-ui.md), the [design system](docs/design-system.md), [machine API notes](docs/gaggiuino-api.md), the [WebSocket protocol](docs/ws/README.md) |
 | `tools/` | release packaging (`make_release.sh`), protocol listener and extractor, manual recorder, screenshot and screen recorder helpers, offline cup picture (`gen_cup.py`), a fake machine from the community profiles (`community_profiles.py`), font edge contrast (`font_contrast.py`) |
 
-For development, `./build-pio.sh ui-debug` adds a small web server on the screen (`http://brewdeck.local`: screenshots
-for `tools/screenshot.sh`, a recorder that keeps frames in the screen's memory during a shot for `tools/record.sh`, memory, Wi-Fi details, and remote touch). It has no password and anyone on your network can
-press the screen through it, so use debug builds only for development, on a network you trust; release builds (`ui`)
-leave it out.
+Debug builds (`ui-debug`) add a small web server for screenshots, a screen recorder and remote touch; it has no
+password, so use them only on a network you trust ([development](docs/development.md#debug-web-server)).
 
 ## Contributing
 
@@ -213,8 +213,8 @@ talks to the machine. Security problems: please report them privately, see [SECU
 
 Plans, not promises:
 
-- **More screens**: an unlocked ESP32-P4 board (Guition JC4880P443, 4.3" 480x800), with a speaker for optional
-  sounds ([#2](https://github.com/pongells/brewdeck/issues/2)).
+- **The ESP32-P4 board** out of experimental: a full shot on it, and its speaker for optional sounds
+  ([#2](https://github.com/pongells/brewdeck/issues/2)).
 - **Updates over Wi-Fi** for the screen, and later **switching between UIs** from the screen itself
   ([#3](https://github.com/pongells/brewdeck/issues/3)).
 - **Your own UI in your own repository**, built against a tagged core release, with a list of UIs here
@@ -244,5 +244,5 @@ Not covered by Brewdeck's license:
 
 ## Status
 
-A personal project, in daily use on one machine, where every screen above has been checked; the first-run setup on a
-new Sunton board and the planned P4 board are untested.
+A personal project, in daily use on one machine, where every screen above has been checked. The first-run setup on a
+new Sunton board is untested, and the P4 board is experimental (no full shot yet).

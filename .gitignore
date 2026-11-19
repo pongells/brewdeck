@@ -7,6 +7,8 @@ sim/obj-emu/
 sim/web/obj/
 sim/web/dist/
 sim/out/
+# output of tools/record.sh and tools/screenshot.sh
+rec-*/
 firmware/.pio/
 *.bin
 *.raw
