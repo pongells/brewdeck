@@ -31,8 +31,6 @@ static inline uint32_t fnv1a(uint32_t h, const void *p, size_t n) {
 // a Unix time before this (Sep 2020) means the clock was not set (no NTP yet, or the machine's clock)
 static const uint32_t CLOCK_SET_TS = 1600000000u;
 
-static inline void Serial_log(const char *m) { bd_log("%s", m); }   // the core's log (time in front on the device)
-
 // ---- shared constants and types ---------------------------------------------------------------------------------
 static_assert(sizeof(lv_point_precise_t) == sizeof(lv_point_t), "point layout (LV_USE_FLOAT 0)");
 // stop weight in tenths of a gram: the range the screen edits, and the -/+ step
@@ -77,7 +75,6 @@ void set_bg(lv_obj_t *o, lv_color_t c);
 void set_tc(lv_obj_t *o, lv_color_t c);
 void set_line_c(lv_obj_t *o, lv_color_t c);
 void set_hidden(lv_obj_t *o, bool h);
-void set_w(lv_obj_t *o, int32_t w);
 void set_h(lv_obj_t *o, int32_t h);
 void set_y(lv_obj_t *o, int32_t y);
 void display_name(const char *in, char *out, size_t n, bool *community);

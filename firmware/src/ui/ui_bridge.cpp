@@ -37,12 +37,6 @@ static void orig_save(const char *p, int w10, int deg) {
   bd_store_set_int(k, (int32_t)(((uint32_t)w10 << 16) | (uint32_t)(deg & 0xFFFF)));
   bd_log("originals: \"%s\" %d.%d g, %d C kept", p, w10 / 10, w10 % 10, deg);
 }
-static void orig_drop(const char *p) {
-  char k[12];
-  orig_key(p, k, sizeof k);
-  bd_store_erase(k);
-  bd_log("originals: \"%s\" back to its original, dropped", p);
-}
 
 // screen settings from the menu, written 2 s after the last change
 static int g_bright = 100, g_idle = 10;
@@ -140,7 +134,7 @@ void bd_ui_init(void) {
   bd_lvgl9_setup();
   bd_lvgl9_flush_filter = ui_flush_filter;   // the pressure-release glow lies over everything
   ui_init();
-  ui_on_originals(orig_load, orig_save, orig_drop);
+  ui_on_originals(orig_load, orig_save);
   g_bright = bd_store_get_int("bright", 100);
   g_idle = bd_store_get_int("idle", 10);
   g_bounce = bd_store_get_int("bounce", 0) != 0;

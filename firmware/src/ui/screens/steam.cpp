@@ -50,12 +50,9 @@ static void st_draw(lv_event_t *e) {
   }
   lv_point_t p1 = {(int32_t)x0, (int32_t)base}, p2 = {(int32_t)x1, (int32_t)base};
   dl(ctx, &l, &p1, &p2);
-  {
-    const int span = g_st_n - 1 > 60 ? g_st_n - 1 : 60;
-    axis_time(ctx, x0, x1 - x0, base + 4, span, span <= 120 ? 30 : 60);
-  }
-  if (!g_st_n) return;
   const int span = g_st_n - 1 > 60 ? g_st_n - 1 : 60;   // time axis: at least 1 min, grows to 4 min
+  axis_time(ctx, x0, x1 - x0, base + 4, span, span <= 120 ? 30 : 60);
+  if (!g_st_n) return;
 #define ST_X(i) (x0 + 2 + (i) * (x1 - x0 - 4) / span)
 #define ST_Y(v) (top + (hi - (v)) * (base - top) / (hi - lo))
 #define ST_PY(p) (base - ((p) < 0 ? 0 : (p) > pmax ? pmax : (p)) * (base - top) / pmax)   // pressure x100, 0..pmax

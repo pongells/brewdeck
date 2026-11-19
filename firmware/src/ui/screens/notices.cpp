@@ -365,7 +365,7 @@ static void notify_show(int type, const char *msg, int fr) {
     g_blank_on = g_blank_offline = false;
     lv_obj_set_hidden(g_blank, true);
     if (g_idle_min > 0) { g_idle_force = true; on_idle_timer(NULL); }   // shows the clock now (no Ready in between)
-    Serial_log("ui: screen on (notification)");
+    bd_log("ui: screen on (notification)");
   }
   bl_set(g_bright);
   if (!lv_obj_is_hidden(g_idle)) g_nb_lit = true;

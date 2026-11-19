@@ -267,9 +267,6 @@ void set_line_c(lv_obj_t *o, lv_color_t c) {
 void set_hidden(lv_obj_t *o, bool h) {
   if (lv_obj_is_hidden(o) != h) { if (h) lv_obj_set_hidden(o, true); else lv_obj_set_hidden(o, false); }
 }
-void set_w(lv_obj_t *o, int32_t w) {
-  if (lv_obj_get_style_width(o, LV_PART_MAIN) != w) lv_obj_set_width(o, w);
-}
 void set_h(lv_obj_t *o, int32_t h) {
   if (lv_obj_get_style_height(o, LV_PART_MAIN) != h) lv_obj_set_height(o, h);
 }

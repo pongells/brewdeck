@@ -129,7 +129,7 @@ void ui_set_live(const LiveData *d, int link) {
     else if (!s_ready_since) s_ready_since = stamp_nz(lv_tick_get());
     else if (lv_tick_elaps(s_ready_since) >= READY_HOLD_MS) {
       s_hold = false;
-      Serial_log("ui: ready steady for 30 s, showing Ready");
+      bd_log("ui: ready steady for 30 s, showing Ready");
     }
   }
   const bool heating = heating_now || s_hold;
@@ -175,9 +175,7 @@ void ui_set_live(const LiveData *d, int link) {
       }
     }
     if (g_press_warn != was) {
-      char m[64];
-      snprintf(m, sizeof m, "ui: pressure warning %s (%.2f bar)", g_press_warn ? "on" : "off", d->pressure);
-      Serial_log(m);
+      bd_log("ui: pressure warning %s (%.2f bar)", g_press_warn ? "on" : "off", d->pressure);
     }
     g_press_val = d->pressure;
     // the pressure pill: orange while the warning is on, else grey with the blue gauge (pressure colour)
@@ -263,7 +261,7 @@ void ui_set_live(const LiveData *d, int link) {
   // it (the core checks the active profile too), or give up after 10 s
   if (g_rst.id) {
     if (!strcmp(d->act_profile, g_rst.name) && g_can_select) snap_apply();
-    else if (lv_tick_elaps(g_rst.t) > RESTORE_WAIT_MS) { g_rst.id = 0; Serial_log("ui: restore dropped (profile not active)"); }
+    else if (lv_tick_elaps(g_rst.t) > RESTORE_WAIT_MS) { g_rst.id = 0; bd_log("ui: restore dropped (profile not active)"); }
   }
   // no scale connected: the machine keeps reporting the last reading (seen: 389.4 g long after the scale went
   // away), so the weight is hidden and the pill says "No scale"
@@ -354,7 +352,7 @@ void ui_test_review(int mode, int t10) {
 }
 
 void ui_test_profiles(int open, int all) {
-  (void)all;                                       // one full list
+  (void)all;
   if (open) picker_open();
   else picker_close();
 }

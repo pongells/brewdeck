@@ -447,8 +447,6 @@ void build_ready(lv_obj_t *scr) {
   g_pill_dot = box(pill, 0, 0, 10, 10, COL_GREEN, 5);
   g_pill_lbl = label(pill, "Ready", F_TEXT_B, COL_PILL_TX);
 
-  //   label(hl, "07:44", F_TEXT, COL_MUTED);
-
   // header, right: settings (the menu) and, left of it, a "Profiles" button that opens the profile page. The active
   // profile's name is information, after the state pill (like the brewing screen), not a field: a field with a down
   // chevron read as a dropdown, but it opens a whole page.

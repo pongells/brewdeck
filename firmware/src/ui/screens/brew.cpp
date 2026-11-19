@@ -147,9 +147,6 @@ static void ch_dot(lv_layer_t *ctx, int x, int y, int r, lv_color_t col) {
 // the scrub time above the scrubber: F_TEXT_B, centred on it, kept inside the chart (ox..ox+w)
 static const int RV_AT_H = 22, RV_AT_HW = 30;      // label height, half width (fits "1:05.0")
 static int rv_at_cx(int x, int ox, int w) { return x < ox + RV_AT_HW ? ox + RV_AT_HW : x > ox + w - RV_AT_HW ? ox + w - RV_AT_HW : x; }
-static void ch_text(lv_layer_t *ctx, int x, int y, const char *s, lv_text_align_t align) {
-  ch_text_c(ctx, x, y, s, align, COL_MUTED);
-}
 
 // the four live lines (temperature, weight, flow, pressure on top)
 static void ch_live(lv_layer_t *ctx, int ox, int oy, const ChartMap *m, const ShotPoint *pts, int n) {

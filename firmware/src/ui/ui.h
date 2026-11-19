@@ -14,10 +14,10 @@ void ui_set_live(const LiveData *d, int link);   // link: LINK_CONNECTING / LINK
 void ui_set_profiles(const ProfileList *l);      // list for the profile picker (display only, never selects)
 void ui_set_shape(const ProfileShape *s);        // active profile: preview graph + target weight (display only)
 void ui_shot(const WsShot *s);                   // each shot snapshot in order: opens / feeds the brewing screen
-// each profile's values from before its first change on this screen (kept on the screen, NVS): "edited" marks and
-// "Reset to ..." in the keypad. load: false if none kept; save: first change; drop: back to the original via Reset
+// each profile's original values (the UI's storage): "edited" marks, "Reset to ..." in the keypad, Restore on the
+// Profiles page. load: false if none kept; save: keep these as the profile's original
 void ui_on_originals(bool (*load)(const char *profile, int *w10, int *deg),
-                     void (*save)(const char *profile, int w10, int deg), void (*drop)(const char *profile));
+                     void (*save)(const char *profile, int w10, int deg));
 void ui_set_clock(int h, int m);                          // local time for the idle screen (-1: not known yet)
 // menu changed a screen setting (to be saved); bounce: idle clock bounces around (DVD style) instead of standing still
 // splash: show the boot splash (read at start: ui_splash is called only when on)
@@ -50,7 +50,7 @@ void ui_test_done(void);
 void ui_test_cancel(void);
 void ui_test_step(int tenths);    // +/- target weight in tenths of a gram
 void ui_test_cursor(int on);
-void ui_test_profiles(int open, int all);   // open/close the profile picker; all = full scrollable list
+void ui_test_profiles(int open, int all);   // open / close the profile picker; all: ignored (one list)
 void ui_test_idle(void);          // go to the idle screen now (the next touch wakes it)
 void ui_test_wake(void);         // test hook: like a touch on the idle clock (it only goes away on a touch)
 void ui_test_screen_off(void);   // test hook: screen off now

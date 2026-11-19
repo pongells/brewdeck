@@ -51,12 +51,13 @@ static void on_pick_close(lv_event_t *e) { (void)e; picker_close(); }
 // blue with a Restore button (a long press on the row too), which offers Restore original / Keep current (snap_*). The snapshot is never dropped.
 static bool (*g_orig_load)(const char *profile, int *w10, int *deg) = NULL;
 static void (*g_orig_save)(const char *profile, int w10, int deg) = NULL;
-static void (*g_orig_drop)(const char *profile) = NULL;
 static char g_orig_name[48] = "\x01";     // profile the cache below is for (never a real name at start)
 bool g_orig_have = false;
 int g_orig_w10 = -1, g_orig_deg = -1;
-void ui_on_originals(bool (*load)(const char *, int *, int *), void (*save)(const char *, int, int),
-                     void (*drop)(const char *)) { g_orig_load = load; g_orig_save = save; g_orig_drop = drop; }
+void ui_on_originals(bool (*load)(const char *, int *, int *), void (*save)(const char *, int, int)) {
+  g_orig_load = load;
+  g_orig_save = save;
+}
 void orig_sync(void) {
   if (!strcmp(g_orig_name, g_cur_profile)) return;
   snprintf(g_orig_name, sizeof g_orig_name, "%s", g_cur_profile);
@@ -245,7 +246,6 @@ static void on_pick_hold(lv_event_t *e) {           // a long press on an edited
                                   : "Restore selects this profile, then sets the original values and saves them on the machine.");
   lv_obj_set_hidden(g_rs_back, false);
 }
-static bool pick_profile(int id);
 static void on_pick_row(lv_event_t *e) {
   const int id = (int)(intptr_t)lv_event_get_user_data(e);
   picker_close();

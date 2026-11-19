@@ -23,8 +23,7 @@ static const uint32_t BREW_WAKE_MS = 2000;        // a brew keeps the clock up a
 int g_idle_min = 10, g_bright = 100, g_idle_bright = 50;   // menu changes the first two; idle: 20 % looked off
 lv_obj_t *g_idle;
 static lv_obj_t *g_idle_clock, *g_idle_dot, *g_idle_txt, *g_idle_col;
-static bool g_blank_on_flag(void);
-void bl_set(int pct) { bd_set_backlight(g_blank_on_flag() ? 0 : pct); }   // off while the screen is off
+void bl_set(int pct) { bd_set_backlight(g_blank_on ? 0 : pct); }   // off while the screen is off
 int g_clock_h = -1, g_clock_m = -1;
 bool g_idle_busy = false;      // shot / steam / hot water / flush running (set by ui_set_live)
 char g_idle_temp[16] = "";
@@ -50,7 +49,7 @@ static void idle_bounce_start(void) {           // from the centre, as before
 }
 static void on_idle_bounce(lv_timer_t *t) {
   (void)t;
-  if (!g_idle_bounce || lv_obj_is_hidden(g_idle) || g_blank_on_flag()) return;
+  if (!g_idle_bounce || lv_obj_is_hidden(g_idle) || g_blank_on) return;
   const int w = lv_obj_get_width(g_idle_col), h = lv_obj_get_height(g_idle_col);
   const int xmax = 800 - IDLE_EDGE - w, ymax = 480 - IDLE_EDGE - h;
   bool hit = false;
@@ -130,7 +129,7 @@ static void screen_wake(void) {
   lv_display_trigger_activity(NULL);
   idle_hide();                                    // straight to the screen below, not to the dimmed clock
   bl_set(g_bright);
-  Serial_log("ui: screen on");
+  bd_log("ui: screen on");
 }
 static void on_blank_touch(lv_event_t *e) { (void)e; screen_wake(); }
 static void on_blank_timer(lv_timer_t *t) {
@@ -157,9 +156,8 @@ static void on_blank_timer(lv_timer_t *t) {
   lv_obj_set_hidden(g_blank, false);
   lv_obj_move_to_index(g_blank, -1);
   bl_set(0);
-  Serial_log(g_blank_offline ? "ui: screen off (offline screen untouched for 2 min)" : "ui: screen off (no touch)");
+  bd_log("ui: screen off (%s)", g_blank_offline ? "offline screen untouched for 2 min" : "no touch");
 }
-static bool g_blank_on_flag(void) { return g_blank_on; }
 void build_blank(lv_obj_t *scr) {
   g_blank = box(scr, 0, 0, 800, 480, lv_color_black(), 0);
   lv_obj_set_clickable(g_blank, true);
