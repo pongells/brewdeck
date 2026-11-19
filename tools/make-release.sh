@@ -36,6 +36,7 @@ if [[ $BOARD == p4 ]]; then
   sums "$OUT/c6-update"
 fi
 cp "$FW/flash.sh" "$OUT/"
+cp "$ROOT/LICENSE" "$ROOT/THIRD_PARTY_NOTICES.txt" "$OUT/"
 chmod +x "$OUT/flash.sh"
 
 if [[ $BOARD == s3 ]]; then
@@ -60,7 +61,7 @@ Wi-Fi and web UI). You need esptool v5 (brew install esptool, or pip install esp
 The screen starts on "No Wi-Fi set up": choose your network on the screen, then it looks for the machine
 ("gaggiuino.local"; another name or IP under Menu > Wi-Fi).
 Ports: /dev/cu.usbserial-... on macOS, /dev/ttyUSB0 or similar on Linux.
-License: PolyForm Noncommercial 1.0.0 (https://github.com/pongells/brewdeck/blob/main/LICENSE).
+License: PolyForm Noncommercial 1.0.0 (LICENSE). Third-party software in the images: THIRD_PARTY_NOTICES.txt.
 EOF
 else
 cat > "$OUT/INSTALL.txt" <<EOF
@@ -89,7 +90,7 @@ start (Brewdeck retries, so it only joins slower). c6-update/ updates it: after 
 It uses the network saved on the screen, downloads Espressif's image and installs it only if its checksum matches
 (progress on the serial port, 115200 baud). Then flash Brewdeck again (step 3).
 Ports: /dev/cu.usbmodem... on macOS, /dev/ttyACM0 or similar on Linux.
-License: PolyForm Noncommercial 1.0.0 (https://github.com/pongells/brewdeck/blob/main/LICENSE).
+License: PolyForm Noncommercial 1.0.0 (LICENSE). Third-party software in the images: THIRD_PARTY_NOTICES.txt.
 EOF
 fi
 (cd "$ROOT/dist" && zip -qr "$NAME.zip" "$NAME")

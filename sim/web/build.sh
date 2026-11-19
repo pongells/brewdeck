@@ -28,6 +28,7 @@ done
   -sEXPORTED_FUNCTIONS=_main,_web_frame,_web_fb,_web_backlight,_web_touch,_web_action,_web_status,_web_shot_playing,_web_steam_speed,_web_splash \
   -sEXPORTED_RUNTIME_METHODS=ccall,UTF8ToString,HEAPU16)
 cp "$WEB/index.html" "$DIST/index.html"
+cp "$SIM/../THIRD_PARTY_NOTICES.txt" "$DIST/THIRD_PARTY_NOTICES.txt"
 cp "$SIM/../docs/images/logo.svg" "$DIST/logo.svg"
 ls -la "$DIST" | awk 'NR>1 {print $5, $9}'
 echo "built sim/web/dist"

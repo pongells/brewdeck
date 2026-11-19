@@ -229,6 +229,10 @@ Brewdeck is source-available under the [PolyForm Noncommercial License 1.0.0](LI
 it for any noncommercial purpose (personal use, hobby projects, research, teaching, charities). Selling it, or using it
 in a commercial product or service, is not allowed without the author's permission.
 
+In short: free to use, change and share at home, and contributions are welcome. Selling it, or selling screens that
+run it, needs the author's permission: the noncommercial license is there so that the work cannot simply be taken and
+sold. To ask about commercial use, open an issue.
+
 The example UI in [`firmware/src/ui_minimal`](firmware/src/ui_minimal) is under the [MIT License](firmware/src/ui_minimal/LICENSE),
 so it can be the start of your own UI; it runs on the core, which stays under the noncommercial license.
 
@@ -242,7 +246,9 @@ Not covered by Brewdeck's license:
   which belong to their authors and the Gaggiuino project ([CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)).
 - The fonts in `firmware/src/ui/fonts/` are generated from [Inter Tight](https://github.com/rsms/inter-tight) and stay under
   the SIL Open Font License 1.1 ([OFL.txt](firmware/src/ui/fonts/OFL.txt)).
-- Libraries fetched at build time (LVGL, Arduino_GFX, the Arduino core) keep their own licenses.
+- Libraries fetched at build time (LVGL, Arduino_GFX, the Arduino core, ESP-IDF) keep their own licenses. Release images
+  and the web demo contain them compiled in: their notices and license texts are in
+  [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt), which every release package includes.
 
 ## Status
 

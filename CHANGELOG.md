@@ -18,6 +18,8 @@ Each release has a section here; its text becomes the release notes on GitHub.
 - Dragging (the review's scrubber, scrolling) follows the finger more closely: touch is read right before each redraw.
 - A router that blocks or drops the screen no longer shows "did not accept the password": that message now needs the
   network to have refused the password before the screen's first join since it started.
+- THIRD_PARTY_NOTICES.txt: the licenses of the libraries and font compiled into the firmware and the web demo, in
+  every release package (with LICENSE).
 - Board code split into `firmware/src/board/common` (shared) and one folder per board (`s3`, `p4`).
 - `flash.sh` refuses images built for another chip and writes the bootloader where that chip expects it.
 - The screen's Wi-Fi status is read by the network task, not the UI task; a dropped first Wi-Fi join is retried after
