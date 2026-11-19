@@ -5,7 +5,7 @@ Each release has a section here; its text becomes the release notes on GitHub.
 ## Unreleased
 
 - Experimental support for the Guition JC4880P443 (ESP32-P4, 4.3" MIPI-DSI panel shown in landscape, Wi-Fi through
-  its ESP32-C6): `./build-pio.sh ui-p4`. Not yet tested through a full shot.
+  its ESP32-C6): `./build.sh ui-p4`. Not yet tested through a full shot.
 - `p4-c6-update`: a one-off tool that updates the P4 board's Wi-Fi chip firmware; with the firmware these boards ship
   with, the first Wi-Fi join dropped at every start.
 - Board code split into `firmware/src/board/common` (shared) and one folder per board (`s3`, `p4`).
@@ -14,6 +14,8 @@ Each release has a section here; its text becomes the release notes on GitHub.
   1 s instead of 15 s.
 - The brewing chart's time axis starts at 30 s and grows in 15 s steps (fewer full redraws during a shot).
 - Shot history: a stored shot with a larger stop weight than the active profile's is drawn to its own scale.
+- Scripts renamed: `firmware/build-pio.sh` is now `firmware/build.sh`, `sim/build.sh` is `sim/build-render.sh`,
+  `tools/make_release.sh` is `tools/make-release.sh`.
 - For developers: a screen recorder in debug builds (`tools/record.sh`), [docs/development.md](docs/development.md),
   shared command rules between the device and the emulator.
 

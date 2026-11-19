@@ -1,8 +1,8 @@
 // One-off tool for the Guition ESP32-P4 board (env p4-c6-update): updates the board's ESP32-C6, the Wi-Fi chip the P4
 // talks to over SDIO (ESP-Hosted), to the ESP-Hosted version this Arduino core's host side expects. Boards ship with
 // older C6 firmware (seen: 2.3.2 against 2.12.13); with it the first Wi-Fi join dropped at every boot.
-//   ./build-pio.sh p4-c6-update --flash, then read the log (the screen stays dark), then flash Brewdeck again:
-//   ./build-pio.sh ui-p4 --flash
+//   ./build.sh p4-c6-update --flash, then read the log (the screen stays dark), then flash Brewdeck again:
+//   ./build.sh ui-p4 --flash
 // Wi-Fi: the network Brewdeck saved on the screen (NVS "wifi", read only), else the one in wifi_config.h.
 //
 // The image comes from Espressif (the URL the core names). Its size and SHA-256 are pinned below: the hash is computed

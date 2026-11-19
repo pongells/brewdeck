@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Flash Brewdeck's images onto the screen (macOS / Linux). Used by build-pio.sh --flash after a build, and shipped in
+# Flash Brewdeck's images onto the screen (macOS / Linux). Used by build.sh --flash after a build, and shipped in
 # each release zip next to the prebuilt images.
 #   ./flash.sh [<folder>]   folder with bootloader.bin, partitions.bin, boot_app0.bin, firmware.bin (default: this
 #                           script's folder, as in a release zip)

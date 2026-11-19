@@ -20,7 +20,7 @@ You do not need the hardware to work on most of Brewdeck:
 
 ```sh
 tests/run.sh                                               # unit tests
-sim/build.sh && sim/render sim/out && python3 sim/topng.py sim/out   # renders every screen to PNG
+sim/build-render.sh && sim/render sim/out && python3 sim/topng.py sim/out   # renders every screen to PNG
 sim/build-emu.sh && sim/emu                                # the real UI in a desktop window, fake machine
 ```
 

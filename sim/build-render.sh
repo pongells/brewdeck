@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Render harness: Brewdeck's screens (ui.cpp + screens/) on the desktop, drawn to files (no hardware needed).
-# Usage: sim/build.sh && sim/render sim/out && python3 sim/topng.py sim/out
+# Usage: sim/build-render.sh && sim/render sim/out && python3 sim/topng.py sim/out
 # Needs: gcc/g++, python3 + Pillow (pip install pillow), git (the first run clones LVGL into sim/lvgl).
 set -euo pipefail
 cd "$(dirname "$0")"

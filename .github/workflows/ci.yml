@@ -31,7 +31,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
       - run: pip install pillow
       - name: Render every screen with the real UI code
-        run: sim/build.sh && sim/render sim/out && python3 sim/topng.py sim/out
+        run: sim/build-render.sh && sim/render sim/out && python3 sim/topng.py sim/out
       - name: Build the emulator
         run: sim/build-emu.sh
       - name: Build the emulator with the example UI (src/ui_minimal uses only the core API)
@@ -57,10 +57,10 @@ jobs:
         working-directory: firmware
         run: |
           # pioarduino can install a pioarduino package its own version check rejects (6.2.0.post1 vs >=6.2.0)
-          ./build-pio.sh ui || { uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0 && ./build-pio.sh ui; }
-          ./build-pio.sh ui-debug
-          UI=ui_minimal ./build-pio.sh ui   # the example UI: proves a UI builds on the core API alone
-          ./build-pio.sh touchtest
+          ./build.sh ui || { uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0 && ./build.sh ui; }
+          ./build.sh ui-debug
+          UI=ui_minimal ./build.sh ui   # the example UI: proves a UI builds on the core API alone
+          ./build.sh touchtest
 
   firmware-p4:
     # separate job and cache: the two boards need differently compiled Arduino libraries, and pioarduino keeps one copy
@@ -77,7 +77,7 @@ jobs:
       - name: Build
         working-directory: firmware
         run: |
-          ./build-pio.sh ui-p4 || { uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0 && ./build-pio.sh ui-p4; }
-          ./build-pio.sh ui-p4-debug
-          UI=ui_minimal ./build-pio.sh ui-p4
-          ./build-pio.sh p4-c6-update
+          ./build.sh ui-p4 || { uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0 && ./build.sh ui-p4; }
+          ./build.sh ui-p4-debug
+          UI=ui_minimal ./build.sh ui-p4
+          ./build.sh p4-c6-update

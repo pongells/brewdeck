@@ -7,7 +7,7 @@
 #   ./tools/record.sh fetch [dir]                     download and write dir/frame-NNNN-<seconds>.png (stops recording)
 #   ./tools/record.sh free                            give the memory back to the screen
 # Env HOST (default brewdeck.local; the ESP32-P4 board: HOST=brewdeck-p4.local). Needs a debug build
-# (./build-pio.sh ui-debug --flash). PNG via sips (built into macOS); elsewhere the .bmp files are kept.
+# (./build.sh ui-debug --flash). PNG via sips (built into macOS); elsewhere the .bmp files are kept.
 set -euo pipefail
 HOST="${HOST:-brewdeck.local}"
 get() { curl -4 -fsS -m "${2:-10}" "http://$HOST$1"; }   # -4: macOS otherwise waits ~5 s for IPv6 over mDNS

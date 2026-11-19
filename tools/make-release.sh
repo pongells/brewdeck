@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Package a release of Brewdeck for the Sunton ESP32-S3 screen: the prebuilt images, flash.sh, checksums and a short
 # INSTALL.txt, as dist/brewdeck-<version>-esp32s3.zip. Builds the release env (`ui`, no debug web server) first.
-#   tools/make_release.sh v0.1.0
+#   tools/make-release.sh v0.1.0
 # The image has no Wi-Fi network built in (wifi_config.h from the example): the screen starts on "No Wi-Fi set up".
 set -euo pipefail
-VER="${1:?usage: tools/make_release.sh <version, e.g. v0.1.0>}"
+VER="${1:?usage: tools/make-release.sh <version, e.g. v0.1.0>}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FW="$ROOT/firmware"
 # a release never carries anyone's network: build with the example config, put a local one back afterwards
@@ -13,7 +13,7 @@ if [[ -f "$FW/include/wifi_config.h" ]] && ! cmp -s "$FW/include/wifi_config.h" 
   trap 'mv "$FW/include/wifi_config.h.local" "$FW/include/wifi_config.h"' EXIT
 fi
 cp "$FW/include/wifi_config.example.h" "$FW/include/wifi_config.h"
-(cd "$FW" && UI=ui ./build-pio.sh ui)
+(cd "$FW" && UI=ui ./build.sh ui)
 NAME="brewdeck-$VER-esp32s3"
 OUT="$ROOT/dist/$NAME"
 rm -rf "$OUT" "$ROOT/dist/$NAME.zip"

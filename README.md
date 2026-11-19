@@ -144,9 +144,9 @@ tested yet. There is no release package for it: build it (next section), from `f
 
 1. Back up its flash as in step 2, to `backup/p4-guition-original.bin` (or point `GAGGI_BACKUP` at it; a plain board
    can also be flashed without one, `NO_BACKUP=1`). Its port is `/dev/cu.usbmodem…` on macOS, `/dev/ttyACM0` on Linux.
-2. `./build-pio.sh ui-p4 --flash`, then join Wi-Fi on the screen. On the network it is `brewdeck-p4`.
+2. `./build.sh ui-p4 --flash`, then join Wi-Fi on the screen. On the network it is `brewdeck-p4`.
 3. If the first Wi-Fi join drops at every start, the board's ESP32-C6 runs old firmware: update it once with
-   `./build-pio.sh p4-c6-update --flash` (it uses the network saved on the screen and installs Espressif's image only
+   `./build.sh p4-c6-update --flash` (it uses the network saved on the screen and installs Espressif's image only
    if its checksum matches; progress in the [serial log](docs/development.md#serial-log)), then flash `ui-p4` again.
 
 Pins: [`firmware/src/board/p4/board.h`](firmware/src/board/p4/board.h).
@@ -168,15 +168,15 @@ Make the backup first (step 2 above, from the repository root), then:
 
 ```sh
 cd firmware
-./build-pio.sh ui            # the first run creates include/wifi_config.h (see below)
-./build-pio.sh ui --flash    # build, then flash with flash.sh (env PORT=..., GAGGI_BACKUP=path to the backup)
+./build.sh ui            # the first run creates include/wifi_config.h (see below)
+./build.sh ui --flash    # build, then flash with flash.sh (env PORT=..., GAGGI_BACKUP=path to the backup)
 ```
 
-`build-pio.sh --flash` runs the same `flash.sh` as a release, on the build's images. Never flash with
+`build.sh --flash` runs the same `flash.sh` as a release, on the build's images. Never flash with
 `pio run -t upload`: it skips all these checks. `include/wifi_config.h` (git-ignored) can hold your Wi-Fi network and
 the machine's name or IP; left as created, the screen starts on "No Wi-Fi set up" and you choose the network there.
 Other envs (debug builds, the P4, the touch test) and the debug tools: [development](docs/development.md). A release
-package is made with `tools/make_release.sh <version>` (CI does it for each `v*` tag; notes from
+package is made with `tools/make-release.sh <version>` (CI does it for each `v*` tag; notes from
 [CHANGELOG.md](CHANGELOG.md)).
 
 ## Without hardware
@@ -199,7 +199,7 @@ How the parts fit together (board, core, UI, the network tasks, the emulator): [
 | `sim/` | emulator, renderer and recorded machine data |
 | `tests/` | host unit tests |
 | `docs/` | the [user manual](docs/manual.md) and its animations, [development](docs/development.md), the [architecture](docs/architecture.md), [writing your own UI](docs/custom-ui.md), the [design system](docs/design-system.md), [machine API notes](docs/gaggiuino-api.md), the [WebSocket protocol](docs/ws/README.md) |
-| `tools/` | release packaging (`make_release.sh`), protocol listener and extractor, manual recorder, screenshot and screen recorder helpers, offline cup picture (`gen_cup.py`), a fake machine from the community profiles (`community_profiles.py`), font edge contrast (`font_contrast.py`) |
+| `tools/` | release packaging (`make-release.sh`), protocol listener and extractor, manual recorder, screenshot and screen recorder helpers, offline cup picture (`gen_cup.py`), a fake machine from the community profiles (`community_profiles.py`), font edge contrast (`font_contrast.py`) |
 
 Debug builds (`ui-debug`) add a small web server for screenshots, a screen recorder and remote touch; it has no
 password, so use them only on a network you trust ([development](docs/development.md#debug-web-server)).

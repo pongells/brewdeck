@@ -1,7 +1,7 @@
 // A minimal UI on the Brewdeck core: the smallest complete example of brewdeck_core.h, to start your own from.
 // One LVGL 9 screen: the link, the machine's live values, the active profile, the running shot, and the profile list
 // (a tap selects a profile: a command, with the core's answer shown). Build it instead of Brewdeck's UI:
-//   firmware:  UI=ui_minimal ./build-pio.sh ui [--flash]
+//   firmware:  UI=ui_minimal ./build.sh ui [--flash]
 //   emulator:  UI=ui_minimal sim/build-emu.sh && sim/emu-ui_minimal
 // License: this folder is MIT (LICENSE here), so it can be the start of your own UI; the core it runs on, like the
 // rest of Brewdeck, is under the PolyForm Noncommercial License 1.0.0 (LICENSE at the root of the repository).

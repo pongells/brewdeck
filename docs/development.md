@@ -11,7 +11,7 @@ emulator (`brew install sdl2`) and Pillow for the PNG conversion (`pip install p
 | What | Command |
 |---|---|
 | Unit tests (parsers, decoders, command rules, against real machine replies in `sim/data/`; ASan + UBSan) | `tests/run.sh` |
-| Renders of every screen to PNG | `sim/build.sh && sim/render sim/out && python3 sim/topng.py sim/out` |
+| Renders of every screen to PNG | `sim/build-render.sh && sim/render sim/out && python3 sim/topng.py sim/out` |
 | Emulator: the real UI in a desktop window, fake machine | `sim/build-emu.sh && sim/emu` |
 | Web demo (WebAssembly; needs `brew install emscripten`) | `sim/web/build.sh`, then `python3 -m http.server -d sim/web/dist` |
 | User manual GIFs and stills (after a UI change; build the emulator first) | `python3 tools/gen_manual.py` |
@@ -38,8 +38,8 @@ Prerequisites and the first build: README, [Building](../README.md#building). In
 | `p4-c6-update` | one-off: updates the P4 board's ESP32-C6 Wi-Fi firmware (`src/c6update`) |
 | `touchtest` | raw touch test for the S3: shows touch coordinates, tap the corners to check the axes |
 
-`./build-pio.sh <env>` builds, `--flash` flashes through `flash.sh`; `UI=<folder>` builds another UI folder. Options are
-in the header of [`build-pio.sh`](../firmware/build-pio.sh). Switching between S3 and P4 builds recompiles the Arduino
+`./build.sh <env>` builds, `--flash` flashes through `flash.sh`; `UI=<folder>` builds another UI folder. Options are
+in the header of [`build.sh`](../firmware/build.sh). Switching between S3 and P4 builds recompiles the Arduino
 libraries (2-3 minutes).
 
 ## Serial log

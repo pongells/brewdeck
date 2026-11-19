@@ -29,7 +29,7 @@ jobs:
       - name: Build and package
         run: |
           # pioarduino can install a pioarduino package its own version check rejects (6.2.0.post1 vs >=6.2.0)
-          tools/make_release.sh "$GITHUB_REF_NAME" || { uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0 && tools/make_release.sh "$GITHUB_REF_NAME"; }
+          tools/make-release.sh "$GITHUB_REF_NAME" || { uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0 && tools/make-release.sh "$GITHUB_REF_NAME"; }
       - name: Release notes from CHANGELOG.md
         run: |
           # the section "## <tag> ..." up to the next "## "
