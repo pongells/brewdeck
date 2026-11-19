@@ -75,8 +75,7 @@ void ui_set_live(const bd_machine *d) {
     safe.temperature = 0.0f;
     d = &safe;
   }
-  g_live_brew = link == BD_LINK_ONLINE && d->brewing;   // brewing screen: "Done" once this drops after a shot
-  if (g_live_brew && g_br_state == BR_BREWING) g_br_seen_brew = true;
+  g_live_brew = link == BD_LINK_ONLINE && d->brewing;   // the idle clock wakes for a shot
   static bool pv_msg_shown = false;                // the preview's "loading" line, once, until a profile arrives
   if (!g_shape_loaded && !pv_msg_shown) {
     pv_msg_shown = true;

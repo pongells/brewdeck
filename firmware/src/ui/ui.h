@@ -10,10 +10,12 @@ extern "C" {
 void ui_init(void);
 // the boot splash (Brewdeck, unofficial): 5 s or until a tap; called at start when the setting is on
 void ui_splash(void);
-void ui_set_live(const bd_machine *m);            // machine state and link
-void ui_set_profiles(const bd_profiles *l);       // list for the profile picker (display only, never selects)
+void ui_set_live(const bd_machine *m);           // machine state and link
+void ui_set_profiles(const bd_profiles *l);      // list for the profile picker (display only, never selects)
 void ui_set_shape(const bd_profile_shape *s);    // active profile: preview graph + stop weight (display only)
-void ui_shot(const bd_shot_point *p);            // each shot point in order: opens / feeds the brewing screen
+void ui_shot_start(void);                        // a shot began (BD_EV_SHOT_START): its first point opens brewing
+void ui_shot(const bd_shot_point *p);            // each shot point in order: feeds the brewing screen
+void ui_shot_end(void);                          // the shot ended (BD_EV_SHOT_END): "Done", then the review
 // each profile's original values (the UI's storage): "edited" marks, "Reset to ..." in the keypad, Restore on the
 // Profiles page. load: false if none kept; save: keep these as the profile's original
 void ui_on_originals(bool (*load)(const char *profile, int *w10, int *deg),

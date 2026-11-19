@@ -45,9 +45,12 @@ const char *cs_profile_name(int id) {
 }
 
 // ---- shots: start, end, the live shot ------------------------------------------------------------------------------
-// A shot starts at its first point or when the machine reports brewing, whichever comes first, and ends when the
-// machine stops brewing or no new point came for 3 s (cs_tick).
+// A shot starts at its first point or when the machine reports brewing, whichever comes first. It ends 0.3 s after
+// the machine stopped brewing with no new point (the last points come just after the flag drops), or when no new
+// point came for 3 s (cs_tick).
+static const uint32_t SHOT_QUIET_MS = 300, SHOT_NO_DATA_MS = 3000;
 static bool g_shot_on = false;
+static bool g_shot_brewed = false;                // the machine reported brewing during this shot
 static uint32_t g_shot_rx = 0;                    // points received (the stored shot stops growing at BD_SHOT_MAX)
 static uint32_t g_shot_seen_rx = 0, g_shot_seen_t = 0;
 static void shot_event(bd_event_type t) {
@@ -58,6 +61,7 @@ static void shot_event(bd_event_type t) {
 }
 static void shot_begin(void) {
   g_shot_on = true;
+  g_shot_brewed = g_m.brewing;
   g_shot_rx = g_shot_seen_rx = 0;
   g_shot_seen_t = 0;
   if (!g_live) g_live = (bd_shot *)bd_alloc(sizeof(bd_shot), BD_MEM_PSRAM);
@@ -104,7 +108,8 @@ void cs_take_live(const LiveData *d, int link) {
   cpy(g_m.web_version, sizeof g_m.web_version, d->static_ver);
   g_seq_m++;
   if (g_m.brewing && !was_brewing && !g_shot_on) shot_begin();
-  if (!g_m.brewing && was_brewing && g_shot_on) shot_end();
+  if (g_m.brewing && g_shot_on) g_shot_brewed = true;
+  if (!g_m.brewing && was_brewing && g_shot_on && !g_shot_rx) shot_end();   // no points at all: nothing to wait for
   const bool flushing = !strncmp(g_m.mode, "FLUSH", 5), was_flushing = !strncmp(was_mode, "FLUSH", 5);
   if ((g_m.steaming && !was_steaming) || (flushing && !was_flushing)) bd_ui_wake();
 }
@@ -358,7 +363,7 @@ void cs_tick(uint32_t now) {
   watch_n(&g_w_tare.on, fabsf(g_m.weight) < 0.3f, &g_w_tare.t, now, ANSWER_MS, BD_CMD_TARE);
   if (g_shot_on && g_shot_rx) {                   // a shot that stopped sending points: ended
     if (g_shot_rx != g_shot_seen_rx || !g_shot_seen_t) { g_shot_seen_rx = g_shot_rx; g_shot_seen_t = stamp_nz(now); }
-    else if (now - g_shot_seen_t > 3000) shot_end();
+    else if (now - g_shot_seen_t > (g_shot_brewed && !g_m.brewing ? SHOT_QUIET_MS : SHOT_NO_DATA_MS)) shot_end();
   }
 }
 

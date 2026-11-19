@@ -172,7 +172,9 @@ void bd_ui_tick(uint32_t now) {
 
 void bd_ui_event(const bd_event *e) {
   switch (e->type) {
+    case BD_EV_SHOT_START: ui_shot_start(); break;
     case BD_EV_SHOT_POINT: ui_shot(e->u.point); break;
+    case BD_EV_SHOT_END: ui_shot_end(); break;
     case BD_EV_NOTICE:
       if (e->u.notice.update) ui_update_notice(e->u.notice.type, bd_machine_state()->update);
       else ui_notify(e->u.notice.type, e->u.notice.text);

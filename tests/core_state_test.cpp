@@ -61,24 +61,27 @@ int main(void) {
   cs_take_live(&d, BD_LINK_ONLINE);
   uint32_t now = 1000;
 
-  // 1. a normal shot: brewing, points, brewing off -> one START, one END, the whole shot kept
+  // 1. a normal shot: brewing, points, brewing off -> one START, one END 0.3 s later, the whole shot kept
   reset_counts();
   d = live(true); cs_take_live(&d, BD_LINK_ONLINE);
   for (uint32_t t = 1; t <= 200; t++) { point(t); cs_tick(now += 150); }
   d = live(false); cs_take_live(&d, BD_LINK_ONLINE);
+  cs_tick(now += 150);
+  CHECK(n_end == 0);                                // the last points may still come
+  for (int i = 0; i < 3; i++) cs_tick(now += 150);
   CHECK(n_start == 1 && n_end == 1 && n_point == 200);
   CHECK(bd_live_shot() && bd_live_shot()->n == 200);
   printf("normal shot: start %d end %d points %d kept %d\n", n_start, n_end, n_point, bd_live_shot()->n);
 
-  // 2. the last point arrives after "brewing off" was taken (the order a slow loop pass could see): the shot goes on,
-  //    no new START, the points are not wiped
+  // 2. the last point arrives just after "brewing off": the same shot, one START, one END, the points not wiped
   reset_counts();
   d = live(true); cs_take_live(&d, BD_LINK_ONLINE);
-  for (uint32_t t = 1; t <= 100; t++) point(t);
+  for (uint32_t t = 1; t <= 100; t++) { point(t); cs_tick(now += 150); }
   d = live(false); cs_take_live(&d, BD_LINK_ONLINE);
+  cs_tick(now += 150);
   point(101);
-  for (int i = 0; i < 40; i++) cs_tick(now += 150);   // 6 s of no points: ends (again) once
-  CHECK(n_start == 1);
+  for (int i = 0; i < 40; i++) cs_tick(now += 150);
+  CHECK(n_start == 1 && n_end == 1);
   CHECK(bd_live_shot()->n == 101);
   printf("late point: start %d end %d kept %d\n", n_start, n_end, bd_live_shot()->n);
 
@@ -89,6 +92,7 @@ int main(void) {
   CHECK(n_start == 1 && n_end == 0);
   CHECK(bd_live_shot()->n == BD_SHOT_MAX);
   d = live(false); cs_take_live(&d, BD_LINK_ONLINE);
+  for (int i = 0; i < 4; i++) cs_tick(now += 150);
   CHECK(n_end == 1);
   printf("long shot: start %d end %d kept %d\n", n_start, n_end, bd_live_shot()->n);
 
@@ -98,6 +102,13 @@ int main(void) {
   for (int i = 0; i < 30; i++) cs_tick(now += 150);
   CHECK(n_start == 1 && n_end == 1);
   printf("points stop: start %d end %d\n", n_start, n_end);
+
+  // 4b. brewing on and off without a single point (no shot data came): START and END at once
+  reset_counts();
+  d = live(true); cs_take_live(&d, BD_LINK_ONLINE);
+  d = live(false); cs_take_live(&d, BD_LINK_ONLINE);
+  CHECK(n_start == 1 && n_end == 1);
+  printf("no points: start %d end %d\n", n_start, n_end);
 
   // 5. answers: a stop weight the machine takes -> OK; one it never takes -> NOT_TAKEN after 7 s
   reset_counts();

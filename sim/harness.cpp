@@ -173,6 +173,14 @@ int main(int argc, char **argv) {
     bd_machine d; memset(&d, 0, sizeof d); d.readiness = BD_RD_UNKNOWN;
     d.target_temp = 91; d.water_level = 20; strcpy(d.profile_name, "LMD Single v1.1 (community)"); strcpy(d.mode, "HOME");
     static const int at[] = {50, 120, 200}; int next = 0; uint32_t last_t = 0;
+    // the core's shot start / end rule (core_state.cpp): end 0.3 s after brewing off with no new point, or after 3 s
+    uint32_t vt = 0, last_pt = 0; bool started = false, ended = false, brewed = false;
+    auto tick = [&](uint32_t ms) { lv_tick_inc(ms); vt += ms; };
+    auto end_check = [&]() {
+      if (started && !ended && ((brewed && !d.brewing && vt - last_pt > 300) || vt - last_pt > 3000)) {
+        ended = true; ui_shot_end();
+      }
+    };
     for (size_t i = 0; i + 4 <= n;) {
       uint32_t L = b[i] | b[i+1] << 8 | b[i+2] << 16 | (uint32_t)b[i+3] << 24; const uint8_t *fr = b + i + 4; i += 4 + L;
       char act[24]; const uint8_t *dd; size_t dl;
@@ -180,16 +188,18 @@ int main(int argc, char **argv) {
       if (!strcmp(act, "d_sensor_snap")) {
         WsSensor s; pb_sensor(dd, dl, &s);
         d.temperature = s.temperature; d.pressure = s.pressure; d.brewing = s.brew_active; d.water_level = s.water_level;
-        d.link = BD_LINK_ONLINE; ui_set_live(&d); lv_tick_inc(100); lv_timer_handler();
+        if (d.brewing && started) brewed = true;
+        d.link = BD_LINK_ONLINE; ui_set_live(&d); tick(100); end_check(); lv_timer_handler();
       } else if (!strcmp(act, "d_shot_snap")) {
         WsShot s; pb_shot(dd, dl, &s);
-        if (s.time10 > last_t) { lv_tick_inc((s.time10 - last_t) * 100 > 600 ? 600 : (s.time10 - last_t) * 100); last_t = s.time10; }
+        if (s.time10 > last_t) { tick((s.time10 - last_t) * 100 > 600 ? 600 : (s.time10 - last_t) * 100); last_t = s.time10; }
+        if (!started) { started = true; brewed = d.brewing; ui_shot_start(); }
         bd_shot_point pt; pb_shot_point(&s, &pt);
-        ui_shot(&pt); lv_timer_handler();
+        ui_shot(&pt); last_pt = vt; lv_timer_handler();
         if (next < 3 && (int)s.time10 >= at[next]) { snprintf(path, sizeof path, "%s/brew_%02d.raw", dir, at[next] / 10); dump(path); next++; }
       }
     }
-    for (int k = 0; k < 10; k++) { lv_tick_inc(100); lv_timer_handler(); }
+    for (int k = 0; k < 10; k++) { tick(100); end_check(); lv_timer_handler(); }
     snprintf(path, sizeof path, "%s/brew_done.raw", dir); dump(path);
     for (int k = 0; k < 30; k++) { lv_tick_inc(100); lv_timer_handler(); }    // 3 s later: shot review
     snprintf(path, sizeof path, "%s/review.raw", dir); dump(path);

@@ -257,8 +257,8 @@ void bd_debug_route(const char *path, bd_debug_fn fn);
 typedef enum {
   BD_EV_SHOT_START,         // a shot began (its first point, or the machine reports brewing): the live shot is reset
   BD_EV_SHOT_POINT,         // a new point of the running shot (~7/s)
-  BD_EV_SHOT_END,           // the machine stopped brewing, or no new point came for 3 s (a later point of the same
-                            // shot carries on with it, without a new SHOT_START)
+  BD_EV_SHOT_END,           // the machine stopped brewing and no new point came for 0.3 s, or none came for 3 s (a
+                            // later point of the same shot carries on with it, without a new SHOT_START)
   BD_EV_NOTICE,             // a machine notification (not the pressure release, not the repeated "Fill the water tank!"). The update
                             // notice repeats every 2 min: update = true marks it (bd_machine.update has the release)
   BD_EV_PRESSURE_RELEASE,   // "Dropping beats in: N" (count >= 0) / "Releasing pressure" (count -1)

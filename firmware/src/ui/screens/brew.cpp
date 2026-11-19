@@ -8,8 +8,8 @@ enum { BS_P, BS_F, BS_W, BS_T, BS_TP, BS_TF };
 typedef struct { lv_layer_t *ctx; lv_draw_line_dsc_t d; bool dashed; float phase; int px, py; } Pen;
 
 // ---- brewing screen and shot review ---------------------------------------------------------------------------------
-// Brewing opens on the first shot point (~7/s) and shows "Done" when the machine reports brewing off after the shot
-// (or DONE_NO_DATA_MS without points). REVIEW_AFTER_MS later (or on a tap) the shot review opens: the whole shot, a
+// Brewing opens on the first point of a shot (~7/s) and shows "Done" when the core reports the shot's end
+// (BD_EV_SHOT_START / SHOT_END, ui_bridge.cpp). REVIEW_AFTER_MS later (or on a tap) the shot review opens: the whole shot, a
 // scrubber (drag on the chart) and a "Target | Previous" toggle for the dashed line (the profile's targets, or the
 // previous stored shot of the same profile, loaded from the machine). Close, or RV_CLOSE_MS without a touch, goes back
 // to Ready (or to the list, for a shot opened from the shot history).
@@ -27,8 +27,9 @@ bd_shot_point *g_br;                          // BD_SHOT_MAX points (11.5 KB) in
 int g_br_n = 0;
 static int g_br_step = 1, g_br_skip = 0, g_br_tmax = 30, g_br_lastx = -1;
 int g_br_state = BR_HIDDEN;
-bool g_br_seen_brew = false, g_live_brew = false;
-static uint32_t g_br_last_ms = 0, g_br_done_ms = 0;
+bool g_live_brew = false;
+static bool g_br_new = false;                    // a shot started: its first point opens a fresh brewing screen
+static uint32_t g_br_done_ms = 0;
 static bd_shot_point g_br_cur;
 lv_obj_t *g_brew;
 static lv_obj_t *g_br_chart, *g_br_pill, *g_br_dot, *g_br_pill_lbl, *g_br_prof, *g_br_clock;
@@ -40,8 +41,6 @@ int g_rv_mode = 0, g_rv_i = 0;
 static int g_rv_tmax = 25;
 static uint32_t g_rv_touch_ms = 0;
 static const uint32_t RV_CLOSE_MS = 60000;     // the review closes after this long untouched
-static const uint32_t DONE_QUIET_MS = 300;      // brewing reported off and no snapshot this long: Done
-static const uint32_t DONE_NO_DATA_MS = 3000;   // no snapshot this long: Done anyway
 static const uint32_t REVIEW_AFTER_MS = 3000;   // the review opens this long after Done
 lv_obj_t *g_rv, *g_rv_chart;
 static lv_obj_t *g_rv_res_w, *g_rv_res_t, *g_rv_close_t, *g_rv_tog[2], *g_rv_tog_l[2];
@@ -264,7 +263,7 @@ static void br_start(void) {
   g_br_skip = 0;
   g_br_tmax = 30;
   g_br_lastx = -1;
-  g_br_seen_brew = false;
+  g_br_new = false;
   g_br_state = BR_BREWING;
   g_rv_hist = false;
   g_rv_prev_state = RV_PREV_NONE;
@@ -465,10 +464,7 @@ static void on_brew_tap(lv_event_t *e) { (void)e; if (g_br_state == BR_DONE) rv_
 
 static void on_brew_timer(lv_timer_t *t) {
   (void)t;
-  if (g_br_state == BR_BREWING) {
-    const uint32_t idle = lv_tick_elaps(g_br_last_ms);
-    if ((g_br_seen_brew && !g_live_brew && idle > DONE_QUIET_MS) || idle > DONE_NO_DATA_MS) br_done();
-  } else if (g_br_state == BR_DONE && lv_tick_elaps(g_br_done_ms) > REVIEW_AFTER_MS) {
+  if (g_br_state == BR_DONE && lv_tick_elaps(g_br_done_ms) > REVIEW_AFTER_MS) {
     rv_open();
   } else if (g_br_state == BR_REVIEW) {
     const uint32_t el = lv_tick_elaps(g_rv_touch_ms);
@@ -480,9 +476,15 @@ static void on_brew_timer(lv_timer_t *t) {
   }
 }
 
+void ui_shot_start(void) { g_br_new = true; }
+void ui_shot_end(void) { if (g_br_state == BR_BREWING) br_done(); }
+
 void ui_shot(const bd_shot_point *s) {
-  if (g_br_state != BR_BREWING || s->t + 5 < g_br_cur.t) br_start();   // first snapshot, or time went back
-  g_br_last_ms = lv_tick_get();
+  if (g_br_new || g_br_state == BR_HIDDEN || g_br_state == BR_REVIEW) br_start();
+  else if (g_br_state == BR_DONE) {                // a late point of the same shot: it goes on
+    g_br_state = BR_BREWING;
+    br_pill(false);
+  }
   g_br_cur = *s;
   // keep the point (thinned 2:1 when full)
   if (++g_br_skip >= g_br_step) {

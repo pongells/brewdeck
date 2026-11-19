@@ -174,7 +174,6 @@ void build_steam(lv_obj_t *scr);
 extern bd_shot_point *g_br;
 extern int g_br_n;
 extern int g_br_state;
-extern bool g_br_seen_brew;
 extern bool g_live_brew;
 extern lv_obj_t *g_brew;
 extern int g_rv_prev_state;
