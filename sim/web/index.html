@@ -7,183 +7,258 @@
 <meta name="description" content="Brewdeck, an unofficial Wi-Fi touchscreen for Gaggiuino machines, running in the browser against a fake machine.">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600&display=swap">
 <style>
+/* The screen's own palette and typeface (firmware/src/ui/theme.h), one dark look like the device.
+   Layout: the device is the page's one big object; the controls sit in a rail beside it (below it on narrow screens),
+   the machine's state is a row of switches under the glass. */
 :root {
-  --bg: #0A0A0B; --card: #1A1A1D; --card-pr: #2A2A2F; --line: #26262A; --text: #F2F2F3; --muted: #8E8E96; --faint: #5E5E66;
-  --blue: #7CC4FF; --gold: #F5C04A; --desk: #141416;
+  --bg: #0A0A0B; --surface: #131315; --raised: #1C1C1F; --raised-hi: #26262A; --line: #222226;
+  --text: #F2F2F3; --muted: #8E8E96; --faint: #5E5E66;
+  --gold: #F5C04A; --gold-hi: #FFD36B; --gold-ink: #1A1405; --blue: #7CC4FF; --blue-bg: #0F2233;
+  --green: #4ADE80; --warn: #FFA94D; --warn-bg: #33200F;
+  --font: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 'Inter Tight', system-ui, sans-serif; }
-main { max-width: 880px; margin: 0 auto; padding: 32px 16px 48px; }
-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
-header h1 { margin: 0; font-size: 28px; font-weight: 300; line-height: 1.1; }
-header p { margin: 2px 0 0; color: var(--muted); }
-.logo { width: 48px; height: 48px; flex: none; }
-.device { background: #08080A; border: 1px solid #3C3C42; border-radius: 22px; padding: clamp(10px, 3.5vw, 28px); }
-.glass { position: relative; aspect-ratio: 800 / 480; outline: 1px solid var(--card); }
-canvas { display: block; width: 100%; height: 100%; touch-action: none; image-rendering: auto; cursor: pointer; }
-.loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
-.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-top: 28px; }
-h2 { margin: 0 0 10px; font-size: 16px; font-weight: 600; color: var(--muted); }
-.row { display: flex; flex-wrap: wrap; gap: 8px; }
-button { font: inherit; font-size: 15px; font-weight: 600; color: var(--text); background: var(--card); border: 0; border-radius: 12px;
-  min-height: 44px; padding: 0 14px; cursor: pointer; }
-button:hover { background: var(--card-pr); }
-button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-button[aria-pressed="true"] { background: #0F2233; color: var(--blue); }
-.status { margin-top: 16px; color: var(--muted); font-size: 14px; white-space: pre-line; min-height: 3em; }
-.note { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px;
-  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 32px; }
-.note div { flex: 1 1 360px; max-width: 72ch; }
-.note p { margin: 0 0 8px; }
-.note > a { flex: none; font-weight: 600; text-decoration: none; }
-.note > a:hover { text-decoration: underline; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 var(--font); }
 a { color: var(--blue); }
-kbd { font: inherit; font-size: 13px; padding: 1px 6px; border-radius: 6px; background: var(--card); color: var(--text); }
-/* how it works: a layer stack, then two cards */
-.how { margin-top: 56px; display: flex; flex-direction: column; gap: 16px; }
-.how > h2, .make > h2 { font-size: 26px; font-weight: 300; color: var(--text); margin: 0; }
-.how > p, .make > p { margin: 0; color: var(--muted); max-width: 68ch; }
-.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
-.stack { display: grid; gap: 6px; }
-.tier { display: grid; grid-template-columns: 150px 1fr; gap: 6px 20px; align-items: baseline; background: var(--desk);
-  border: 1px solid var(--line); border-radius: 16px; padding: 14px 18px; border-left-width: 3px; }
-.tier b { font-size: 18px; font-weight: 400; }
-.tier span { color: var(--muted); font-size: 15px; }
-.tier.ui { border-left-color: var(--gold); }
-.tier.core { border-left-color: var(--blue); }
-.tier.board { border-left-color: var(--faint); }
-.tier.machine { border-left-color: #4ADE80; }
-.joint { padding-left: 20px; color: var(--faint); font-size: 13px; }
-code { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.86em; background: var(--card);
-  color: var(--text); padding: 1px 5px; border-radius: 5px; overflow-wrap: anywhere; }
-.make { margin-top: 56px; display: flex; flex-direction: column; gap: 16px; }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
-.card { background: var(--desk); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; display: flex;
-  flex-direction: column; gap: 10px; min-width: 0; }
-.card h3 { margin: 0; font-size: 18px; font-weight: 600; }
-.card p { margin: 0; color: var(--muted); font-size: 15px; }
-.card ol { margin: 0; padding-left: 20px; color: var(--muted); font-size: 15px; display: flex; flex-direction: column; gap: 6px; }
-.card a.more { font-weight: 600; text-decoration: none; margin-top: auto; }
-.card a.more:hover { text-decoration: underline; }
-@media (max-width: 560px) { .tier { grid-template-columns: 1fr; } }
+main { max-width: 1240px; margin: 0 auto; padding-block: 28px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* header: the name and two links */
+.top { display: flex; align-items: center; gap: 12px; }
+.top img { width: 36px; height: 36px; flex: none; }
+.top .name { font-size: 20px; font-weight: 500; letter-spacing: -0.01em; }
+.top nav { margin-left: auto; display: flex; gap: 6px; }
+.top nav a { font-size: 15px; font-weight: 500; color: var(--text); text-decoration: none; border-radius: 12px; padding: 9px 14px; }
+.top nav a:hover { background: var(--raised); }
+.top nav a.gh { border: 1px solid var(--line); }
+
+/* intro: what it is, in two sentences, then the demo */
+.intro { margin: 48px 0 32px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px 56px; align-items: end; }
+.intro h1 { margin: 0; font-size: clamp(34px, 4.6vw, 52px); font-weight: 300; line-height: 1.08; letter-spacing: -0.02em;
+  text-wrap: balance; }
+.intro p { margin: 0; color: var(--muted); font-size: 17px; max-width: 52ch; }
+.intro p b { color: var(--text); font-weight: 500; }
+.try { margin: 0 0 12px; color: var(--muted); font-size: 15px; display: flex; align-items: center; gap: 10px; }
+.try i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+@media (max-width: 1000px) { .intro { grid-template-columns: 1fr; margin-top: 36px; } }
+
+/* stage: device + rail */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; align-items: start; }
+.device { position: relative; border-radius: 28px; padding: clamp(10px, 2.6vw, 30px);
+  background: linear-gradient(180deg, #1B1B1E 0%, #0E0E10 14%, #08080A 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), inset 0 0 0 1px #2A2A2F, 0 40px 80px -30px rgba(0,0,0,0.9), 0 2px 0 #000; }
+.glass { position: relative; aspect-ratio: 800 / 480; border-radius: 4px; overflow: hidden; background: #000;
+  box-shadow: 0 0 0 1px #000, 0 0 0 2px #17171A; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: pointer; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
+
+/* the fake machine: a panel of real switches under the device */
+.machine { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px 16px; }
+.machine h2 { margin: 0 0 10px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.state { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px 16px; }
+.sw { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 4px; background: none; border-radius: 10px;
+  color: var(--text); font: 500 15px/1.2 var(--font); }
+.sw:hover, .sw[aria-checked]:hover { background: var(--raised); }
+.sw .track { position: relative; flex: none; width: 40px; height: 24px; border-radius: 12px; background: var(--raised-hi);
+  box-shadow: inset 0 0 0 1px #34343A; }
+.sw .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--muted); }
+.sw[aria-checked="true"] .track { background: var(--blue); box-shadow: none; }
+.sw[aria-checked="true"] .track::after { left: 19px; background: #fff; }
+.sw[data-warn="true"] .track { background: var(--warn); box-shadow: none; }
+.sw[data-warn="true"] .track::after { background: #fff; }
+.sw .lbl { display: flex; flex-direction: column; gap: 1px; }
+.sw small { font-size: 13px; color: var(--muted); font-weight: 400; }
+.sw[data-warn="true"] small { color: var(--warn); }
+@media (prefers-reduced-motion: no-preference) { .sw .track, .sw .track::after { transition: all 140ms ease; } }
+
+/* rail */
+.rail { display: flex; flex-direction: column; gap: 22px; position: sticky; top: 20px; }
+@media (max-width: 560px) { .top nav a:not(.gh) { display: none; } }
+.group { display: flex; flex-direction: column; gap: 8px; }
+.group h2 { margin: 0 0 2px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+button { font: 500 15px/1.2 var(--font); color: var(--text); background: var(--raised); border: 0; border-radius: 14px;
+  min-height: 46px; padding: 0 16px; cursor: pointer; text-align: left; }
+button:hover { background: var(--raised-hi); }
+button:focus-visible, .sw:focus-visible, .top .src:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+button[aria-pressed="true"] { background: var(--blue-bg); color: var(--blue); }
+.shot { display: flex; flex-direction: column; gap: 2px; justify-content: center; min-height: 72px; padding: 12px 18px;
+  background: var(--gold); color: var(--gold-ink); font-size: 18px; font-weight: 600; }
+.shot:hover { background: var(--gold-hi); }
+.shot span { font-size: 14px; font-weight: 400; opacity: 0.75; }
+.shot[aria-pressed="true"] { background: var(--gold); color: var(--gold-ink); }
+
+/* explanation */
+.explain { margin-top: 88px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; }
+h3 { margin: 0 0 10px; font-size: 28px; font-weight: 300; letter-spacing: -0.01em; line-height: 1.2; text-wrap: balance; }
+.explain p { margin: 0; color: var(--muted); }
+.explain p + p { margin-top: 10px; }
+code { font-family: var(--mono); font-size: 0.84em; color: var(--text); background: var(--raised); padding: 1px 5px;
+  border-radius: 5px; overflow-wrap: anywhere; }
+
+.layers { list-style: none; margin: 22px 0 0; padding: 0; position: relative; }
+.layers::before { content: ""; position: absolute; left: 5px; top: 10px; bottom: 10px; width: 2px; background: var(--line); }
+.layers li { position: relative; padding: 0 0 18px 30px; }
+.layers li:last-child { padding-bottom: 0; }
+.layers li::before { content: ""; position: absolute; left: 0; top: 7px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--bg); border: 2px solid var(--c, var(--faint)); }
+.layers b { display: block; font-size: 17px; font-weight: 600; }
+.layers span { color: var(--muted); font-size: 15px; }
+.layers .via { padding-bottom: 14px; color: var(--faint); font-size: 14px; }
+.layers .via::before { display: none; }
+
+.ways { margin-top: 22px; display: flex; flex-direction: column; gap: 26px; }
+.way h4 { margin: 0 0 6px; font-size: 17px; font-weight: 600; }
+.way p { font-size: 15px; }
+.way ol { margin: 10px 0 0; padding-left: 20px; color: var(--muted); font-size: 15px; display: flex; flex-direction: column; gap: 5px; }
+.way a { display: inline-block; margin-top: 10px; font-weight: 500; }
+
+footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--faint); font-size: 14px;
+  display: flex; flex-direction: column; gap: 6px; }
+footer p { margin: 0; max-width: 80ch; }
+
+@media (max-width: 1000px) {
+  .stage { grid-template-columns: 1fr; }
+  .rail { position: static; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 16px; }
+  .explain { grid-template-columns: 1fr; gap: 48px; margin-top: 64px; }
+}
+@media (max-width: 560px) {
+  .top p { display: none; }
+  .rail { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  button, .sw { transition: background-color 120ms ease; }
+}
 </style>
 </head>
 <body>
 <main>
-  <header>
-    <img class="logo" src="logo.svg" alt="">
-    <div>
-      <h1>Brewdeck</h1>
-      <p>The screen's real software, running in your browser against a fake machine.</p>
-    </div>
+  <header class="top">
+    <img src="logo.svg" alt="">
+    <span class="name">Brewdeck</span>
+    <nav>
+      <a href="https://github.com/pongells/brewdeck/blob/main/docs/manual.md">Manual</a>
+      <a class="gh" href="https://github.com/pongells/brewdeck">GitHub</a>
+    </nav>
   </header>
 
-  <div class="device">
-    <div class="glass">
-      <canvas id="screen" width="800" height="480" aria-label="Brewdeck screen. Click or touch it like the touchscreen."></canvas>
-      <div class="loading" id="loading">Loading…</div>
-    </div>
-  </div>
-
-  <div class="controls">
-    <section>
-      <h2>On the machine</h2>
-      <div class="row">
-        <button data-action="Shot">Pull a shot</button>
-        <button data-action="Shot > review">Shot, fast forward</button>
-        <button data-action="Steam" id="steam">Steam</button>
-        <button data-action="Steam, fast">Steam, fast forward</button>
-        <button data-action="Pressure release">Pressure release</button>
-        <button data-action="Notification">Send a notice</button>
-      </div>
-    </section>
-    <section>
-      <h2>Change the fake machine</h2>
-      <div class="row">
-        <button data-action="Heat on/off">Heat up from cold</button>
-        <button data-action="Water">Water low / full</button>
-        <button data-action="Scale on/off">Scale on / off</button>
-        <button data-action="Machine on/off">Machine on / off</button>
-        <button data-action="Wi-Fi on/off">Wi-Fi on / off</button>
-      </div>
-    </section>
-    <section>
-      <h2>Jump to</h2>
-      <div class="row">
-        <button data-action="Ready">Ready</button>
-        <button data-action="Idle">Idle clock</button>
-        <button data-action="Shot history">Shot history</button>
-        <button data-action="Splash">Start-up</button>
-      </div>
-    </section>
-  </div>
-  <div class="status" id="status" aria-live="polite"></div>
-
-  <section class="how">
-    <div class="eyebrow">How it works</div>
-    <h2>Three layers, one contract between them</h2>
-    <p>Brewdeck is a separate touchscreen. It is not wired to the machine: it reads it over Wi-Fi through Gaggiuino's
-      documented REST and WebSocket API. The firmware is split so each part can be replaced on its own. Only the core
-      talks to the machine, and it checks every command before sending it.</p>
-    <div class="stack">
-      <div class="tier ui"><b>UI</b><span>The screens you see above. Any graphics library; Brewdeck's own uses LVGL 9.
-        It reads plain state, asks the core for things and gets told what happened.</span></div>
-      <div class="joint">↕ <code>brewdeck_core.h</code>, the core API (version 1)</div>
-      <div class="tier core"><b>Core</b><span>Wi-Fi, finding the machine, REST and WebSocket, shot start and end, settings.
-        The only part that sends anything, and only a short list: pick a profile, stop weight, brew temperature, save
-        them, flush, tare. Never pumps, valves, heater or steam.</span></div>
-      <div class="joint">↕ panel, touch, backlight, memory</div>
-      <div class="tier board"><b>Board</b><span>One folder per screen model: the Sunton ESP32-S3 4.3″ (800 × 480), and an
-        experimental Guition ESP32-P4 port.</span></div>
-      <div class="joint">↕ Wi-Fi</div>
-      <div class="tier machine"><b>Machine</b><span>Gaggiuino's own firmware, untouched. On this page the machine is fake: it
-        replays a recorded shot and steam session.</span></div>
-    </div>
+  <section class="intro">
+    <h1>A second screen for your Gaggiuino machine</h1>
+    <p>Brewdeck is an unofficial touchscreen that sits next to the machine and talks to it over Wi-Fi. It draws every shot
+      live, compares it with the profile or your last shot, and handles profile, brew temperature, stop weight and
+      flushing. <b>Nothing on the machine is rewired or reflashed.</b></p>
   </section>
 
-  <section class="make">
-    <div class="eyebrow">Make it yours</div>
-    <h2>A new look, or a new screen</h2>
-    <p>Because the layers are separate, you can replace the UI without touching the network code, or bring Brewdeck to
-      another ESP32 panel without touching the UI.</p>
-    <div class="cards">
-      <div class="card">
-        <h3>Write your own UI</h3>
-        <p>A UI implements four functions (<code>bd_ui_init</code>, <code>tick</code>, <code>event</code>,
-          <code>wake</code>) and calls the rest of the core API.</p>
-        <ol>
-          <li>Copy <code>firmware/src/ui_minimal</code>, a 150-line example (MIT licensed).</li>
-          <li>Try it against the fake machine: <code>UI=myui sim/build-emu.sh</code></li>
-          <li>Build the firmware: <code>UI=myui ./build.sh ui</code></li>
-        </ol>
-        <a class="more" href="https://github.com/pongells/brewdeck/blob/main/docs/custom-ui.md">Custom UI guide →</a>
-      </div>
-      <div class="card">
-        <h3>Bring it to another screen</h3>
-        <p>A board folder provides the panel, touch, backlight and memory. The core and the UI stay the same; the P4
-          port was done this way.</p>
-        <ol>
-          <li>Start from <code>firmware/src/board/s3</code> (RGB panel) or <code>board/p4</code> (DSI panel).</li>
-          <li>Add an environment in <code>platformio.ini</code> with its own <code>custom_board</code>.</li>
-          <li>Touch is shared (GT911); other controllers go in <code>board/common</code>.</li>
-        </ol>
-        <a class="more" href="https://github.com/pongells/brewdeck/blob/main/docs/architecture.md">Architecture notes →</a>
-      </div>
-    </div>
-    <p>There is no step-by-step porting guide yet. If you want to try a screen, open a discussion on GitHub.</p>
-  </section>
+  <p class="try"><i></i>The real screen software, running here against a fake machine. Click the screen like a touchscreen.</p>
 
-  <footer class="note">
+  <div class="stage">
     <div>
-      <p>Brewdeck is an unofficial Wi-Fi touchscreen for <a href="https://gaggiuino.github.io/">Gaggiuino</a> machines. It is not
-        made by or affiliated with the Gaggiuino project.</p>
-      <p>This page runs the same interface code as the screen, compiled to WebAssembly. The machine is fake: it replays a
-        recorded shot and a recorded steam session, and answers profile, weight and temperature changes. Nothing leaves your
-        browser.</p>
+      <div class="device">
+        <div class="glass">
+          <canvas id="screen" width="800" height="480" aria-label="Brewdeck screen. Click or touch it like the touchscreen."></canvas>
+          <div class="loading" id="loading">Loading…</div>
+        </div>
+      </div>
+      <div class="machine">
+        <h2>The fake machine</h2>
+        <div class="state">
+          <button class="sw" role="switch" aria-checked="true" data-action="Machine on/off" data-key="machine"><span class="track"></span><span class="lbl">Power<small>on</small></span></button>
+          <button class="sw" role="switch" aria-checked="true" data-action="Heat on/off" data-key="heat"><span class="track"></span><span class="lbl">Boiler hot<small>ready</small></span></button>
+          <button class="sw" role="switch" aria-checked="true" data-action="Water" data-key="water"><span class="track"></span><span class="lbl">Water tank<small>100 %</small></span></button>
+          <button class="sw" role="switch" aria-checked="true" data-action="Scale on/off" data-key="scale"><span class="track"></span><span class="lbl">Scale<small>connected</small></span></button>
+          <button class="sw" role="switch" aria-checked="true" data-action="Wi-Fi on/off" data-key="wifi"><span class="track"></span><span class="lbl">Wi-Fi<small>on</small></span></button>
+        </div>
+      </div>
     </div>
-    <a href="https://github.com/pongells/brewdeck">Source and build guide</a>
+
+    <aside class="rail" aria-label="Things to try">
+      <div class="group">
+        <button class="shot" data-action="Shot" id="shot">Pull a shot<span>Plays a recorded 33-second shot</span></button>
+        <button data-action="Shot > review">Fast-forward to the review</button>
+      </div>
+      <div class="group">
+        <h2>Steam</h2>
+        <div class="row">
+          <button data-action="Steam" id="steam" aria-pressed="false">Steam</button>
+          <button data-action="Steam, fast">Steam at 10×</button>
+        </div>
+      </div>
+      <div class="group">
+        <h2>Messages from the machine</h2>
+        <div class="row">
+          <button data-action="Pressure release">Pressure release</button>
+          <button data-action="Notification">A notice</button>
+        </div>
+      </div>
+      <div class="group">
+        <h2>Go to</h2>
+        <div class="row">
+          <button data-action="Ready">Ready</button>
+          <button data-action="Idle">Idle clock</button>
+          <button data-action="Shot history">Shot history</button>
+          <button data-action="Splash">Start-up</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="explain">
+    <section>
+      <h3>How it works</h3>
+      <p>Brewdeck is a separate touchscreen. It is not wired to the machine: it reads it over Wi-Fi through Gaggiuino's
+        documented REST and WebSocket API. The firmware has three layers, each replaceable on its own.</p>
+      <ol class="layers">
+        <li style="--c: var(--gold)"><b>UI</b><span>The screens above. Any graphics library; Brewdeck's own uses LVGL 9. It
+          reads plain state, asks the core for things and is told what happened.</span></li>
+        <li class="via">through <code>brewdeck_core.h</code>, the core API</li>
+        <li style="--c: var(--blue)"><b>Core</b><span>Wi-Fi, finding the machine, live data, shots, settings. The only part
+          that sends anything, and only a short list: pick a profile, stop weight, brew temperature, save them, flush,
+          tare. Never pumps, valves, heater or steam.</span></li>
+        <li class="via">through the panel, touch, backlight and memory</li>
+        <li style="--c: var(--muted)"><b>Board</b><span>One folder per screen model: the Sunton ESP32-S3 4.3″ (800 × 480),
+          and an experimental Guition ESP32-P4.</span></li>
+        <li class="via">over Wi-Fi</li>
+        <li style="--c: var(--green)"><b>Machine</b><span>Gaggiuino's own firmware, untouched. Here it is fake: it replays a
+          recorded shot and steam session, and answers profile, weight and temperature changes.</span></li>
+      </ol>
+    </section>
+
+    <section>
+      <h3>Make it yours</h3>
+      <p>Because the layers are separate, a new look does not touch the network code, and a new screen does not touch the
+        interface.</p>
+      <div class="ways">
+        <div class="way">
+          <h4>Write your own interface</h4>
+          <p>A UI implements four functions (<code>bd_ui_init</code>, <code>tick</code>, <code>event</code>,
+            <code>wake</code>) and calls the rest of the core API.</p>
+          <ol>
+            <li>Copy <code>firmware/src/ui_minimal</code>, a 150-line example under the MIT license.</li>
+            <li>Try it against the fake machine: <code>UI=myui sim/build-emu.sh</code></li>
+            <li>Build the firmware: <code>UI=myui ./build.sh ui</code></li>
+          </ol>
+          <a href="https://github.com/pongells/brewdeck/blob/main/docs/custom-ui.md">Read the custom UI guide</a>
+        </div>
+        <div class="way">
+          <h4>Bring it to another screen</h4>
+          <p>A board folder provides the panel, touch, backlight and memory; the core and the UI stay the same. The P4 port
+            was done this way. There is no step-by-step guide yet: start from <code>firmware/src/board/s3</code> or
+            <code>board/p4</code>, or open a discussion on GitHub.</p>
+          <a href="https://github.com/pongells/brewdeck/blob/main/docs/architecture.md">Read the architecture notes</a>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <p>Brewdeck is an unofficial Wi-Fi touchscreen for <a href="https://gaggiuino.github.io/">Gaggiuino</a> machines. It is not
+      made by or affiliated with the Gaggiuino project.</p>
+    <p>This page runs the screen's interface code compiled to WebAssembly. Nothing leaves your browser.</p>
   </footer>
 </main>
 <script src="brewdeck.js"></script>
@@ -199,7 +274,28 @@ code { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-si
     const r = (v >> 11) & 31, g = (v >> 5) & 63, b = v & 31;
     lut[v] = 0xFF000000 | ((b * 527 + 23) >> 6) << 16 | ((g * 259 + 33) >> 6) << 8 | ((r * 527 + 23) >> 6);
   }
-  const status = document.getElementById('status'), steam = document.getElementById('steam');
+
+  // the fake machine's state, from the emulator's status line:
+  // "Machine on, Wi-Fi on\nScale on (Bluetooth), water 100 %\nready, shot idle. Keys: ..."
+  const sw = {};
+  for (const b of document.querySelectorAll('.sw')) sw[b.dataset.key] = b;
+  function setSw(key, on, text, warn) {
+    const b = sw[key];
+    b.dataset.warn = !!warn;
+    b.querySelector('small').textContent = text;
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  }
+  function showState(s) {
+    const machine = /Machine on/.test(s), wifi = /Wi-Fi on/.test(s);
+    const scale = /Scale on/.test(s), water = +(s.match(/water (\d+)/) || [0, 100])[1], heating = /heating/.test(s);
+    setSw('machine', machine, machine ? 'on' : 'off');
+    setSw('heat', !heating, heating ? 'heating up' : 'ready');
+    setSw('water', water >= 20, water < 20 ? water + ' %, refill' : water + ' %', water < 20);
+    setSw('scale', scale, scale ? 'connected' : 'not connected');
+    setSw('wifi', wifi, wifi ? 'on' : 'off');
+  }
+
+  const steam = document.getElementById('steam');
   let last = '';
   function frame() {
     if (M._web_frame()) {
@@ -208,8 +304,8 @@ code { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-si
       ctx.putImageData(img, 0, 0);
       cv.style.filter = 'brightness(' + M._web_backlight() / 100 + ')';
     }
-    const s = M.UTF8ToString(M._web_status()).replace(/\. Keys:.*$/, '.').replace(/\n/g, ', ');
-    if (s !== last) { status.textContent = s; last = s; }
+    const s = M.UTF8ToString(M._web_status());
+    if (s !== last) { showState(s); last = s; }
     steam.setAttribute('aria-pressed', M._web_steam_on() ? 'true' : 'false');
     requestAnimationFrame(frame);
   }
