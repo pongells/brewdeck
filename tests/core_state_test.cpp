@@ -5,13 +5,15 @@
 #include <string.h>
 #include "core_state.h"
 
-static int fails = 0;
-#define CHECK(c) do { if (!(c)) { printf("FAIL %s:%d  %s\n", __FILE__, __LINE__, #c); fails++; } } while (0)
+#include "test_util.h"
 
 // ---- the UI and board side, recorded ----------------------------------------------------------------------------
-static int n_start, n_end, n_point, n_wake, n_answer[8], last_answer[8];
+static int n_start, n_end, n_point, n_wake, n_answer[8], last_answer[8], n_notice, n_release, last_release;
+static bool last_update;
 void bd_ui_event(const bd_event *e) {
-  if (e->type == BD_EV_SHOT_START) n_start++;
+  if (e->type == BD_EV_NOTICE) { n_notice++; last_update = e->u.notice.update; }
+  else if (e->type == BD_EV_PRESSURE_RELEASE) { n_release++; last_release = e->u.release.count; }
+  else if (e->type == BD_EV_SHOT_START) n_start++;
   else if (e->type == BD_EV_SHOT_END) n_end++;
   else if (e->type == BD_EV_SHOT_POINT) n_point++;
   else if (e->type == BD_EV_COMMAND) { n_answer[e->u.command.cmd]++; last_answer[e->u.command.cmd] = e->u.command.answer; }
@@ -23,7 +25,10 @@ static const bd_display_info g_di = {800, 480, BD_PIXEL_RGB565, 40};
 const bd_display_info *bd_display(void) { return &g_di; }
 void bd_display_flush(int, int, int, int, const uint16_t *) {}
 
-static void reset_counts(void) { n_start = n_end = n_point = n_wake = 0; memset(n_answer, 0, sizeof n_answer); }
+static void reset_counts(void) {
+  n_start = n_end = n_point = n_wake = n_notice = n_release = 0;
+  memset(n_answer, 0, sizeof n_answer);
+}
 static LiveData live(bool brewing) {
   LiveData d;
   memset(&d, 0, sizeof d);
@@ -46,9 +51,11 @@ static void point(uint32_t t10) {
 int main(void) {
   ProfileList pl;
   memset(&pl, 0, sizeof pl);
-  pl.count = 1;
+  pl.count = 2;
   pl.p[0].id = 7;
   snprintf(pl.p[0].name, sizeof pl.p[0].name, "%s", "Test");
+  pl.p[1].id = 8;
+  snprintf(pl.p[1].name, sizeof pl.p[1].name, "%s", "Other");
   cs_take_profiles(&pl);
   LiveData d = live(false);
   cs_take_live(&d, LINK_ONLINE);
@@ -134,6 +141,44 @@ int main(void) {
     CHECK(cs_cmd_flush(BD_FLUSH_ON, &pm) == BD_ERR_BUSY);
   }
 
-  printf(fails ? "core_state_test: %d FAILED\n" : "core_state_test: all passed\n", fails);
-  return fails ? 1 : 0;
+  // 8. profile pick: unknown id, one at a time, answered NOT_TAKEN when the machine never reports it (5 s)
+  d = live(false); cs_take_live(&d, LINK_ONLINE);
+  {
+    const char *nm = NULL;
+    reset_counts();
+    CHECK(cs_cmd_select(99, &nm) == BD_ERR_UNKNOWN_ID);
+    CHECK(cs_cmd_select(8, &nm) == BD_OK && nm && !strcmp(nm, "Other"));
+    CHECK(cs_cmd_select(7, &nm) == BD_ERR_PENDING);
+    for (int i = 0; i < 40; i++) cs_tick(now += 150);
+    CHECK(n_answer[BD_CMD_SELECT] == 1 && last_answer[BD_CMD_SELECT] == BD_ANSWER_NOT_TAKEN);
+    CHECK(!cs_select_pending());
+    d = live(false); cs_take_live(&d, LINK_NO_MACHINE);
+    CHECK(cs_cmd_select(7, &nm) == BD_ERR_OFFLINE);
+  }
+
+  // 9. flush: OK once the machine reports the mode; tare: NOT_TAKEN when the scale never reads ~0
+  d = live(false); cs_take_live(&d, LINK_ONLINE);
+  reset_counts();
+  cs_watch_flush("FLUSH");
+  cs_tick(now += 150);
+  d = live(false); snprintf(d.mode, sizeof d.mode, "%s", "FLUSH"); cs_take_live(&d, LINK_ONLINE);
+  cs_tick(now += 150);
+  CHECK(n_answer[BD_CMD_FLUSH] == 1 && last_answer[BD_CMD_FLUSH] == BD_ANSWER_OK);
+  d = live(false); d.weight = 30.0f; cs_take_live(&d, LINK_ONLINE);
+  cs_watch_tare();
+  for (int i = 0; i < 60; i++) cs_tick(now += 150);
+  CHECK(n_answer[BD_CMD_TARE] == 1 && last_answer[BD_CMD_TARE] == BD_ANSWER_NOT_TAKEN);
+
+  // 10. machine texts: the pressure release becomes its own event, the update notice is marked, the tank is dropped
+  reset_counts();
+  cs_notice(0, "Dropping beats in: 2");
+  CHECK(n_release == 1 && last_release == 2 && n_notice == 0);
+  cs_notice(0, "Releasing pressure!");
+  CHECK(n_release == 2 && last_release == -1);
+  cs_notice(0, "Release c929939 now available for download!");
+  CHECK(n_notice == 1 && last_update);
+  cs_notice(1, "Fill the water tank!");
+  CHECK(n_notice == 1);
+
+  return report("core_state_test");
 }

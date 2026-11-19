@@ -1,8 +1,9 @@
-#include "../firmware/src/core/stamp.h"
-// Interactive desktop emulator: the real ui.cpp (+ pb.cpp, parse.cpp, preview.cpp) in an 800x480 SDL window, mouse =
-// touch, fed by a FAKE machine built from the recordings in sim/data (real machine replies). Nothing goes on the
-// network. Build: sim/build-emu.sh, run: sim/emu. Keys are listed in HELP below (also printed at start).
+// Interactive desktop emulator: a UI folder (Brewdeck's by default) in an 800x480 SDL window, mouse = touch, on a
+// fake core (core_state.cpp, shared with the device) and a fake machine that plays recordings from sim/data (real
+// machine replies, decoded by pb.cpp / parse.cpp). Nothing goes on the network. Build: sim/build-emu.sh, run: sim/emu.
+// Keys, stdin commands and environment variables: HELP below (also printed at start), docs/development.md.
 // What it does NOT show: device timing (the Mac is far faster), Wi-Fi behaviour, touch feel, real backlight.
+#include "../firmware/src/core/stamp.h"
 #ifdef EMU_WEB                                   // sim/web: the same fake machine compiled to WebAssembly, no SDL
 #include <emscripten.h>
 static uint32_t SDL_GetTicks(void) { return (uint32_t)emscripten_get_now(); }
@@ -48,7 +49,11 @@ static const char *HELP =
     "keys:  S start shot (recorded LMD Single shot)   B scale on/off   P scale type BT/wired/predictive\n"
     "       H heating on/off   L water low/full   O machine offline/back   N no Wi-Fi/back\n"
     "       I idle screen now   M steam (recorded session)   R reload profiles   Esc/Q quit\n"
-    "mouse = finger. Profile taps and weight changes go to the fake machine (printed here).\n";
+    "mouse = finger. Profile taps and weight changes go to the fake machine (printed here).\n"
+    "stdin: key s | tap x y | drag x1 y1 x2 y2 | hold x y ms | click x y | button <label> | wait ms | save f.raw |\n"
+    "       savewin f.bmp | quit\n"
+    "env:   EMU_DATA=<dir> other machine data   EMU_SHOT_CUT=s cut the shot   EMU_SHOT_PROFILE=id   EMU_IGNORE=1 the\n"
+    "       machine ignores commands   EMU_FLUSHLOG=1 log big screen flushes\n";
 
 // ---- board layer (brewdeck_core.h): the emulator's screen is a frame buffer, its touch the mouse ----------------
 #include "bd_lvgl9.h"
@@ -200,8 +205,8 @@ static void on_flush(int mode) {
   g_autoflush_ms = mode == 5 ? stamp_nz(SDL_GetTicks()) : 0;
   if (mode != 5) g_m.pressure = 0;
 }
-// steam: plays a REAL steam session (sim/data/ws_steam.bin, recorded 2026-11-18 with tools/ws_listen.py right after
-// the demo shot; <u32 ms><u32 len><frame> per sensor / system frame): steam on at 0:01 with the boiler at 91 degC,
+// steam: plays a REAL steam session (sim/data/ws_steam.bin, recorded with tools/ws_listen.py right after the demo
+// shot; <u32 ms><u32 len><frame> per sensor / system frame): steam on at 0:01 with the boiler at 91 degC,
 // heats ~1.8 degC/s while the pump fills the boiler (~12 bar held); wand opened ~1:30 -> ~1.5 bar while steaming,
 // 145-158 degC around the 155 degC set point; wand closed ~3:05 -> pressure up again; steam off 3:20 at 155.5 degC,
 // then cooling to 132 degC (~3.5-4 bar) when the recording stops at 3:57.
@@ -265,25 +270,7 @@ static void steam_step(uint32_t now) {
   if (g_st.i >= g_steam.size()) { g_st.on = false; g_st.after = true; g_st.speed = 1; printf("steam recording done\n"); }
 }
 
-// originals (ui.cpp): kept in memory here (NVS "orig" on the device)
-#include <map>
-#include <string>
-static std::map<std::string, std::pair<int, int>> g_orig;
-static bool orig_load(const char *p, int *w10, int *deg) {
-  auto it = g_orig.find(p);
-  if (it == g_orig.end()) return false;
-  *w10 = it->second.first; *deg = it->second.second;
-  return true;
-}
-static void orig_save(const char *p, int w10, int deg) { g_orig[p] = {w10, deg}; printf("screen: originals of \"%s\": %.1f g, %d C kept\n", p, w10 / 10.0, deg); }
-static void orig_drop(const char *p) { g_orig.erase(p); printf("screen: originals of \"%s\" dropped\n", p); }
-
 static void on_backlight(int pct) { g_backlight = pct; g_dirty = true; printf("screen: backlight %d %%\n", pct); }
-static void on_settings(int b, int idle, bool bounce, bool splash) {
-  printf("screen: settings saved: brightness %d %%, dim after %d min, idle clock %s, splash %s\n", b, idle,
-         bounce ? "bouncing" : "still", splash ? "on" : "off");
-}
-
 // previous shot: answered 1.5 s after the request with a stored shot recording
 static uint32_t g_prev_due = 0;
 static void on_prev(const char *profile, int dur10) {
@@ -592,9 +579,8 @@ static void t_machine(void) { g_offline = !g_offline; }
 static void t_wifi(void) { g_nowifi = !g_nowifi; }
 static void t_heating(void) { set_heating(!g_heating); }
 static void t_resid(void) { g_m.pressure = g_m.pressure > 0.5f ? 0 : 1.4f; printf("machine: idle pressure %.1f bar\n", g_m.pressure); }   // pressure left in the system
-static void t_notif(void) {   // as the machine sends it (d_notif); cycles the update notice (INFO, the longest real
-  static int k = 0;            // text, seen 2026-11-08) and test notices of the other types. The pressure release has
-                               // its own button ("Pressure release"), so it is not in this cycle.
+static void t_notif(void) {   // as the machine sends it (d_notif): the update notice (INFO, the longest real text)
+  static int k = 0;            // and test notices of the other types; the pressure release has its own button
   static const int T[4] = {NOTIF_INFO, NOTIF_WARN, NOTIF_SUCCESS, NOTIF_ERROR};
   static const char *const KIND[4] = {"", "warning", "success", "error"};
   static char test[48];
@@ -605,7 +591,7 @@ static void t_notif(void) {   // as the machine sends it (d_notif); cycles the u
   cs_notice(T[i], m);
 }
 
-// the machine's power-on / after-flush sequence as seen on hardware 2026-11-06: INFO "Dropping beats in: 3 / 2 / 1"
+// the machine's power-on / after-flush sequence: INFO "Dropping beats in: 3 / 2 / 1"
 // ~1 s apart, then INFO "Releasing pressure!"
 static void t_release(void) {
   static int step = 0;
@@ -669,7 +655,9 @@ bd_result bd_flush_mode(bd_flush mode) {
 }
 bd_result bd_tare(void) {
   const bd_result r = cs_cmd_tare();
-  if (r == BD_OK) on_tare();
+  if (r != BD_OK) return r;
+  if (getenv("EMU_IGNORE")) { printf("machine: ignores the tare (EMU_IGNORE)\n"); return BD_OK; }
+  on_tare();
   return r;
 }
 bd_result bd_load_previous_shot(const char *profile, int dur10) { on_prev(profile, dur10); return BD_OK; }

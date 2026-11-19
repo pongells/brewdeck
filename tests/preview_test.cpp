@@ -5,7 +5,7 @@
 #include <string.h>
 #include "parse.h"
 #include "preview.h"
-static char buf[16384];
+#include "test_util.h"
 static void plot(const PvSeries *o) {   // 84x84 box shown at 1/4 x, 1/6 y
   char g[15][85]; memset(g, ' ', sizeof g); for (int r = 0; r < 15; r++) g[r][84] = 0;
   const char c[4] = {'P', 'p', 'F', 'f'};   // capital = target, small = limit
@@ -14,10 +14,10 @@ static void plot(const PvSeries *o) {   // 84x84 box shown at 1/4 x, 1/6 y
   for (int r = 0; r < 15; r++) printf("   |%s\n", g[r]);
 }
 int main(int argc, char **argv) {
-  int fail = 0;
+  int &fail = fails;   // counted by hand here: each failure also prints why
   const bool verbose = argc > 1 && !strcmp(argv[1], "-v");
   for (int a = verbose ? 2 : 1; a < argc; a++) {
-    FILE *f = fopen(argv[a], "rb"); size_t n = fread(buf, 1, sizeof buf - 1, f); buf[n] = 0; fclose(f);
+    const char *buf = slurp(argv[a]);
     static ProfileShape s; static PvSeries o[PV_SERIES];
     if (!parse_profile_shape(buf, &s)) { printf("%s: parse failed\n", argv[a]); fail++; continue; }
     float tot = preview_build(&s, 336, 84, o);
@@ -50,5 +50,5 @@ int main(int argc, char **argv) {
   if (parse_profile_shape(trunc, &t)) { printf("truncated accepted!\n"); fail++; }
   static PvSeries o2[PV_SERIES]; ProfileShape e; memset(&e, 0, sizeof e);
   if (preview_build(&e, 336, 84, o2) != 0 || o2[0].n || o2[2].n) { printf("empty not empty\n"); fail++; }
-  printf(fail ? "FAIL %d\n" : "all checks pass\n", fail); return fail;
+  return report("preview_test");
 }

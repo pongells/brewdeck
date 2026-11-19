@@ -1,4 +1,4 @@
-// Stored-shot readers on real machine replies (2026-11-04): GET /api/shots/<id> (parse.cpp) and the WebSocket shot
+// Stored-shot readers on real machine replies: GET /api/shots/<id> (parse.cpp) and the WebSocket shot
 // history index (pb.cpp, frame from sim/data/ws_idle.bin). Run via tests/run.sh.
 // args: shot_298.json shot_297.json ws_idle.bin
 #include <stdio.h>
@@ -6,13 +6,7 @@
 #include <string.h>
 #include "parse.h"
 #include "pb.h"
-static int fails = 0;
-#define CHECK(c) do { if (!(c)) { printf("FAIL %s:%d %s\n", __FILE__, __LINE__, #c); fails++; } } while (0)
-static char *slurp(const char *p, size_t *len = NULL) {
-  FILE *f = fopen(p, "rb"); if (!f) { perror(p); exit(1); }
-  static char b[2][1 << 20]; static int k; char *o = b[k++ % 2];
-  size_t n = fread(o, 1, sizeof b[0] - 1, f); o[n] = 0; fclose(f); if (len) *len = n; return o;
-}
+#include "test_util.h"
 static ShotTrace t, u;
 int main(int, char **argv) {
   {   // target weight command, built on the machine's own d_act_prof from ws_idle.bin
@@ -77,9 +71,10 @@ int main(int, char **argv) {
     }
     {   // weight then temperature on the result (what ws.cpp does with keep_sent): both survive
       const size_t wn = pb_weight_cmd(prof, pn, 18.5f, cmd2, sizeof cmd2);
-      const uint8_t *wd;
-      size_t wdl;
+      const uint8_t *wd = NULL;
+      size_t wdl = 0;
       CHECK(wn && pb_envelope(cmd2, wn, act, sizeof act, &wd, &wdl));
+      if (!wd) return report("shot_test");
       static uint8_t wp[8192];
       memcpy(wp, wd, wdl);
       const size_t t2 = pb_temp_cmd(wp, wdl, 93.0f, cmd, sizeof cmd);
@@ -244,6 +239,5 @@ int main(int, char **argv) {
     WsNotif h;
     CHECK(pb_notif(hand, sizeof hand, &h) && h.type == NOTIF_ERROR && !strcmp(h.msg, "Releasing pressure!"));
   }
-  printf(fails ? "%d FAILED\n" : "all passed\n", fails);
-  return fails != 0;
+  return report("shot_test");
 }

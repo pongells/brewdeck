@@ -12,18 +12,23 @@ K = 1.5                                           # slope at the middle; 1 = unc
 LUT = [max(0, min(15, round((v - 7.5) * K + 7.5))) for v in range(16)]
 MARK = ' * Edge contrast: tools/font_contrast.py (x%g)\n' % K
 
-for path in sys.argv[1:]:
-    src = open(path).read()
-    if 'Edge contrast:' in src:
-        print(path, 'already done'); continue
-    if '--bpp 4' not in src:
-        print(path, 'skipped (not 4 bpp)'); continue
-    a = src.index('glyph_bitmap[] = {')
-    b = src.index('};', a)
-    body = re.sub(r'0x([0-9a-fA-F]{2})',
-                  lambda m: '0x%02x' % (LUT[int(m.group(1), 16) >> 4] << 4 | LUT[int(m.group(1), 16) & 15]), src[a:b])
-    head = src[:a]
-    k = head.index(' * Opts:')
-    k = head.index('\n', k) + 1
-    open(path, 'w').write(head[:k] + MARK + head[k:] + body + src[b:])
-    print(path, 'done')
+def main(paths):
+    for path in paths:
+        src = open(path).read()
+        if 'Edge contrast:' in src:
+            print(path, 'already done'); continue
+        if '--bpp 4' not in src:
+            print(path, 'skipped (not 4 bpp)'); continue
+        a = src.index('glyph_bitmap[] = {')
+        b = src.index('};', a)
+        body = re.sub(r'0x([0-9a-fA-F]{2})',
+                      lambda m: '0x%02x' % (LUT[int(m.group(1), 16) >> 4] << 4 | LUT[int(m.group(1), 16) & 15]), src[a:b])
+        head = src[:a]
+        k = head.index(' * Opts:')
+        k = head.index('\n', k) + 1
+        open(path, 'w').write(head[:k] + MARK + head[k:] + body + src[b:])
+        print(path, 'done')
+
+
+if __name__ == '__main__':
+    main(sys.argv[1:])
