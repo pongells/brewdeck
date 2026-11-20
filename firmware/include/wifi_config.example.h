@@ -1,6 +1,6 @@
 #pragma once
 // Copy this file to wifi_config.h (git-ignored) and fill it in. build.sh does the copy on first run.
-// ---- EDIT THESE TWO LINES ------------------------------------------------------------------
+// ---- Optional: your Wi-Fi (or leave these as they are and choose the network on the screen) ----
 #define WIFI_SSID "YOUR_WIFI_NAME"
 #define WIFI_PASS "YOUR_WIFI_PASSWORD"
 // ---------------------------------------------------------------------------------------------

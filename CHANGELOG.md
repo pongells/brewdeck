@@ -25,15 +25,27 @@ On the screen:
 - No placeholder profile name on Ready: the name stays empty until the machine reports it.
 - The brewing chart's time axis starts at 30 s and grows in 15 s steps (fewer full redraws during a shot).
 - Shot history: a stored shot with a larger stop weight than the active profile's is drawn to its own scale.
+- The review finds the previous shot when the machine's shot list missed the new shot (a WebSocket gap as the shot
+  ended showed "Previous n/a"), and for profile names of 48 characters or more.
+- Starting steam closes the last shot's review, so the steam screen shows at once.
+- The steam chart redraws only its newest second while its scales hold (frames had grown from 40 to 90 ms over a
+  session on the P4); its time axis is 1 min, then grows in 30 s steps; after a Wi-Fi gap it stays in step with the
+  steam clock, and past 4 min its labels follow the rolling window. A set point changed in the web UI is redrawn.
+- A pressure reading that is not a number no longer reaches the charts.
+- After a profile is saved, its stored values are read again even if the first read fails.
 
-New board (experimental):
+New board:
 - The Guition JC4880P443 (ESP32-P4, 4.3" MIPI-DSI panel shown in landscape, Wi-Fi through its ESP32-C6): a release
-  package `brewdeck-<version>-esp32p4.zip`, or `./build.sh ui-p4`. Tested through one full shot.
+  package `brewdeck-<version>-esp32p4.zip`, or `./build.sh ui-p4`. Tested like the Sunton: shots, review, previous
+  shot, history and steam.
 - `p4-c6-update`: a one-off tool that updates the P4 board's Wi-Fi chip firmware; with the firmware these boards ship
-  with, the first Wi-Fi join dropped at every start. In the P4 package as `c6-update/`.
+  with, the first Wi-Fi join dropped at every start (now retried after 1 s, so it is only slower). In the P4 package
+  as `c6-update/`.
 
 Releases and licenses:
 - `flash.sh` refuses images built for another chip and writes the bootloader where that chip expects it.
+- `flash.sh` without `PORT` writes to the board it checked (with two boards plugged in, the write could reach the
+  other one).
 - THIRD_PARTY_NOTICES.txt: the licenses of the libraries and font compiled into the firmware and the web demo, in
   every release package (with LICENSE).
 

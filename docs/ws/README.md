@@ -17,8 +17,10 @@ Field numbers as decoded by `firmware/src/core/pb.cpp` (they match what the mach
 | `ShotHistoryIndexDto` (`d_shot_hist_index`) | `records = 1`: `{ uint32 id = 1; string profileName = 2; uint32 timestamp = 3; uint32 duration = 4; }`, newest first | shot history, previous shot |
 | `GaggiaSettingsDto` (`d_settings`) | only `scales = 4` (`forcePredictive = 1`, `hwScalesEnabled = 2`, `btScalesEnabled = 5`), `boiler = 1` (`steamSetPoint = 1`), `versions = 7` (`frontVersion = 2`, `staticVersion = 3`); nothing else is read | scale icon, steam screen, About |
 
-Checked on firmware `6ea560e`, release `c929939`. After a Gaggiuino update, re-read the docs and re-check these fields
-against a recording of what the machine sends (`tools/ws_listen.py --raw`) and the host tests.
+Checked on Gaggiuino core `8aaf6f0`, release `c929939` (first worked out on core `6ea560e`). After a Gaggiuino update,
+re-read the docs and re-check these fields against a recording of what the machine sends
+(`python3 -I tools/ws_listen.py <machine-ip> <schema.json> 60 --raw frames.bin`; the schema is described in the script's
+header) and the host tests.
 
 ## Protocol
 

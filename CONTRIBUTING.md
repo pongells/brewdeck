@@ -29,7 +29,8 @@ at the renders or the emulator and include a screenshot in the pull request; if 
 `python3 tools/gen_manual.py` re-records them.
 
 Every pull request runs the unit tests, the renders, the release and debug firmware builds for both boards, the
-example UI (firmware and emulator) and the P4 C6 updater automatically; the renders are attached to the run.
+example UI (firmware and emulator), the touch test, the web demo and the P4 C6 updater automatically; the renders are
+attached to the run.
 
 ## Hardware
 

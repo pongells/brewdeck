@@ -136,7 +136,8 @@ the decision and the esptool command without writing. If esptool cannot connect,
 screen restarts by itself after flashing; if the picture looks wrong, unplug and replug USB.
 
 **4. Set it up on the screen.** It starts on "No Wi-Fi set up": choose your network and type the password. It then
-looks for the machine as `gaggiuino.local`; another name or an IP can be set under Menu > Wi-Fi.
+looks for the machine as `gaggiuino.local`; another name or an IP can be set under Menu > Wi-Fi (tap the connected
+network, then Machine).
 
 **Updating**: flash the new release the same way (step 3). The backup stays valid, and the screen keeps its Wi-Fi,
 machine address and settings.
@@ -156,10 +157,11 @@ review, previous shot, history) and steam. Use the USB-C socket that carries dat
 D4D5; the other one only powers it). Each release has a package for it, `brewdeck-<version>-esp32p4.zip`: follow its
 INSTALL.txt. Or build it (next section), from `firmware/`:
 
-1. Back up its flash as in step 2, to `backup/p4-guition-original.bin` (or point `GAGGI_BACKUP` at it; a plain board
+1. Back up its flash (also 16 MB) as in step 2, to `backup/p4-guition-original.bin` (or point `GAGGI_BACKUP` at it; a plain board
    can also be flashed without one, `NO_BACKUP=1`). Its port is `/dev/cu.usbmodem…` on macOS, `/dev/ttyACM0` on Linux.
 2. `./build.sh ui-p4 --flash`, then join Wi-Fi on the screen. On the network it is `brewdeck-p4`.
-3. If the first Wi-Fi join drops at every start, the board's ESP32-C6 runs old firmware: update it once with
+3. If the first Wi-Fi join is slow at every start (it drops once and is retried), the board's ESP32-C6 runs old
+   firmware: update it once with
    `./build.sh p4-c6-update --flash` (it uses the network saved on the screen and installs Espressif's image only
    if its checksum matches; progress in the [serial log](docs/development.md#serial-log)), then flash `ui-p4` again.
 
@@ -215,7 +217,7 @@ How the parts fit together (board, core, UI, the network tasks, the emulator): [
 | `docs/` | the [user manual](docs/manual.md) and its animations, [development](docs/development.md), the [architecture](docs/architecture.md), [writing your own UI](docs/custom-ui.md), the [design system](docs/design-system.md), [machine API notes](docs/gaggiuino-api.md), the [WebSocket protocol](docs/ws/README.md) |
 | `tools/` | release packaging (`make-release.sh`), protocol listener, manual recorder, screenshot and screen recorder helpers, offline cup picture (`gen_cup.py`), a fake machine from the community profiles (`community_profiles.py`), font edge contrast (`font_contrast.py`) |
 
-Debug builds (`ui-debug`) add a small web server for screenshots, a screen recorder and remote touch; it has no
+Debug builds (`ui-debug`, `ui-p4-debug`) add a small web server for screenshots, a screen recorder and remote touch; it has no
 password, so use them only on a network you trust ([development](docs/development.md#debug-web-server)).
 
 ## Contributing

@@ -4,7 +4,7 @@
 #   ./tools/record.sh start [every_ms] [max_frames]   start recording (default every 2000 ms, until memory is full)
 #   ./tools/record.sh status                          frames so far
 #   ./tools/record.sh stop                            stop recording (the frames stay on the screen)
-#   ./tools/record.sh fetch [dir]                     download and write dir/frame-NNNN-<seconds>.png (stops recording)
+#   ./tools/record.sh fetch [dir]                     download and write dir/frame-NNNN-<seconds>s.png (stops recording)
 #   ./tools/record.sh free                            give the memory back to the screen
 # Env HOST (default brewdeck.local; the ESP32-P4 board: HOST=brewdeck-p4.local). Needs a debug build
 # (./build.sh ui-debug --flash). PNG via sips (built into macOS); elsewhere the .bmp files are kept.
