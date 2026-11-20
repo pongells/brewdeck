@@ -2,8 +2,11 @@ name: Web demo
 
 # Builds sim/web (the real UI + a fake machine, compiled to WebAssembly) and publishes it on GitHub Pages.
 # One-time setup: Settings > Pages > Source: "GitHub Actions". Skipped while the repository is private.
+# Runs after CI passed on main, so a push that breaks the checks never reaches the published demo.
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -16,10 +19,12 @@ concurrency:
 
 jobs:
   build:
-    if: ${{ !github.event.repository.private }}
+    if: ${{ !github.event.repository.private && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}   # the commit CI checked
       - uses: mymindstorm/setup-emsdk@4528d102f7230f0e7b276855c01ea1159be0e984   # v16
       - name: Build the web demo
         run: sim/web/build.sh

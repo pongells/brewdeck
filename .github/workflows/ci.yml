@@ -36,6 +36,9 @@ jobs:
         run: sim/build-emu.sh
       - name: Build the emulator with the example UI (src/ui_minimal uses only the core API)
         run: UI=ui_minimal sim/build-emu.sh
+      - uses: mymindstorm/setup-emsdk@4528d102f7230f0e7b276855c01ea1159be0e984   # v16
+      - name: Build the web demo (deployed by pages.yml once the repository is public)
+        run: sim/web/build.sh
       - name: Keep the renders (look at them to review a UI change)
         uses: actions/upload-artifact@v7
         with:
