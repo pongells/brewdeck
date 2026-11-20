@@ -28,6 +28,12 @@ anything with a `/` in it, taken from where you run the script. The firmware bui
 `firmware/src/ui_ext` (PlatformIO compiles only inside `src/`; the link is git-ignored). Include the core's headers by
 name (`#include "brewdeck_core.h"`, `#include "bd_lvgl9.h"`): both builds put `src/core` on the include path.
 
+Naming a UI in its own repository, so people can find it and tell UIs apart:
+- **Repository:** `brewdeck-ui-<name>` (e.g. `brewdeck-ui-ledger`), with the GitHub topic `brewdeck-ui`.
+- **`BD_UI` name:** `<name>` alone (at most 15 characters, lower case; it is also the namespace of the UI's saved
+  settings, so keep it once people use the UI).
+- **Emulator:** `sim/emu-brewdeck-ui-<name>` (named after the folder).
+
 Brewdeck's own UI (`firmware/src/ui`) is the large example: every screen, the settings, the shot review.
 
 ## What a UI implements
