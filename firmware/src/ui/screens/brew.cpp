@@ -305,6 +305,12 @@ void br_hide(void) {
   ready_cover();
 }
 
+// steam started: the last shot's screen (Done or its review) closes, so the steam screen shows; a stored shot's review
+// (opened from the shot history) stays
+void br_steam_started(void) {
+  if ((g_br_state == BR_DONE || g_br_state == BR_REVIEW) && !g_rv_hist) br_hide();
+}
+
 // ---- shot review ----------------------------------------------------------------------------------------------------
 static void fmt10(unsigned v, char *b, size_t n) { snprintf(b, n, "%u.%u", v / 10, v % 10); }
 // values row: values at the scrubber, this shot (solid) and the dashed line (previous shot or the targets)

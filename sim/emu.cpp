@@ -53,7 +53,7 @@ static const char *HELP =
     "       I idle screen now   M steam (recorded session)   R reload profiles   Esc/Q quit\n"
     "mouse = finger. Profile taps and weight changes go to the fake machine (printed here).\n"
     "stdin: key s | tap x y | drag x1 y1 x2 y2 | hold x y ms | click x y | button <label> | wait ms | save f.raw |\n"
-    "       savewin f.bmp | quit\n"
+    "       savewin f.bmp | redraw | quit\n"
     "env:   EMU_DATA=<dir> other machine data   EMU_SHOT_CUT=s cut the shot   EMU_SHOT_PROFILE=id   EMU_IGNORE=1 the\n"
     "       machine ignores commands   EMU_FLUSHLOG=1 log big screen flushes\n";
 
@@ -833,6 +833,7 @@ static bool run_named(const char *name) {
 //   wait 1500      ms before the next command                quit
 //   button Shot > review   press a panel button (its label)     savewin f.bmp   the whole window
 //   click 1194 164 mouse click in window coordinates (screen at 48,48; panel at 896,20)
+//   redraw         redraw the whole screen (a save before and after checks that partial redraws left nothing behind)
 static char g_cmd_buf[512];
 static char g_savewin[400] = "";
 static int g_click_up = 0, g_click_x, g_click_y;   // release a "click" a few passes later         // write the whole window (BMP) after the next frame
@@ -861,6 +862,9 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
     if (o) { fwrite(g_fb, 2, W * H, o); fclose(o); printf("saved %s\n", f); }
   } else if (sscanf(l, "savewin %399s", f) == 1) {
     snprintf(g_savewin, sizeof g_savewin, "%s", f);
+  } else if (!strncmp(l, "redraw", 6)) {
+    lv_obj_invalidate(lv_screen_active());
+    lv_obj_invalidate(lv_layer_top());
   } else if (!strncmp(l, "quit", 4)) return false;
   fflush(stdout);
   return true;

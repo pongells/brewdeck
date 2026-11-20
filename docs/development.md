@@ -24,7 +24,8 @@ UI only). `EMU_SHOT_CUT=5` cuts the shot after 5 s; `EMU_IGNORE=1` makes the fak
 
 For scripts the emulator reads commands on stdin, one per line: `key s`, `tap x y`, `drag x1 y1 x2 y2`, `hold x y ms`,
 `click x y` (window coordinates), `button <panel label>`, `wait ms`, `save f.raw` (RGB565, `sim/topng.py` converts it),
-`savewin f.bmp`, `quit`.
+`savewin f.bmp`, `redraw` (the whole screen; a `save` before and after checks that partial redraws left nothing
+behind), `quit`.
 
 ## Building the firmware
 

@@ -16,32 +16,76 @@ static int16_t g_st_ps[ST_PTS];                     // pressure x100
 static int g_st_n = 0, g_st_set_deg = 0;
 static uint32_t g_st_last = 0, g_st_t0 = 0;
 bool g_st_on = false;
-static void st_draw(lv_event_t *e) {
-  lv_layer_t *ctx = lv_event_get_layer(e);
-  lv_area_t a;
-  lv_obj_get_coords(lv_event_get_target_obj(e), &a);
-  // plot area like br_draw: the full box width, baseline at 261 (box coordinates)
-  const int ox = a.x1, oy = a.y1, x0 = ox, x1 = ox + ST_CW, base = oy + 261, top = oy + 22;
-  lv_draw_line_dsc_t l;
-  lv_draw_line_dsc_init(&l);
-  l.color = COL_LINE;
-  l.width = 1;
+
+// The chart's scales and the set point label's side, from the samples. While they stay the same, a new sample redraws
+// only the strip at its end (the whole chart took 40 -> 90 ms per second on the P4 as the session grew).
+struct StScale { int lo, hi, pmax, span, left; };
+static StScale g_st_drawn;                          // the scales of the last full redraw asked for
+static const int ST_BASE = 261, ST_TOP = 22;        // plot area like br_draw, box coordinates
+#define ST_X(i) (x0 + 2 + (i) * (x1 - x0 - 4) / sc.span)
+#define ST_Y(v) (top + (sc.hi - (v)) * (base - top) / (sc.hi - sc.lo))
+#define ST_PY(p) (base - ((p) < 0 ? 0 : (p) > sc.pmax ? sc.pmax : (p)) * (base - top) / sc.pmax)   // pressure x100
+static int st_label_y(const StScale &sc, int top, int base) { return ST_Y(g_st_set_deg * 10) - 22; }
+static void st_set_text(char *t, size_t n) { snprintf(t, n, "%d\xC2\xB0", g_st_set_deg); }
+
+static StScale st_scale(void) {
+  StScale sc;
   int lo = g_st_n ? g_st_s[0] : 0, hi = lo;
   for (int i = 0; i < g_st_n; i++) { if (g_st_s[i] < lo) lo = g_st_s[i]; if (g_st_s[i] > hi) hi = g_st_s[i]; }
   if (g_st_set_deg > 0) {
     if (g_st_set_deg * 10 > hi) hi = g_st_set_deg * 10;
     if (g_st_set_deg * 10 < lo) lo = g_st_set_deg * 10;
   }
-  lo -= 50;                                         // 5 deg of room below, 8 above (the set point sits near the top)
-  hi += 80;
-  // the set point's label (right end, 22 px above its line): a grid label next to it is left out
-  const int set_y = g_st_set_deg > 0 && g_st_n ? top + (hi - g_st_set_deg * 10) * (base - top) / (hi - lo) : -100;
+  sc.lo = lo - 50;                                  // 5 deg of room below, 8 above (the set point sits near the top)
+  sc.hi = hi + 80;
   // pressure scale: 0..3 bar, grows to the next whole bar above the highest reading (up to 13: the machine can
   // reach ~12 bar)
   int pmax = 300;
   for (int i = 0; i < g_st_n; i++) if (g_st_ps[i] > pmax) pmax = g_st_ps[i];
   pmax = (pmax + 99) / 100 * 100;
-  if (pmax > 1300) pmax = 1300;
+  sc.pmax = pmax > 1300 ? 1300 : pmax;
+  // time axis: 1 min, then in steps of 30 s up to 4 min (growing by the second would move every point each second)
+  sc.span = 60;
+  while (sc.span < g_st_n - 1) sc.span += 30;
+  // the set point's label: right end of its line, or the left end when a line runs through the right spot (at
+  // ~12 bar the pressure and its live dot sit right there)
+  sc.left = 0;
+  if (g_st_set_deg > 0 && g_st_n) {
+    const int x0 = 0, x1 = ST_CW, top = ST_TOP, base = ST_BASE;
+    const int ly = st_label_y(sc, top, base) < 0 ? 0 : st_label_y(sc, top, base);
+    char t[12];
+    st_set_text(t, sizeof t);
+    lv_point_t tws;
+    lv_text_get_size(&tws, t, F_TEXT, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    bool busy_r = false, busy_l = false;
+    for (int i = 0; i < g_st_n; i++) {
+      const int x = ST_X(i);
+      for (int k = 0; k < 2; k++) {
+        const int y = k ? ST_Y(g_st_s[i]) : ST_PY(g_st_ps[i]);
+        if (y < ly - 4 || y > ly + 22) continue;
+        if (x >= x1 - tws.x - 12) busy_r = true;
+        if (x <= x0 + tws.x + 12) busy_l = true;
+      }
+    }
+    sc.left = busy_r && !busy_l;
+  }
+  return sc;
+}
+
+static void st_draw(lv_event_t *e) {
+  lv_layer_t *ctx = lv_event_get_layer(e);
+  lv_area_t a;
+  lv_obj_get_coords(lv_event_get_target_obj(e), &a);
+  const int ox = a.x1, oy = a.y1, x0 = ox, x1 = ox + ST_CW, base = oy + ST_BASE, top = oy + ST_TOP;
+  const StScale sc = st_scale();
+  const lv_area_t *clip = &ctx->_clip_area;
+  lv_draw_line_dsc_t l;
+  lv_draw_line_dsc_init(&l);
+  l.color = COL_LINE;
+  l.width = 1;
+  // the set point's label (right end, 22 px above its line): a grid label next to it is left out
+  const int set_y = g_st_set_deg > 0 && g_st_n ? ST_Y(g_st_set_deg * 10) : -100;
+  const int pmax = sc.pmax;
   const int pstep = pmax <= 400 ? 1 : 3;            // grid every bar up to 4 bar, then at 3 / 6 / 9 / 12
   for (int b = pstep; b * 100 < pmax; b += pstep) {
     const int y = base - b * 100 * (base - top) / pmax;
@@ -53,12 +97,8 @@ static void st_draw(lv_event_t *e) {
   }
   lv_point_t p1 = {(int32_t)x0, (int32_t)base}, p2 = {(int32_t)x1, (int32_t)base};
   dl(ctx, &l, &p1, &p2);
-  const int span = g_st_n - 1 > 60 ? g_st_n - 1 : 60;   // time axis: at least 1 min, grows to 4 min
-  axis_time(ctx, x0, x1 - x0, base + 4, span, span <= 120 ? 30 : 60);
+  axis_time(ctx, x0, x1 - x0, base + 4, sc.span, sc.span <= 120 ? 30 : 60);
   if (!g_st_n) return;
-#define ST_X(i) (x0 + 2 + (i) * (x1 - x0 - 4) / span)
-#define ST_Y(v) (top + (hi - (v)) * (base - top) / (hi - lo))
-#define ST_PY(p) (base - ((p) < 0 ? 0 : (p) > pmax ? pmax : (p)) * (base - top) / pmax)   // pressure x100, 0..pmax
   if (g_st_set_deg > 0) {                           // set point: dashed, labelled once at its right end
     l.color = COL_RED;
     l.opa = LV_OPA_60;
@@ -76,6 +116,7 @@ static void st_draw(lv_event_t *e) {
     l.width = k ? 3 : 2;
     l.round_start = l.round_end = 1;
     for (int i = 1; i < g_st_n; i++) {
+      if (ST_X(i) < clip->x1 - 4 || ST_X(i - 1) > clip->x2 + 4) continue;   // outside the strip being redrawn
       p1 = {(int32_t)ST_X(i - 1), (int32_t)(k ? ST_Y(g_st_s[i - 1]) : ST_PY(g_st_ps[i - 1]))};
       p2 = {(int32_t)ST_X(i), (int32_t)(k ? ST_Y(g_st_s[i]) : ST_PY(g_st_ps[i]))};
       dl(ctx, &l, &p1, &p2);
@@ -83,30 +124,19 @@ static void st_draw(lv_event_t *e) {
   }
   if (g_st_set_deg > 0) {                           // the set point's label over the lines (see the backing)
     char t[12];
-    snprintf(t, sizeof t, "%d\xC2\xB0", g_st_set_deg);
+    st_set_text(t, sizeof t);
     lv_draw_label_dsc_t ld;
     lv_draw_label_dsc_init(&ld);
     ld.font = F_TEXT;
     ld.color = COL_RED;
     ld.align = LV_TEXT_ALIGN_RIGHT;
-    int ly = ST_Y(g_st_set_deg * 10) - 22;
+    int ly = st_label_y(sc, top, base);
     if (ly < oy) ly = oy;
-    // right end of its line, or the left end when a line runs through the right spot (at ~12 bar the pressure and
-    // its live dot sit right there); either way on a dark backing, so it stays readable
+    // the side comes from st_scale; either way on a dark backing, so it stays readable
     lv_point_t tws;
     lv_text_get_size(&tws, t, ld.font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
     const int32_t tw = tws.x;
-    bool busy_r = false, busy_l = false;
-    for (int i = 0; i < g_st_n; i++) {
-      const int x = ST_X(i);
-      for (int k = 0; k < 2; k++) {
-        const int y = k ? ST_Y(g_st_s[i]) : ST_PY(g_st_ps[i]);
-        if (y < ly - 4 || y > ly + 22) continue;
-        if (x >= x1 - tw - 12) busy_r = true;
-        if (x <= x0 + tw + 12) busy_l = true;
-      }
-    }
-    const bool left = busy_r && !busy_l;
+    const bool left = sc.left;
     const int bx1 = left ? x0 : x1 - tw - 6, bx2 = left ? x0 + tw + 6 : x1;
     lv_draw_rect_dsc_t bg;
     lv_draw_rect_dsc_init(&bg);
@@ -128,9 +158,6 @@ static void st_draw(lv_event_t *e) {
     const lv_area_t da = {(int32_t)(x - r), (int32_t)(y - r), (int32_t)(x + r), (int32_t)(y + r)};
     lv_draw_rect(ctx, &dot, &da);
   }
-#undef ST_X
-#undef ST_Y
-#undef ST_PY
 }
 
 // called from ui_set_live with every update while online
@@ -141,6 +168,7 @@ void st_update(const bd_machine *d, bool on) {
     ready_cover();
     if (on) {
       g_st_n = 0;                                   // a new steam session: chart and clock from now
+      br_steam_started();                           // the last shot's screen gives way
       g_st_last = 0;
       g_st_t0 = stamp_nz(lv_tick_get());
     }
@@ -171,16 +199,30 @@ void st_update(const bd_machine *d, bool on) {
     // on a 1 s grid (+= 1000, not "now"): this runs every ~150 ms, and "now" would drift ~7 % slow behind the steam
     // clock; after a long gap it starts again
     g_st_last = g_st_last && lv_tick_elaps(g_st_last) < 3000 ? stamp_nz(g_st_last + 1000) : stamp_nz(lv_tick_get());
-    if (g_st_n == ST_PTS) {
+    const bool shift = g_st_n == ST_PTS;            // after 4 min every point moves left: whole chart
+    if (shift) {
       memmove(g_st_s, g_st_s + 1, sizeof g_st_s[0] * (ST_PTS - 1));
       memmove(g_st_ps, g_st_ps + 1, sizeof g_st_ps[0] * (ST_PTS - 1));
       g_st_n--;
     }
     g_st_s[g_st_n] = (int16_t)(d->temperature * 10.0f + 0.5f);
     g_st_ps[g_st_n++] = (int16_t)((d->pressure < 0 ? 0 : d->pressure) * 100.0f + 0.5f);
-    lv_obj_invalidate(g_st_chart);
+    const StScale sc = st_scale();
+    if (shift || g_st_n < 2 || memcmp(&sc, &g_st_drawn, sizeof sc)) {
+      g_st_drawn = sc;
+      lv_obj_invalidate(g_st_chart);
+    } else {                                        // same scales: the new segment and both dots (r 4) only
+      lv_area_t a;
+      lv_obj_get_coords(g_st_chart, &a);
+      const int x0 = a.x1, x1 = a.x1 + ST_CW;
+      const lv_area_t st = {(int32_t)(ST_X(g_st_n - 2) - 8), a.y1, (int32_t)(ST_X(g_st_n - 1) + 8), a.y2};
+      lv_obj_invalidate_area(g_st_chart, &st);
+    }
   }
 }
+#undef ST_X
+#undef ST_Y
+#undef ST_PY
 
 void build_steam(lv_obj_t *scr) {
   g_st = box(scr, 0, 0, 800, 480, COL_BG, 0);

@@ -185,6 +185,7 @@ extern int g_rv_i;
 extern lv_obj_t *g_rv;
 extern lv_obj_t *g_rv_chart;
 void br_hide(void);
+void br_steam_started(void);
 void rv_values(void);
 void rv_axis(void);
 void rv_toggle_style(void);

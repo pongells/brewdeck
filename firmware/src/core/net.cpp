@@ -235,13 +235,19 @@ static void prev_step(const IPAddress &ip, const LiveData *d) {
   const int dd = at < 0 ? 0 : (int)ix.r[at].dur10 - (int)dur;
   const bool newer = g_before_id ? (uint32_t)latest > g_before_id : (dd >= -10 && dd <= 10);
   int from = at + 1;                                // search older shots of this profile from here
-  if (at < 0 || ix.r[at].name_hash != hash || !newer) {
+  // stored (the REST id is newer) but not in the index yet: the index push was missed (a WebSocket gap), and the
+  // machine does not send it again. Every shot in it is older, so its newest of the profile is the previous one.
+  const bool ix_stale = at < 0 && g_before_id && (uint32_t)latest > g_before_id;
+  if (ix_stale) {
+    from = 0;
+    Log.printf("previous shot: shot %d is stored but not in the index yet, using the index as it is\n", latest);
+  } else if (at < 0 || ix.r[at].name_hash != hash || !newer) {
     if (tries > 1 || !g_before_id || (uint32_t)latest != g_before_id) { retry("this shot not stored yet"); return; }
     last_try = true;                                // nothing new stored: the machine did not keep this shot
     from = 0;
     Log.println("previous shot: this shot was not stored by the machine, using the newest stored one");
   }
-  if (!last_try && (dd < -10 || dd > 10))
+  if (!last_try && at >= 0 && (dd < -10 || dd > 10))
     Log.printf("previous shot: stored shot %d is %u.%u s, the screen saw %u.%u s\n", latest,
                   (unsigned)(ix.r[at].dur10 / 10), (unsigned)(ix.r[at].dur10 % 10), (unsigned)(dur / 10), (unsigned)(dur % 10));
   int prev = -1;
