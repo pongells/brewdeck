@@ -38,8 +38,10 @@ Releases and licenses:
   every release package (with LICENSE).
 
 Web demo:
-- An introduction, how Brewdeck works and how to make your own interface or support another screen; the screen as
-  the thing to use, the buttons as shortcuts, a fake machine that follows its switches.
+- Opens on the screen's start-up screen and starts on a click; then the screen to use, scenes beside it (a recorded
+  shot with a stop button, steam, the rarer ones under "More scenes", keys S / M / R / H) and switches for the fake
+  machine, with a line under the screen that explains what it shows. How to install it, how it works, and how to
+  build your own interface or bring it to another screen.
 
 For developers:
 - Board code split into `firmware/src/board/common` (shared) and one folder per board (`s3`, `p4`); the screen's

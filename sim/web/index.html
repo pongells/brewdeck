@@ -12,7 +12,7 @@
 /* The screen's own palette and typeface (firmware/src/ui/theme.h), one dark look like the device.
    Layout: the device is the page's one big object, with a status line under it (how to use it, what the lines on
    the chart mean, what a switch just did); the shortcuts sit in a rail beside it (below it on narrow screens, where
-   the device stays in view); then how to build one, then how it works for developers. */
+   the device stays in view); then how to install it, then how it works and how to build on it. */
 :root {
   --bg: #0A0A0B; --surface: #131315; --raised: #1C1C1F; --raised-hi: #26262A; --line: #222226;
   --text: #F2F2F3; --muted: #8E8E96; --faint: #5E5E66;
@@ -31,15 +31,14 @@ main { max-width: 1240px; margin: 0 auto; padding-block: 28px 64px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-/* header: the name and the links (the manual is the first stop for owners) */
+/* header: the name and the links */
 .top { display: flex; align-items: center; gap: 12px; }
 .top img { width: 36px; height: 36px; flex: none; }
 .top .name { font-size: 20px; font-weight: 500; letter-spacing: -0.01em; }
 .top nav { margin-left: auto; display: flex; gap: 6px; }
 .top nav a { font-size: 15px; font-weight: 500; color: var(--text); text-decoration: none; border-radius: 12px; padding: 9px 14px; }
 .top nav a:hover { background: var(--raised); }
-.top nav a.main { border: 1px solid #34343A; }
-@media (max-width: 480px) { .top nav a { padding: 9px 10px; } .top nav .to-build { display: none; } }
+@media (max-width: 480px) { .top nav a { padding: 9px 10px; } .top nav .gh { display: none; } }   /* GitHub is in the footer too */
 
 /* intro: what it is, in two sentences, then the demo */
 .intro { margin: 56px 0 40px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px 56px; align-items: end; }
@@ -76,6 +75,22 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
 .bigger { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px;
   border-radius: 12px; font-size: 14px; background: var(--raised); }
 .bigger svg { flex: none; }
+/* before the start: the device on its start-up screen, and in the rail only what this is and the start button;
+   the scenes and conditions come in when the demo starts */
+.begin { display: flex; flex-direction: column; gap: 18px; }
+.begin p { margin: 0; color: var(--muted); font-size: 15px; }
+.start { min-height: 64px; padding: 0 18px; background: var(--gold); color: var(--gold-ink); font-size: 17px; font-weight: 600; }
+.start:hover { background: var(--gold-hi); }
+.start:disabled, .start:disabled:hover { background: var(--gold); }   /* only while the demo loads */
+body.pre .rail > :not(.begin), body.pre .machine { display: none; }
+body:not(.pre) .begin, body.pre .bigger { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  body:not(.pre) .rail > *, body:not(.pre) .machine { animation: come-in 360ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  body:not(.pre) .rail > :nth-child(3) { animation-delay: 40ms; }
+  body:not(.pre) .rail > :nth-child(4) { animation-delay: 80ms; }
+  body:not(.pre) .rail > :nth-child(5), body:not(.pre) .machine { animation-delay: 120ms; }
+}
+@keyframes come-in { from { opacity: 0; transform: translateY(6px); } }
 
 /* bigger screen: browser full screen where it exists, otherwise the device over the whole page */
 .screen:fullscreen, .screen.expanded { display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -88,9 +103,12 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
   .screen.expanded .turn, .screen:fullscreen .turn { display: block; margin: 0 0 14px; color: var(--muted); font-size: 14px; }
 }
 
-/* the fake machine: a panel of real switches under the device */
+/* small labels over a group of controls (not headings: the page's outline is h1, then the sections) */
+.label { margin: 0 0 2px; font-size: 13px; font-weight: 500; color: var(--muted); }
+
+/* conditions: switches for the fake machine right under the device */
 .machine { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px 16px; }
-.machine h2 { margin: 0 0 10px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.machine .label { margin-bottom: 10px; font-size: 14px; }
 .state { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 16px; }
 .sw { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 4px; background: none; border-radius: 10px;
   color: var(--text); font: 500 15px/1.2 var(--font); }
@@ -108,12 +126,28 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
 .sw[data-warn="true"] small { color: var(--warn); }
 @media (prefers-reduced-motion: no-preference) { .sw .track, .sw .track::after { transition: all 140ms ease; } }
 
-/* rail: shortcuts, "Pull a shot" first and loudest */
-.rail { display: flex; flex-direction: column; gap: 28px; position: sticky; top: 20px; }
-.rail-head h2 { margin: 0; font-size: 17px; font-weight: 600; color: var(--text); }
+/* rail: scenes, "Pull a shot" first and loudest, the rarer ones folded under "More scenes" */
+.rail { display: flex; flex-direction: column; gap: 24px; position: sticky; top: 20px; }
 .group { display: flex; flex-direction: column; gap: 8px; }
-.group h2 { margin: 0 0 2px; font-size: 13px; font-weight: 500; color: var(--muted); }
 .group .row button { min-height: 42px; font-size: 14px; }
+.more summary { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 4px; border-radius: 10px; cursor: pointer;
+  list-style: none; font-size: 14px; font-weight: 500; color: var(--muted); }
+.more summary::-webkit-details-marker { display: none; }
+.more summary:hover { color: var(--text); }
+.more summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.more summary svg { flex: none; }
+@media (prefers-reduced-motion: no-preference) { .more summary svg { transition: transform 160ms ease-out; } }
+.more[open] summary svg { transform: rotate(90deg); }
+.more .row { margin-top: 6px; }
+/* keyboard hints: only where there is a keyboard */
+kbd { display: none; font: 500 12px/1 var(--font); color: var(--muted); border: 1px solid #34343A; border-radius: 5px;
+  padding: 3px 5px; margin-left: auto; }
+@media (hover: hover) and (pointer: fine) {
+  kbd { display: inline-block; }
+  .row button, .group > button:not(.shot) { display: flex; align-items: center; gap: 8px; }
+}
+.shot kbd { color: rgba(26, 20, 5, 0.85); border-color: rgba(26, 20, 5, 0.35); }
+.shot .top-line { display: flex; align-items: center; gap: 8px; }
 .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 button { font: 500 15px/1.2 var(--font); color: var(--text); background: var(--raised); border: 0; border-radius: 14px;
   min-height: 46px; padding: 0 16px; cursor: pointer; text-align: left; }
@@ -127,17 +161,17 @@ button:disabled:hover { background: var(--raised); }
 .shot { display: flex; flex-direction: column; gap: 2px; justify-content: center; min-height: 64px; padding: 10px 18px;
   background: var(--gold); color: var(--gold-ink); font-size: 17px; font-weight: 600; }
 .shot:hover { background: var(--gold-hi); }
-.shot span { font-size: 13px; font-weight: 400; color: rgba(26, 20, 5, 0.72); font-variant-numeric: tabular-nums; }
-.shot:disabled:hover { background: var(--gold); }
+.shot .sub { font-size: 13px; font-weight: 400; color: rgba(26, 20, 5, 0.72); font-variant-numeric: tabular-nums; }
 .shot.playing, .shot.playing:hover { background: var(--raised-hi); color: var(--text); box-shadow: inset 0 0 0 1px var(--gold); }
-.shot.playing span { color: var(--gold); }
+.shot.playing .sub { color: var(--gold); }
+.shot.playing kbd { color: var(--muted); border-color: #34343A; }
 
-/* build one: for owners, right after the demo */
-.build { margin-top: 120px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px 72px; }
+/* install it: right after the demo */
+.build { margin-top: 96px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px 72px; }
 .build > header { grid-column: 1 / -1; }
-.build > header p { margin: 0; color: var(--muted); }
-h3 { margin: 0 0 12px; font-size: 28px; font-weight: 300; letter-spacing: -0.01em; line-height: 1.2; text-wrap: balance; }
-h4 { margin: 0 0 14px; font-size: 17px; font-weight: 600; }
+.build > header p { margin: 0; color: var(--muted); max-width: 68ch; }
+h2 { margin: 0 0 12px; font-size: 28px; font-weight: 300; letter-spacing: -0.01em; line-height: 1.2; text-wrap: balance; }
+h3 { margin: 0 0 14px; font-size: 17px; font-weight: 600; }
 .need { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; color: var(--muted); }
 .need li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; }
 .need svg { margin-top: 3px; color: var(--text); }
@@ -147,34 +181,37 @@ h4 { margin: 0 0 14px; font-size: 17px; font-weight: 600; }
   color: var(--muted); font-size: 15px; }
 .spare svg { margin-top: 2px; color: var(--warn); }
 .spare b { color: var(--warn); font-weight: 600; }
-.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 16px; color: var(--muted); }
-.steps li { counter-increment: s; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; }
-.steps li::before { content: counter(s); width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
-  font-size: 13px; font-weight: 600; color: var(--text); background: var(--raised-hi); }
+/* steps: the numbers in the screen's light value face, as on its readouts, not as badges */
+.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; color: var(--muted); }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 8px; align-items: baseline;
+  padding: 12px 0; border-top: 1px solid var(--line); }
+.steps li:first-child { border-top: 0; padding-top: 0; }
+.steps li::before { content: counter(s); font-size: 28px; font-weight: 300; line-height: 1; color: var(--text);
+  font-variant-numeric: tabular-nums; }
 .steps b { color: var(--text); font-weight: 500; }
 .links { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 8px; }
 .links a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 12px; font-weight: 500;
   text-decoration: none; color: var(--text); background: var(--raised); }
 .links a:hover { background: var(--raised-hi); }
-.links a.go { background: var(--text); color: var(--bg); }
-.links a.go:hover { background: #FFFFFF; }
 
 /* for developers: how it works, make it yours */
-.explain { margin-top: 120px; padding-top: 64px; border-top: 1px solid var(--line); display: grid;
+.explain { margin-top: 96px; padding-top: 64px; border-top: 1px solid var(--line); display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 72px; }
 .explain p { margin: 0; color: var(--muted); }
 .explain p + p { margin-top: 10px; }
 code { font-family: var(--mono); font-size: 0.84em; color: var(--text); background: var(--raised); padding: 1px 5px;
   border-radius: 5px; overflow-wrap: anywhere; }
 
-.layers { list-style: none; margin: 28px 0 0; padding: 0; position: relative; }
-.layers::before { content: ""; position: absolute; left: 5px; top: 10px; bottom: 10px; width: 2px; background: var(--line); }
-.layers li { position: relative; padding: 0 0 22px 30px; }
-.layers li:last-child { padding-bottom: 0; }
-.layers li::before { content: ""; position: absolute; left: 0; top: 7px; width: 12px; height: 12px; border-radius: 50%;
-  background: var(--bg); border: 2px solid var(--c, var(--faint)); }
-.layers b { display: block; font-size: 17px; font-weight: 600; }
+/* the layers as a stack, each name in the colour it has on the screen's chart key; the machine sits apart, under a
+   dashed rule like the screen's dashed "other" lines, because it is reached over Wi-Fi */
+.layers { list-style: none; margin: 28px 0 0; padding: 0; }
+.layers li { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 4px 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+.layers li:first-child { border-top: 0; padding-top: 0; }
+.layers b { font-size: 17px; font-weight: 600; color: var(--c); }
 .layers span { color: var(--muted); font-size: 15px; }
+.layers li.apart { margin-top: 10px; border-top: 1px dashed #34343A; padding-top: 26px; position: relative; }
+.layers li.apart::before { content: "over Wi-Fi"; position: absolute; top: -10px; left: 76px; padding: 0 8px 0 16px;
+  background: var(--bg); color: var(--faint); font-size: 13px; line-height: 20px; }
 
 .ways { margin-top: 28px; display: flex; flex-direction: column; gap: 32px; }
 .way p { font-size: 15px; }
@@ -191,7 +228,8 @@ footer p { margin: 0; }
   .screen { order: 1; position: sticky; top: 0; z-index: 5; background: var(--bg); padding-top: 8px; }
   .rail { order: 2; } .machine { order: 3; margin-top: 0; }
   .rail { position: static; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; }
-  .rail-head { grid-column: 1 / -1; }
+  .rail .more, .rail .begin { grid-column: 1 / -1; }
+  .begin p { max-width: 60ch; }
   .build, .explain { grid-template-columns: 1fr; gap: 40px; margin-top: 64px; }
   .build > *, .explain > section { max-width: 72ch; }   /* one measure for a whole section when the columns stack */
 }
@@ -208,32 +246,32 @@ footer p { margin: 0; }
 }
 </style>
 </head>
-<body>
+<body class="pre">
 <main>
   <header class="top">
     <img src="logo.svg" alt="">
     <span class="name">Brewdeck</span>
     <nav>
-      <a class="to-build" href="#build">Build one</a>
-      <a class="main" href="https://github.com/pongells/brewdeck/blob/main/docs/manual.md">Manual</a>
-      <a href="https://github.com/pongells/brewdeck">GitHub</a>
+      <a href="#build">Install</a>
+      <a href="https://github.com/pongells/brewdeck/blob/main/docs/manual.md">Manual</a>
+      <a class="gh" href="https://github.com/pongells/brewdeck">GitHub</a>
     </nav>
   </header>
 
   <section class="intro">
-    <h1>A second screen for your Gaggiuino machine</h1>
-    <p>Brewdeck is an unofficial touchscreen that sits next to the machine and talks to it over Wi-Fi. It draws every shot
-      live, compares it with the profile or your last shot, and handles profile, brew temperature, stop weight and
-      flushing. <b>Nothing on the machine is rewired or reflashed.</b></p>
+    <h1>A brewing screen for Gaggiuino</h1>
+    <p>Brewdeck is an unofficial Wi-Fi touchscreen for brewing on Gaggiuino machines, and a base for
+      <a href="#make">trying your own screens and interfaces</a> on Gaggiuino's network API.</p>
   </section>
 
+  <h2 class="sr">Try the screen</h2>
   <div class="stage">
     <div class="left">
       <div class="screen" id="screenbox">
         <p class="turn">Turn your phone sideways for a bigger screen.</p>
         <div class="device">
           <div class="glass">
-            <canvas id="screen" width="800" height="480" role="img" aria-label="Brewdeck screen. Click or touch it like the touchscreen."></canvas>
+            <canvas id="screen" width="800" height="480" role="img" aria-label="Brewdeck screen, running the real interface against a fake machine. Click or touch it like the touchscreen."></canvas>
             <div class="loading" id="loading">Loading…</div>
             <noscript><div class="loading">The demo needs JavaScript.</div></noscript>
           </div>
@@ -245,60 +283,65 @@ footer p { margin: 0; }
             d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg><span>Bigger</span></button>
         </div>
       </div>
-      <div class="machine">
-        <h2>The fake machine</h2>
+      <div class="machine" role="group" aria-labelledby="cond-label">
+        <p class="label" id="cond-label">Try other conditions</p>
         <div class="state">
-          <button class="sw" role="switch" aria-checked="true" data-action="Machine on/off" data-key="machine"><span class="track"></span><span class="lbl">Power<small>on</small></span></button>
-          <button class="sw" role="switch" aria-checked="true" data-action="Heat on/off" data-key="heat"><span class="track"></span><span class="lbl">Boiler hot<small>ready</small></span></button>
-          <button class="sw" role="switch" aria-checked="true" data-action="Water" data-key="water"><span class="track"></span><span class="lbl">Water tank<small>100 %</small></span></button>
+          <button class="sw" role="switch" aria-checked="true" data-action="Machine on/off" data-key="machine"><span class="track"></span><span class="lbl">Machine power<small>on</small></span></button>
+          <button class="sw" role="switch" aria-checked="true" data-action="Heat on/off" data-key="heat"><span class="track"></span><span class="lbl">Boiler at temperature<small>ready</small></span></button>
+          <button class="sw" role="switch" aria-checked="true" data-action="Water" data-key="water"><span class="track"></span><span class="lbl">Water in the tank<small>100 %</small></span></button>
           <button class="sw" role="switch" aria-checked="true" data-action="Scale on/off" data-key="scale"><span class="track"></span><span class="lbl">Scale<small>connected</small></span></button>
-          <button class="sw" role="switch" aria-checked="true" data-action="Wi-Fi on/off" data-key="wifi"><span class="track"></span><span class="lbl">Wi-Fi<small>on</small></span></button>
+          <button class="sw" role="switch" aria-checked="true" data-action="Wi-Fi on/off" data-key="wifi"><span class="track"></span><span class="lbl">Screen's Wi-Fi<small>on</small></span></button>
         </div>
       </div>
     </div>
 
-    <aside class="rail" aria-label="Shortcuts">
-      <div class="rail-head">
-        <h2>Shortcuts</h2>
+    <aside class="rail" aria-label="Scenes">
+      <div class="begin">
+        <p>The screen's real interface, built for the browser, against a fake machine that replays a recorded shot and
+          steam session. Nothing here connects to a coffee&nbsp;machine.</p>
+        <button class="start" id="start" type="button" disabled>Start the demo</button>
       </div>
       <div class="group">
-        <button class="shot" data-action="Shot" id="shot"><b>Pull a shot</b><span>Plays a recorded 33-second shot</span></button>
-        <button data-action="Shot > review">Fast-forward to the review</button>
+        <button class="shot" data-action="Shot" id="shot" aria-keyshortcuts="S"><span class="top-line"><b>Pull a shot</b><kbd>S</kbd></span><span class="sub">Plays a recorded 33-second shot</span></button>
+        <button data-action="Shot > review" aria-keyshortcuts="Shift+S">Shot at 10× speed</button>
       </div>
-      <div class="group">
-        <h2>Steam</h2>
+      <div class="group" role="group" aria-labelledby="steam-label">
+        <p class="label" id="steam-label">Steam</p>
         <div class="row">
-          <button data-action="Steam" id="steam" aria-pressed="false">Steam</button>
-          <button data-action="Steam, fast" id="steam10" aria-pressed="false">Steam at 10×</button>
+          <button data-action="Steam" id="steam" aria-pressed="false" aria-keyshortcuts="M">Steam<kbd>M</kbd></button>
+          <button data-action="Steam, fast" id="steam10" aria-pressed="false" aria-keyshortcuts="Shift+M">At 10× speed</button>
         </div>
       </div>
-      <div class="group">
-        <h2>Go to</h2>
+      <div class="group" role="group" aria-labelledby="go-label">
+        <p class="label" id="go-label">Go to</p>
         <div class="row">
-          <button data-action="Ready">Ready</button>
-          <button data-action="Shot history">Shot history</button>
+          <button data-action="Ready" aria-keyshortcuts="R">Ready<kbd>R</kbd></button>
+          <button data-action="Shot history" aria-keyshortcuts="H">Shot history<kbd>H</kbd></button>
+        </div>
+      </div>
+      <details class="more">
+        <summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>More scenes</summary>
+        <div class="row">
           <button data-action="Idle">Idle clock</button>
-          <button data-action="Splash">Start-up</button>
+          <button data-action="Splash">Start-up screen</button>
+          <button data-action="Pressure release">Pressure-release warning</button>
+          <button data-action="Notification">Machine notification</button>
         </div>
-      </div>
-      <div class="group">
-        <h2>More</h2>
-        <div class="row">
-          <button data-action="Pressure release">Pressure release</button>
-          <button data-action="Notification">A notice</button>
-        </div>
-      </div>
+      </details>
     </aside>
   </div>
   <p class="sr" id="live" aria-live="polite"></p>
 
   <section class="build" id="build">
     <header>
-      <h3>Build one</h3>
-      <p>No soldering, no wiring: flash a spare screen over USB and pick your Wi-Fi on it.</p>
+      <h2>Install it</h2>
+      <p>No soldering, no wiring, nothing on the machine reflashed: flash a spare screen over USB and pick your Wi-Fi on
+        it. Run it with a <a href="https://gaggiuino.github.io/#/guides/interface-headless">headless</a> machine or with
+        the built-in screen tucked away; editing profiles, settings and maintenance stay in the machine's web UI.</p>
     </header>
     <div>
-      <h4>What you need</h4>
+      <h3>What you need</h3>
       <ul class="need">
         <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
           stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
@@ -310,7 +353,8 @@ footer p { margin: 0; }
           <span><b>A Gaggiuino machine with its Wi-Fi web UI</b>, on the same 2.4 GHz network as the screen.</span></li>
         <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
           stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/></svg>
-          <span><b>A Mac or Linux computer</b> with a USB cable and esptool.</span></li>
+          <span><b>A Mac or Linux computer</b> with a USB cable and esptool. On Windows the scripts are untested;
+          WSL may work.</span></li>
       </ul>
       <div class="spare" role="note"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path
@@ -319,7 +363,7 @@ footer p { margin: 0; }
         also runs the machine's Wi-Fi and web UI, which Brewdeck needs.</span></div>
     </div>
     <div>
-      <h4>How it goes</h4>
+      <h3>How it goes</h3>
       <ol class="steps">
         <li><span><b>Download</b> the package for your screen from the releases.</span></li>
         <li><span><b>Back up</b> the screen's flash: the only way back to its original firmware.</span></li>
@@ -327,7 +371,7 @@ footer p { margin: 0; }
         <li><span><b>Choose your Wi-Fi</b> on the screen. It finds the machine by itself.</span></li>
       </ol>
       <div class="links">
-        <a class="go" href="https://github.com/pongells/brewdeck#installing">Installation guide</a>
+        <a href="https://github.com/pongells/brewdeck#installing">Installation guide</a>
         <a href="https://github.com/pongells/brewdeck/releases">Releases</a>
         <a href="https://github.com/pongells/brewdeck/blob/main/docs/manual.md">Manual</a>
       </div>
@@ -336,38 +380,45 @@ footer p { margin: 0; }
 
   <div class="explain">
     <section>
-      <h3>How it works</h3>
+      <h2>How it works</h2>
       <p>Brewdeck is a separate touchscreen. It is not wired to the machine: it reads it over Wi-Fi through Gaggiuino's
-        documented REST and WebSocket API. The firmware has three layers, each replaceable on its own.</p>
+        documented REST and WebSocket API. Its firmware has three layers, each replaceable on its own; the machine's
+        firmware stays as it is.</p>
       <ol class="layers">
         <li style="--c: var(--gold)"><b>UI</b><span>The screens above. Any graphics library; Brewdeck's own uses LVGL 9. It
           talks to the core through one header, <code>brewdeck_core.h</code>.</span></li>
         <li style="--c: var(--blue)"><b>Core</b><span>Wi-Fi, finding the machine, live data, shots, settings. The only part
-          that sends anything, and only a short list: pick a profile, stop weight, brew temperature, save them, flush,
-          tare. Never pumps, valves, heater or steam.</span></li>
-        <li style="--c: var(--muted)"><b>Board</b><span>One folder per screen model: the Sunton ESP32-S3 4.3″ (800 × 480),
+          that sends anything, and only what the web UI's dashboard sends.</span></li>
+        <li style="--c: var(--text)"><b>Board</b><span>One folder per screen model: the Sunton ESP32-S3 4.3″ (800 × 480),
           and an experimental Guition ESP32-P4.</span></li>
-        <li style="--c: var(--green)"><b>Machine</b><span>Gaggiuino's own firmware, untouched. Here it is fake: it replays a
-          recorded shot and steam session, and answers profile, weight and temperature changes.</span></li>
+        <li class="apart" style="--c: var(--green)"><b>Machine</b><span>Gaggiuino's own firmware, untouched. On this page it
+          is fake: it replays a recorded shot and steam session, and answers profile, weight and temperature changes.</span></li>
       </ol>
     </section>
 
-    <section>
-      <h3>Make it yours</h3>
-      <p>Because the layers are separate, a new look does not touch the network code, and a new screen does not touch the
-        interface.</p>
+    <section id="make">
+      <h2>Build on it</h2>
+      <p>Gaggiuino's network API makes room for other screens and interfaces; Brewdeck is one, and a place to start your
+        own. Because the layers are separate, a new look does not touch the network code, and a new screen does not
+        touch the interface.</p>
       <div class="ways">
         <div class="way">
-          <h4>Write your own interface</h4>
+          <h3>Write your own interface</h3>
           <p>Start from the 150-line example interface (MIT licensed), try it against this same fake machine on your
             computer, then build it into the firmware. Four functions and one header are all it needs.</p>
           <a href="https://github.com/pongells/brewdeck/blob/main/docs/custom-ui.md">Read the custom UI guide</a>
         </div>
         <div class="way">
-          <h4>Bring it to another screen</h4>
+          <h3>Bring it to another screen</h3>
           <p>A board folder provides the panel, touch, backlight and memory; the core and the interface stay the same.
             The ESP32-P4 port was done this way. No step-by-step guide yet: ask in the GitHub discussions.</p>
           <a href="https://github.com/pongells/brewdeck/blob/main/docs/architecture.md">Read the architecture notes</a>
+        </div>
+        <div class="way">
+          <h3>Share it</h3>
+          <p>An idea, a bug, a port, an interface of your own: open a discussion, an issue or a pull request. It is a
+            hobby project, so answers may take a while.</p>
+          <a href="https://github.com/pongells/brewdeck">Brewdeck on GitHub</a>
         </div>
       </div>
     </section>
@@ -375,7 +426,8 @@ footer p { margin: 0; }
 
   <footer>
     <p>Brewdeck is an unofficial Wi-Fi touchscreen for <a href="https://gaggiuino.github.io/">Gaggiuino</a> machines. It is not
-      made by or affiliated with the Gaggiuino project.</p>
+      made by or affiliated with the Gaggiuino&nbsp;project. Source and issues on
+      <a href="https://github.com/pongells/brewdeck">GitHub</a>.</p>
     <p>This page runs the screen's interface code compiled to WebAssembly, against a fake machine. It never connects to a
       coffee machine. It contains third-party software and Gaggiuino profile data:
       <a href="THIRD_PARTY_NOTICES.txt">notices</a>.</p>
@@ -391,7 +443,10 @@ footer p { margin: 0; }
     M = await Brewdeck({ print: (t) => console.log(t), printErr: (t) => console.warn(t) });
   } catch (err) {
     console.error(err);
-    document.getElementById('loading').textContent = 'The demo could not load. Reload the page to try again.';
+    const why = typeof WebAssembly === 'undefined' ? 'This browser has no WebAssembly.' : 'Its files did not download.';
+    document.getElementById('loading').innerHTML = `<p style="margin:0 24px;text-align:center">The demo could not load.
+      ${why} Reload the page to try again, or see the screens in the
+      <a href="https://github.com/pongells/brewdeck#readme">README</a>.</p>`;
     return;
   }
   document.getElementById('loading').remove();
@@ -430,9 +485,10 @@ footer p { margin: 0; }
   const key = (c, t, dash) => `<span class="key" style="--c:${c}">${dash ? DASH : '<i></i>'}${t}</span>`;
   const MSG = {
     tip: `<span class="tip">${HAND}<span>Click or tap the screen: it works like the real one.</span></span>`,
-    splash: `<span class="tip">${HAND}<span>The start-up screen. Tap it to skip; the shortcuts wait for it.</span></span>`,
-    off: '<span>The fake machine is off: this is what the screen shows when yours is switched off. Turn <b>Power</b> back on.</span>',
-    nowifi: '<span>The screen has no Wi-Fi: this is what it shows when the network is gone. Turn <b>Wi-Fi</b> back on.</span>',
+    pre: `<span class="tip">${HAND}<span>The screen as it starts up. Click it to start the demo.</span></span>`,
+    splash: `<span class="tip">${HAND}<span>The start-up screen. Tap it to close it.</span></span>`,
+    off: '<span>The fake machine is off: this is what the screen shows when yours is switched off. Turn <b>Machine power</b> back on.</span>',
+    nowifi: '<span>The screen has no Wi-Fi: this is what it shows when the network is gone. Turn <b>Screen&#39;s Wi-Fi</b> back on.</span>',
     shot: key('var(--text)', 'Weight') + key('var(--blue)', 'Pressure') + key('var(--gold)', 'Flow') +
           key('var(--coral)', 'Temperature') + key('var(--muted)', 'target or previous shot', true),
     steam: key('var(--coral)', 'Boiler temperature') + key('var(--blue)', 'Pressure') + key('var(--coral)', 'set point', true),
@@ -446,7 +502,7 @@ footer p { margin: 0; }
   }
 
   // "Pull a shot": while the recording plays it shows the time and stops the shot instead
-  const shot = document.getElementById('shot'), shotSub = shot.querySelector('span'), shotTitle = shot.querySelector('b');
+  const shot = document.getElementById('shot'), shotSub = shot.querySelector('.sub'), shotTitle = shot.querySelector('b');
   const live = document.getElementById('live');
   let playing = false;
   function showShot(on, ms) {
@@ -466,7 +522,33 @@ footer p { margin: 0; }
 
   const steam = document.getElementById('steam'), steam10 = document.getElementById('steam10');
   const btns = [...document.querySelectorAll('button[data-action]')];
-  let splash = null;
+  const run = (action) => M.ccall('web_action', 'number', ['string'], [action]);
+
+  // start: the page opens on the screen's start-up screen (its name and "unofficial" line) and waits for the visitor
+  let started = false;
+  const startBtn = document.getElementById('start');
+  startBtn.disabled = false;
+  function start() {
+    if (started) return;
+    started = true;
+    M._web_start();
+    document.body.classList.remove('pre');
+    live.textContent = 'Demo started. The screen shows Ready; the scenes and conditions are next to it.';
+  }
+  startBtn.addEventListener('click', (e) => { start(); if (e.detail === 0) shot.focus({ preventScroll: true }); });   // keyboard: on to the first scene
+
+  // what changed on the screen, for screen readers (the canvas itself is a picture to them)
+  let was = {};
+  function announce(now) {
+    const say = [];
+    if (was.steam !== undefined && now.steam !== was.steam) say.push(now.steam ? 'Steam started.' : 'Steam ended.');
+    if (was.brew === 1 && now.brew === 2) say.push('The shot review is open: drag on the chart to see the values.');
+    if (was.machine !== undefined && now.machine !== was.machine) say.push(now.machine ? 'Machine on.' : 'Machine off: the screen looks for it.');
+    if (was.wifi !== undefined && now.wifi !== was.wifi) say.push(now.wifi ? 'Screen Wi-Fi on.' : 'Screen Wi-Fi off.');
+    if (say.length) live.textContent = say.join(' ');
+    was = now;
+  }
+
   let last = '';
   function frame() {
     if (M._web_frame()) {
@@ -480,11 +562,12 @@ footer p { margin: 0; }
     const sp = M._web_steam_speed();
     steam.setAttribute('aria-pressed', sp === 1 ? 'true' : 'false');
     steam10.setAttribute('aria-pressed', sp === 10 ? 'true' : 'false');
-    const sh = !!M._web_splash();                  // the start-up splash covers the screen: nothing to press meanwhile
-    if (sh !== splash) { splash = sh; for (const b of btns) b.disabled = sh; }
+    const sh = !!M._web_splash();
     showShot(!!M._web_shot_playing(), M._web_shot_ms());
     const brew = M._web_brew_shown();
-    setMsg(sh ? 'splash' : !machineOn ? 'off' : !wifiOn ? 'nowifi' : sp ? 'steam' : brew ? 'shot' : touched ? '' : 'tip');
+    if (started) announce({ steam: !!sp, brew, machine: machineOn, wifi: wifiOn });
+    setMsg(!started ? 'pre' : sh ? 'splash' : !machineOn ? 'off' : !wifiOn ? 'nowifi' : sp ? 'steam' : brew ? 'shot'
+      : touched ? '' : 'tip');
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -492,14 +575,27 @@ footer p { margin: 0; }
   // pointer = finger, in panel coordinates
   const at = (e) => { const r = cv.getBoundingClientRect(); return [Math.round((e.clientX - r.left) * 800 / r.width), Math.round((e.clientY - r.top) * 480 / r.height)]; };
   let down = false;
-  cv.addEventListener('pointerdown', (e) => { touched = true; down = true; cv.setPointerCapture(e.pointerId); M._web_touch(...at(e), 1); e.preventDefault(); });
+  cv.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (!started) { start(); return; }            // the first click only starts: it must not also press Ready under it
+    touched = true; down = true; cv.setPointerCapture(e.pointerId); M._web_touch(...at(e), 1);
+  });
   cv.addEventListener('pointermove', (e) => { if (down) M._web_touch(...at(e), 1); });
   const up = (e) => { if (!down) return; down = false; M._web_touch(...at(e), 0); };
   cv.addEventListener('pointerup', up);
   cv.addEventListener('pointercancel', up);
 
-  for (const b of btns)
-    b.addEventListener('click', () => M.ccall('web_action', 'number', ['string'], [b.dataset.action]));
+  for (const b of btns) b.addEventListener('click', () => run(b.dataset.action));
+
+  // keys, as in the desktop emulator: S shot (Shift: at 10x), M steam (Shift: at 10x), R Ready, H shot history
+  const KEYS = { s: () => run(shot.dataset.action), S: () => run('Shot > review'), m: () => run('Steam'),
+                 M: () => run('Steam, fast'), r: () => run('Ready'), h: () => run('Shot history') };
+  document.addEventListener('keydown', (e) => {
+    if (!started || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+    const f = KEYS[e.key];
+    if (f) { f(); e.preventDefault(); }
+  });
 
   // bigger screen: the browser's full screen (turned sideways on phones that allow it), else the device over the page
   const box = document.getElementById('screenbox'), bigger = document.getElementById('bigger');

@@ -6,6 +6,8 @@
 #define EMU_WEB 1
 #include "../emu.cpp"
 
+static bool g_hold_splash = true;                 // until web_start(): the splash's own 5 s timer must not end it
+
 extern "C" {
 EMSCRIPTEN_KEEPALIVE void web_init(void) {
   bd_ui_init();                                  // our UI on the emulator's board layer and fake core (emu.cpp);
@@ -14,7 +16,15 @@ EMSCRIPTEN_KEEPALIVE void web_init(void) {
 }
 // one loop pass; 1 = the frame buffer changed since the last call
 EMSCRIPTEN_KEEPALIVE int web_frame(void) {
+  if (g_hold_splash) lv_display_trigger_activity(g_dev_disp);   // waiting to start is not idle: no dimming, no screen off
   emu_step(SDL_GetTicks());
+  if (g_hold_splash && !ui_test_splash_shown()) {
+    // its 5 s timer closed it and this pass drew the screen under it: put it back and keep that frame from the page
+    // (the canvas keeps the splash; LVGL redraws the whole splash on a later pass, which is then shown)
+    ui_splash();
+    g_dirty = false;
+    return 0;
+  }
   const bool d = g_dirty;
   g_dirty = false;
   return d;
@@ -34,6 +44,11 @@ EMSCRIPTEN_KEEPALIVE int web_shot_ms(void) { return g_shot_on ? (int)((SDL_GetTi
 EMSCRIPTEN_KEEPALIVE int web_brew_shown(void) { return ui_test_brew_shown(); }   // 0 none, 1 brewing, 2 done / review
 EMSCRIPTEN_KEEPALIVE int web_steam_speed(void) { return steam_speed(); }   // 0 none, 1, 10
 EMSCRIPTEN_KEEPALIVE int web_splash(void) { return ui_test_splash_shown(); }
+// the page opens on the splash (the name and "Unofficial ...") and keeps it until the visitor starts the demo
+EMSCRIPTEN_KEEPALIVE void web_start(void) {
+  g_hold_splash = false;
+  if (ui_test_splash_shown()) ui_test_splash_end();
+}
 }
 
 int main(void) {
