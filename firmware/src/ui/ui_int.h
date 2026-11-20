@@ -87,7 +87,9 @@ void icon_plus(lv_obj_t *p, lv_color_t col);
 void icon_backspace(lv_obj_t *p, lv_color_t col);
 void ch_hline(lv_layer_t *ctx, int x1, int x2, int y, lv_color_t col);
 void ch_text_c(lv_layer_t *ctx, int x, int y, const char *s, lv_text_align_t align, lv_color_t col);
-void axis_time(lv_layer_t *ctx, int x0, int w, int y, int span_s, int step_s);
+// time labels under a chart of span_s seconds that starts at from_s (a rolling window), every step_s, end label at the
+// right end
+void axis_time(lv_layer_t *ctx, int x0, int w, int y, int span_s, int step_s, int from_s = 0);
 lv_obj_t *strip_value(lv_obj_t *row, lv_color_t dot, const char *unit);
 void fmt_when(uint32_t ts, char *b, size_t n);
 void fmt_day(uint32_t ts, char *b, size_t n);

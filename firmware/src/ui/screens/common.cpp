@@ -388,18 +388,20 @@ void ch_text_c(lv_layer_t *ctx, int x, int y, const char *s, lv_text_align_t ali
   dlabel(ctx, &d, &a, s);
 }
 // time labels under a chart's baseline: every step_s, "N s" under a minute, then "m:ss" / "N min", the span at the end
-void axis_time(lv_layer_t *ctx, int x0, int w, int y, int span_s, int step_s) {
+static void fmt_secs(char *t, size_t n, int s) {
+  if (s < 60) snprintf(t, n, "%d s", s);
+  else if (s % 60) snprintf(t, n, "%d:%02d", s / 60, s % 60);
+  else snprintf(t, n, "%d min", s / 60);
+}
+void axis_time(lv_layer_t *ctx, int x0, int w, int y, int span_s, int step_s, int from_s) {
   char t[16];
-  for (int s = step_s; s < span_s; s += step_s) {
-    const int x = x0 + s * w / span_s;
+  for (int s = (from_s / step_s + 1) * step_s; s < from_s + span_s; s += step_s) {
+    const int x = x0 + (s - from_s) * w / span_s;
     if (x > x0 + w - 60) break;                      // keep clear of the end label
-    if (s < 60 || s % 60) snprintf(t, sizeof t, s < 60 ? "%d s" : "%d:%02d", s < 60 ? s : s / 60, s % 60);
-    else snprintf(t, sizeof t, "%d min", s / 60);
+    fmt_secs(t, sizeof t, s);
     ch_text_c(ctx, x, y, t, LV_TEXT_ALIGN_CENTER, COL_AXIS);
   }
-  if (span_s < 60) snprintf(t, sizeof t, "%d s", span_s);
-  else if (span_s % 60) snprintf(t, sizeof t, "%d:%02d", span_s / 60, span_s % 60);
-  else snprintf(t, sizeof t, "%d min", span_s / 60);
+  fmt_secs(t, sizeof t, from_s + span_s);
   ch_text_c(ctx, x0 + w, y, t, LV_TEXT_ALIGN_RIGHT, COL_AXIS);
 }
 // one value of the row under a chart: dot in the value's colour, the number (F_VALUE), unit on its baseline

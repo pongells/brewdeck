@@ -312,12 +312,15 @@ static void live_scale(const bd_machine *d) {
 // Called on every machine-state change (several times a second); only widgets whose value changed are touched.
 void ui_set_live(const bd_machine *d) {
   const int link = d->link;
-  // a boiler reading that is not a number in 0..400 (a sensor fault) is shown as 0: the big digits font has no "-" or
-  // "nan", and NaN * 10 into int16 (steam chart) is undefined
+  // a boiler reading that is not a number in 0..400, or a pressure not in 0..20 bar (a sensor fault or a bad frame), is
+  // shown as 0: the big digits font has no "-" or "nan", and NaN * 10 or * 100 into int16 (steam chart) is undefined
   bd_machine safe;
-  if (!(d->temperature >= 0.0f && d->temperature < 400.0f)) {
+  const bool temp_ok = d->temperature >= 0.0f && d->temperature < 400.0f;
+  const bool press_ok = d->pressure >= 0.0f && d->pressure <= 20.0f;
+  if (!temp_ok || !press_ok) {
     safe = *d;
-    safe.temperature = 0.0f;
+    if (!temp_ok) safe.temperature = 0.0f;
+    if (!press_ok) safe.pressure = 0.0f;
     d = &safe;
   }
   g_live_brew = link == BD_LINK_ONLINE && d->brewing;   // the idle clock wakes for a shot

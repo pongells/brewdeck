@@ -15,11 +15,12 @@ static int16_t g_st_s[ST_PTS];                      // temperature x10
 static int16_t g_st_ps[ST_PTS];                     // pressure x100
 static int g_st_n = 0, g_st_set_deg = 0;
 static uint32_t g_st_last = 0, g_st_t0 = 0;
+static int g_st_from = 0;                           // seconds since steam started of sample 0 (after 4 min it rolls)
 bool g_st_on = false;
 
 // The chart's scales and the set point label's side, from the samples. While they stay the same, a new sample redraws
 // only the strip at its end (the whole chart took 40 -> 90 ms per second on the P4 as the session grew).
-struct StScale { int lo, hi, pmax, span, left; };
+struct StScale { int lo, hi, pmax, span, left, set; };
 static StScale g_st_drawn;                          // the scales of the last full redraw asked for
 static const int ST_BASE = 261, ST_TOP = 22;        // plot area like br_draw, box coordinates
 #define ST_X(i) (x0 + 2 + (i) * (x1 - x0 - 4) / sc.span)
@@ -36,6 +37,7 @@ static StScale st_scale(void) {
     if (g_st_set_deg * 10 > hi) hi = g_st_set_deg * 10;
     if (g_st_set_deg * 10 < lo) lo = g_st_set_deg * 10;
   }
+  sc.set = g_st_set_deg;                            // a set point changed in the web UI moves its line and label
   sc.lo = lo - 50;                                  // 5 deg of room below, 8 above (the set point sits near the top)
   sc.hi = hi + 80;
   // pressure scale: 0..3 bar, grows to the next whole bar above the highest reading (up to 13: the machine can
@@ -97,7 +99,7 @@ static void st_draw(lv_event_t *e) {
   }
   lv_point_t p1 = {(int32_t)x0, (int32_t)base}, p2 = {(int32_t)x1, (int32_t)base};
   dl(ctx, &l, &p1, &p2);
-  axis_time(ctx, x0, x1 - x0, base + 4, sc.span, sc.span <= 120 ? 30 : 60);
+  axis_time(ctx, x0, x1 - x0, base + 4, sc.span, sc.span <= 120 ? 30 : 60, g_st_from);
   if (!g_st_n) return;
   if (g_st_set_deg > 0) {                           // set point: dashed, labelled once at its right end
     l.color = COL_RED;
@@ -168,6 +170,7 @@ void st_update(const bd_machine *d, bool on) {
     ready_cover();
     if (on) {
       g_st_n = 0;                                   // a new steam session: chart and clock from now
+      g_st_from = 0;
       br_steam_started();                           // the last shot's screen gives way
       g_st_last = 0;
       g_st_t0 = stamp_nz(lv_tick_get());
@@ -195,20 +198,34 @@ void st_update(const bd_machine *d, bool on) {
   set_hidden(g_st_wt, lvl >= 20);
   snprintf(b, sizeof b, "Refill %d%%", lvl);
   set_text(g_st_tank_pct, b);
-  if (!g_st_last || lv_tick_elaps(g_st_last) >= 1000) {   // one chart point per second
+  const uint32_t el = g_st_last ? lv_tick_elaps(g_st_last) : 0;
+  if (!g_st_last || el >= 1000) {                   // one chart point per second
     // on a 1 s grid (+= 1000, not "now"): this runs every ~150 ms, and "now" would drift ~7 % slow behind the steam
-    // clock; after a long gap it starts again
-    g_st_last = g_st_last && lv_tick_elaps(g_st_last) < 3000 ? stamp_nz(g_st_last + 1000) : stamp_nz(lv_tick_get());
-    const bool shift = g_st_n == ST_PTS;            // after 4 min every point moves left: whole chart
-    if (shift) {
-      memmove(g_st_s, g_st_s + 1, sizeof g_st_s[0] * (ST_PTS - 1));
-      memmove(g_st_ps, g_st_ps + 1, sizeof g_st_ps[0] * (ST_PTS - 1));
-      g_st_n--;
+    // clock. After a gap (a Wi-Fi drop, a slow pass) the missed seconds hold the last value, so the chart's time
+    // axis stays with the steam clock
+    int steps = g_st_last ? (int)(el / 1000) : 1;
+    if (steps > ST_PTS) {                           // longer than the whole chart: start the grid again
+      steps = ST_PTS;
+      g_st_last = stamp_nz(lv_tick_get());
+    } else {
+      g_st_last = g_st_last ? stamp_nz(g_st_last + (uint32_t)steps * 1000) : stamp_nz(lv_tick_get());
     }
-    g_st_s[g_st_n] = (int16_t)(d->temperature * 10.0f + 0.5f);
-    g_st_ps[g_st_n++] = (int16_t)((d->pressure < 0 ? 0 : d->pressure) * 100.0f + 0.5f);
+    bool shift = false;                             // after 4 min every point moves left: whole chart
+    for (int k = 0; k < steps; k++) {
+      if (g_st_n == ST_PTS) {
+        memmove(g_st_s, g_st_s + 1, sizeof g_st_s[0] * (ST_PTS - 1));
+        memmove(g_st_ps, g_st_ps + 1, sizeof g_st_ps[0] * (ST_PTS - 1));
+        g_st_n--;
+        g_st_from++;
+        shift = true;
+      }
+      const bool now_val = k == steps - 1 || !g_st_n;
+      g_st_s[g_st_n] = now_val ? (int16_t)(d->temperature * 10.0f + 0.5f) : g_st_s[g_st_n - 1];
+      g_st_ps[g_st_n] = now_val ? (int16_t)((d->pressure < 0 ? 0 : d->pressure) * 100.0f + 0.5f) : g_st_ps[g_st_n - 1];
+      g_st_n++;
+    }
     const StScale sc = st_scale();
-    if (shift || g_st_n < 2 || memcmp(&sc, &g_st_drawn, sizeof sc)) {
+    if (shift || steps > 1 || g_st_n < 2 || memcmp(&sc, &g_st_drawn, sizeof sc)) {
       g_st_drawn = sc;
       lv_obj_invalidate(g_st_chart);
     } else {                                        // same scales: the new segment and both dots (r 4) only

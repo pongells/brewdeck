@@ -46,7 +46,7 @@ static void on_settings(int bright, int idle_min, bool bounce, bool splash) {
   g_idle = idle_min;
   g_bounce = bounce;
   g_splash = splash;
-  g_set_dirty = g_now ? g_now : 1;
+  g_set_dirty = g_now ? g_now : 0xFFFFFFFFu;     // 0 means nothing to save; not 1 (1 ms ahead, saved at once)
 }
 
 // ---- state: bd_* -> the screens -------------------------------------------------------------------------------------

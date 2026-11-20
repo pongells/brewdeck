@@ -385,6 +385,7 @@ static void rv_open(void) {
   g_rv_mode = 0;
   g_rv_i = g_br_n - 1;
   g_rv_touch_ms = lv_tick_get();
+  set_text(g_rv_close_t, "1:00");                 // not the last review's countdown until the timer's first pass
   char b[48];
   snprintf(b, sizeof b, "%u.%u g", (unsigned)(g_br_cur.w / 10), (unsigned)(g_br_cur.w % 10));
   set_text(g_rv_res_w, b);
@@ -481,7 +482,8 @@ static void on_brew_tap(lv_event_t *e) { (void)e; if (g_br_state == BR_DONE) rv_
 static void on_brew_timer(lv_timer_t *t) {
   (void)t;
   if (g_br_state == BR_DONE && lv_tick_elaps(g_br_done_ms) > REVIEW_AFTER_MS) {
-    rv_open();
+    if (g_st_on) br_steam_started();               // steam began right after the shot: no review over it
+    else rv_open();
   } else if (g_br_state == BR_REVIEW) {
     const uint32_t el = lv_tick_elaps(g_rv_touch_ms);
     if (el >= RV_CLOSE_MS) { br_hide(); return; }
@@ -511,6 +513,7 @@ void ui_shot(const bd_shot_point *s) {
       for (int i = 0; i < BD_SHOT_MAX / 2; i++) g_br[i] = g_br[2 * i];
       g_br_n = BD_SHOT_MAX / 2;
       g_br_step *= 2;
+      g_br_lastx = -1;                            // every point moved: redraw the whole chart
     }
     g_br[g_br_n++] = *s;
   }
