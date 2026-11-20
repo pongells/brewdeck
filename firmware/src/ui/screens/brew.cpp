@@ -27,6 +27,7 @@ bd_shot_point *g_br;                          // BD_SHOT_MAX points (11.5 KB) in
 int g_br_n = 0;
 static int g_br_step = 1, g_br_skip = 0, g_br_tmax = 30, g_br_lastx = -1;
 int g_br_state = BR_HIDDEN;
+int ui_test_brew_shown(void) { return g_br_state == BR_HIDDEN ? 0 : g_br_state == BR_BREWING ? 1 : 2; }
 bool g_live_brew = false;
 static bool g_br_new = false;                    // a shot started: its first point opens a fresh brewing screen
 static bool g_br_prev_asked = false;             // the previous shot was asked for this shot (once per shot)

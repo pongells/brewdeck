@@ -37,6 +37,7 @@ EMU_WEAK void ui_test_idle(void) {}
 EMU_WEAK void ui_test_screen_off(void) {}
 EMU_WEAK void ui_test_splash_end(void) {}
 EMU_WEAK bool ui_test_splash_shown(void) { return false; }
+EMU_WEAK int ui_test_brew_shown(void) { return 0; }
 EMU_WEAK void ui_test_home(void) {}
 EMU_WEAK void ui_test_wifi_password(const char *) {}
 EMU_WEAK void ui_test_menu(int) {}
@@ -752,7 +753,7 @@ static const Action SCREENS[] = {
   {"Display", a_display}, {"Scale", a_scale_pg}, {"About", a_about},
   {"Wi-Fi list", a_wifi}, {"Password", a_password}, {"Wi-Fi info", a_wifi_info},
   {"Offline", a_offline}, {"No Wi-Fi", a_nowifi}, {"No Wi-Fi set", a_nocfg}, {"Wi-Fi password", a_wifipw},
-  {"Machine addr.", a_addr}, {"Shot history", a_history}, {"Splash", ui_splash}};
+  {"Machine addr.", a_addr}, {"Shot history", a_history}, {"Splash", ui_splash}, {"Stop shot", stop_shot}};
 static const Action MACHINE[] = {
   {"Scale on/off", t_scale}, {"Scale type", t_scale_type}, {"Water", t_water},
   {"Machine on/off", t_machine}, {"Wi-Fi on/off", t_wifi}, {"Heat on/off", t_heating},

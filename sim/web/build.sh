@@ -25,7 +25,7 @@ done
 # linked from inside dist/: the loader then names its data file "brewdeck.data", not this machine's full path
 (cd "$DIST" && em++ "$OBJ"/*.o "$OBJ"/lvgl/*.o -o brewdeck.js -O2 "${DATA[@]}" \
   -sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=0 -sMODULARIZE=1 -sEXPORT_NAME=Brewdeck \
-  -sEXPORTED_FUNCTIONS=_main,_web_frame,_web_fb,_web_backlight,_web_touch,_web_action,_web_status,_web_shot_playing,_web_steam_speed,_web_splash \
+  -sEXPORTED_FUNCTIONS=_main,_web_frame,_web_fb,_web_backlight,_web_touch,_web_action,_web_status,_web_shot_playing,_web_shot_ms,_web_brew_shown,_web_steam_speed,_web_splash \
   -sEXPORTED_RUNTIME_METHODS=ccall,UTF8ToString,HEAPU16)
 cp "$WEB/index.html" "$DIST/index.html"
 cp "$SIM/../THIRD_PARTY_NOTICES.txt" "$DIST/THIRD_PARTY_NOTICES.txt"

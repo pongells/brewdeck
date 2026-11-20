@@ -62,6 +62,7 @@ void ui_test_wake(void);         // like a touch on the idle clock
 void ui_test_screen_off(void);   // screen off now
 void ui_test_splash_end(void);    // close the boot splash now (the desktop emulator starts without it)
 bool ui_test_splash_shown(void);  // the boot splash is on screen (the web demo disables its buttons meanwhile)
+int  ui_test_brew_shown(void);    // 0 no shot screen, 1 brewing, 2 done or the review (the web demo shows a colour key)
 const char *ui_bench_show(int i);   // debug benchmark: show screen i (0..), NULL past the last
 void ui_bench_glow(bool on);        // debug benchmark: the pressure-release glow held at 60 % / off
 void ui_test_home(void);          // close menu, picker, editor, idle, brewing/review: back to Ready (emulator)

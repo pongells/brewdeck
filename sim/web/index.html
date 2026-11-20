@@ -10,31 +10,37 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600&display=swap">
 <style>
 /* The screen's own palette and typeface (firmware/src/ui/theme.h), one dark look like the device.
-   Layout: the device is the page's one big object; the controls sit in a rail beside it (below it on narrow screens),
-   the machine's state is a row of switches under the glass. */
+   Layout: the device is the page's one big object, with a status line under it (how to use it, what the lines on
+   the chart mean, what a switch just did); the shortcuts sit in a rail beside it (below it on narrow screens, where
+   the device stays in view); then how to build one, then how it works for developers. */
 :root {
   --bg: #0A0A0B; --surface: #131315; --raised: #1C1C1F; --raised-hi: #26262A; --line: #222226;
   --text: #F2F2F3; --muted: #8E8E96; --faint: #5E5E66;
-  --gold: #F5C04A; --blue: #7CC4FF; --blue-bg: #0F2233;
-  --green: #4ADE80; --warn: #FFA94D;
+  --gold: #F5C04A; --gold-hi: #FFD36B; --gold-ink: #1A1405; --blue: #7CC4FF; --blue-bg: #0F2233;
+  --coral: #FF6B6B; --green: #4ADE80; --warn: #FFA94D; --warn-bg: #2A1B0C;
   --font: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   color-scheme: dark;
+  accent-color: var(--blue);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 var(--font); }
-a { color: var(--blue); }
+::selection { background: #24415E; color: var(--text); }
+a { color: var(--blue); text-underline-offset: 3px; }
+p, li { text-wrap: pretty; }
 main { max-width: 1240px; margin: 0 auto; padding-block: 28px 64px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-/* header: the name and two links */
+/* header: the name and the links (the manual is the first stop for owners) */
 .top { display: flex; align-items: center; gap: 12px; }
 .top img { width: 36px; height: 36px; flex: none; }
 .top .name { font-size: 20px; font-weight: 500; letter-spacing: -0.01em; }
 .top nav { margin-left: auto; display: flex; gap: 6px; }
 .top nav a { font-size: 15px; font-weight: 500; color: var(--text); text-decoration: none; border-radius: 12px; padding: 9px 14px; }
 .top nav a:hover { background: var(--raised); }
-.top nav a.gh { border: 1px solid var(--line); }
+.top nav a.main { border: 1px solid #34343A; }
+@media (max-width: 480px) { .top nav a { padding: 9px 10px; } .top nav .to-build { display: none; } }
 
 /* intro: what it is, in two sentences, then the demo */
 .intro { margin: 48px 0 32px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px 56px; align-items: end; }
@@ -42,12 +48,13 @@ main { max-width: 1240px; margin: 0 auto; padding-block: 28px 64px;
   text-wrap: balance; }
 .intro p { margin: 0; color: var(--muted); font-size: 17px; max-width: 52ch; }
 .intro p b { color: var(--text); font-weight: 500; }
-.try { margin: 0 0 12px; color: var(--muted); font-size: 15px; display: flex; align-items: center; gap: 10px; }
-.try i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+.try { margin: 0 0 12px; color: var(--muted); font-size: 15px; display: flex; align-items: baseline; gap: 10px; }
+.try i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; transform: translateY(-1px); }
 @media (max-width: 1000px) { .intro { grid-template-columns: 1fr; margin-top: 36px; } }
 
-/* stage: device + rail */
+/* stage: the screen (device + status line) and the shortcuts */
 .stage { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; align-items: start; }
+.screen { position: relative; }
 .device { position: relative; border-radius: 28px; padding: clamp(10px, 2.6vw, 30px);
   background: linear-gradient(180deg, #1B1B1E 0%, #0E0E10 14%, #08080A 100%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), inset 0 0 0 1px #2A2A2F, 0 40px 80px -30px rgba(0,0,0,0.9), 0 2px 0 #000; }
@@ -55,22 +62,39 @@ main { max-width: 1240px; margin: 0 auto; padding-block: 28px 64px;
   box-shadow: 0 0 0 1px #000, 0 0 0 2px #17171A; }
 canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: pointer; }
 .loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
-/* the screen is the thing to use: a hint over it until the first touch */
-.hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px;
-  padding: 8px 14px; border-radius: 999px; background: rgba(10, 10, 11, 0.86); box-shadow: 0 0 0 1px #34343A;
-  color: var(--text); font-size: 14px; font-weight: 500; white-space: nowrap; pointer-events: none; }
-.hint svg { flex: none; }
-.hint[hidden] { display: none; }
-@media (prefers-reduced-motion: no-preference) {
-  .hint { animation: hint-in 400ms ease 300ms both; }
-  @keyframes hint-in { from { opacity: 0; transform: translate(-50%, 6px); } }
+
+/* status line under the device: one message at a time, its height fixed so the page never jumps */
+.caption { display: flex; align-items: center; gap: 12px; min-height: 44px; margin-top: 10px; padding: 0 4px; }
+.caption .msg { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; font-size: 14px; color: var(--muted); }
+.caption .msg svg { flex: none; color: var(--text); }
+.caption .msg b { color: var(--text); font-weight: 500; }
+.caption .tip { display: inline-flex; align-items: center; gap: 8px; }
+.key { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.key i { width: 16px; height: 3px; border-radius: 2px; background: var(--c); }
+.key svg { flex: none; color: var(--c); }
+.caption.note .msg { color: var(--text); }
+.caption.note .msg { flex-wrap: nowrap; align-items: baseline; gap: 10px; }
+.caption.note .msg::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex: none;
+  transform: translateY(-1px); }
+.bigger { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px;
+  border-radius: 12px; font-size: 14px; background: var(--raised); }
+.bigger svg { flex: none; }
+
+/* bigger screen: browser full screen where it exists, otherwise the device over the whole page */
+.screen:fullscreen, .screen.expanded { display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: #000; padding: 12px; }
+.screen.expanded { position: fixed; inset: 0; z-index: 50; }
+.screen:fullscreen .device, .screen.expanded .device { width: min(100%, calc((100dvh - 96px) * 800 / 480 + 40px)); }
+.screen:fullscreen .caption, .screen.expanded .caption { width: min(100%, calc((100dvh - 96px) * 800 / 480 + 40px)); }
+.turn { display: none; }
+@media (orientation: portrait) and (max-width: 700px) {
+  .screen.expanded .turn, .screen:fullscreen .turn { display: block; margin: 0 0 14px; color: var(--muted); font-size: 14px; }
 }
-@media (max-width: 560px) { .hint { font-size: 13px; padding: 6px 12px; bottom: 8px; } }
 
 /* the fake machine: a panel of real switches under the device */
 .machine { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px 16px; }
 .machine h2 { margin: 0 0 10px; font-size: 14px; font-weight: 500; color: var(--muted); }
-.state { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px 16px; }
+.state { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 16px; }
 .sw { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 4px; background: none; border-radius: 10px;
   color: var(--text); font: 500 15px/1.2 var(--font); }
 .sw:hover, .sw[aria-checked]:hover { background: var(--raised); }
@@ -82,12 +106,12 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
 .sw[aria-checked="true"] .track::after { left: 19px; background: #fff; }
 .sw[data-warn="true"] .track { background: var(--warn); box-shadow: none; }
 .sw[data-warn="true"] .track::after { background: #fff; }
-.sw .lbl { display: flex; flex-direction: column; gap: 1px; }
+.sw .lbl { display: flex; flex-direction: column; gap: 1px; white-space: nowrap; }
 .sw small { font-size: 13px; color: var(--muted); font-weight: 400; }
 .sw[data-warn="true"] small { color: var(--warn); }
 @media (prefers-reduced-motion: no-preference) { .sw .track, .sw .track::after { transition: all 140ms ease; } }
 
-/* rail */
+/* rail: shortcuts, "Pull a shot" first and loudest */
 .rail { display: flex; flex-direction: column; gap: 20px; position: sticky; top: 20px; }
 .rail-head h2 { margin: 0; font-size: 17px; font-weight: 600; color: var(--text); }
 .rail-head p { margin: 2px 0 0; font-size: 14px; color: var(--muted); }
@@ -103,13 +127,44 @@ button:active:not(:disabled) { transform: scale(0.97); }
 button:disabled { opacity: 0.4; cursor: default; }
 button:disabled:hover { background: var(--raised); }
 .sw:disabled:hover { background: none; }
-.shot { display: flex; flex-direction: column; gap: 2px; justify-content: center; min-height: 58px; padding: 10px 16px; }
-.shot span { font-size: 13px; font-weight: 400; color: var(--muted); }
+.shot { display: flex; flex-direction: column; gap: 2px; justify-content: center; min-height: 64px; padding: 10px 18px;
+  background: var(--gold); color: var(--gold-ink); font-size: 17px; font-weight: 600; }
+.shot:hover { background: var(--gold-hi); }
+.shot span { font-size: 13px; font-weight: 400; color: rgba(26, 20, 5, 0.72); font-variant-numeric: tabular-nums; }
+.shot:disabled:hover { background: var(--gold); }
+.shot.playing, .shot.playing:hover { background: var(--raised-hi); color: var(--text); box-shadow: inset 0 0 0 1px var(--gold); }
+.shot.playing span { color: var(--gold); }
 
-/* explanation */
-.explain { margin-top: 88px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; }
+/* build one: for owners, right after the demo */
+.build { margin-top: 88px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px 56px; }
+.build > header { grid-column: 1 / -1; }
+.build > header p { margin: 0; color: var(--muted); max-width: 64ch; }
 h3 { margin: 0 0 10px; font-size: 28px; font-weight: 300; letter-spacing: -0.01em; line-height: 1.2; text-wrap: balance; }
-.explain p { margin: 0; color: var(--muted); }
+h4 { margin: 0 0 8px; font-size: 17px; font-weight: 600; }
+.need { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; color: var(--muted); }
+.need li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; }
+.need svg { margin-top: 3px; color: var(--text); }
+.need b { color: var(--text); font-weight: 500; }
+.spare { margin-top: 18px; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; padding: 14px 16px;
+  border-radius: 14px; background: var(--warn-bg); color: #FFD9B0; font-size: 15px; }
+.spare svg { margin-top: 2px; color: var(--warn); }
+.spare b { color: #FFE8CF; font-weight: 600; }
+.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 12px; color: var(--muted); }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; }
+.steps li::before { content: counter(s); width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 13px; font-weight: 600; color: var(--text); background: var(--raised-hi); }
+.steps b { color: var(--text); font-weight: 500; }
+.links { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; }
+.links a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 12px; font-weight: 500;
+  text-decoration: none; color: var(--text); background: var(--raised); }
+.links a:hover { background: var(--raised-hi); }
+.links a.go { background: var(--text); color: var(--bg); }
+.links a.go:hover { background: #FFFFFF; }
+
+/* for developers: how it works, make it yours */
+.explain { margin-top: 88px; padding-top: 40px; border-top: 1px solid var(--line); display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; }
+.explain p { margin: 0; color: var(--muted); max-width: 62ch; }
 .explain p + p { margin-top: 10px; }
 code { font-family: var(--mono); font-size: 0.84em; color: var(--text); background: var(--raised); padding: 1px 5px;
   border-radius: 5px; overflow-wrap: anywhere; }
@@ -126,29 +181,34 @@ code { font-family: var(--mono); font-size: 0.84em; color: var(--text); backgrou
 .layers .via::before { display: none; }
 
 .ways { margin-top: 22px; display: flex; flex-direction: column; gap: 26px; }
-.way h4 { margin: 0 0 6px; font-size: 17px; font-weight: 600; }
 .way p { font-size: 15px; }
 .way ol { margin: 10px 0 0; padding-left: 20px; color: var(--muted); font-size: 15px; display: flex; flex-direction: column; gap: 5px; }
 .way a { display: inline-block; margin-top: 10px; font-weight: 500; }
 
 footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px;
   display: flex; flex-direction: column; gap: 6px; }
-footer p { margin: 0; max-width: 80ch; }
+footer p { margin: 0; max-width: 60ch; }
 
 @media (max-width: 1000px) {
-  /* one column: the device, then the things to try, then the fake machine (the shot button stays near the screen) */
-  .stage { grid-template-columns: 1fr; }
+  /* one column: the screen stays in view at the top while the shortcuts and switches scroll under it */
+  .stage { grid-template-columns: 1fr; gap: 20px; }
   .stage > .left { display: contents; }
-  .device { order: 1; } .rail { order: 2; } .machine { order: 3; margin-top: 0; }
+  .screen { order: 1; position: sticky; top: 0; z-index: 5; background: var(--bg); padding-top: 8px; }
+  .rail { order: 2; } .machine { order: 3; margin-top: 0; }
   .rail { position: static; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; }
   .rail-head { grid-column: 1 / -1; }
-  .explain { grid-template-columns: 1fr; gap: 48px; margin-top: 64px; }
+  .build, .explain { grid-template-columns: 1fr; gap: 40px; margin-top: 64px; }
 }
 @media (max-width: 560px) {
   .rail { grid-template-columns: 1fr; }
+  .device { border-radius: 18px; }
+  .caption { min-height: 40px; margin-top: 6px; }
+  .caption .msg { font-size: 13px; gap: 2px 12px; }
+  .bigger { padding: 0 12px; }
+  .screen:not(.expanded):not(:fullscreen) .bigger span { display: none; }   /* icon only: the colour key needs the room */
 }
 @media (prefers-reduced-motion: no-preference) {
-  button, .sw { transition: background-color 120ms ease; }
+  button, .sw, .links a { transition: background-color 120ms ease; }
 }
 </style>
 </head>
@@ -158,8 +218,9 @@ footer p { margin: 0; max-width: 80ch; }
     <img src="logo.svg" alt="">
     <span class="name">Brewdeck</span>
     <nav>
-      <a href="https://github.com/pongells/brewdeck/blob/main/docs/manual.md">Manual</a>
-      <a class="gh" href="https://github.com/pongells/brewdeck">GitHub</a>
+      <a class="to-build" href="#build">Build one</a>
+      <a class="main" href="https://github.com/pongells/brewdeck/blob/main/docs/manual.md">Manual</a>
+      <a href="https://github.com/pongells/brewdeck">GitHub</a>
     </nav>
   </header>
 
@@ -174,15 +235,20 @@ footer p { margin: 0; max-width: 80ch; }
 
   <div class="stage">
     <div class="left">
-      <div class="device">
-        <div class="glass">
-          <canvas id="screen" width="800" height="480" role="img" aria-label="Brewdeck screen. Click or touch it like the touchscreen."></canvas>
-          <div class="loading" id="loading">Loading…</div>
-          <div class="hint" id="hint" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11V5a2 2 0 0 1 4 0v6"/><path
-            d="M13 10a2 2 0 0 1 4 0v1a2 2 0 0 1 4 0v4a7 7 0 0 1-7 7h-1a7 7 0 0 1-6-3.4L4.5 15a2 2 0 0 1 3.3-2.2L9 14.5"/></svg>Click or tap
-            the screen: it works like the real one</div>
-          <noscript><div class="loading">The demo needs JavaScript.</div></noscript>
+      <div class="screen" id="screenbox">
+        <p class="turn">Turn your phone sideways for a bigger screen.</p>
+        <div class="device">
+          <div class="glass">
+            <canvas id="screen" width="800" height="480" role="img" aria-label="Brewdeck screen. Click or touch it like the touchscreen."></canvas>
+            <div class="loading" id="loading">Loading…</div>
+            <noscript><div class="loading">The demo needs JavaScript.</div></noscript>
+          </div>
+        </div>
+        <div class="caption" id="caption">
+          <div class="msg" id="msg"></div>
+          <button class="bigger" id="bigger" type="button" aria-pressed="false" aria-label="Bigger screen"><svg width="16" height="16" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path
+            d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg><span>Bigger</span></button>
         </div>
       </div>
       <div class="machine">
@@ -203,7 +269,7 @@ footer p { margin: 0; max-width: 80ch; }
         <p>Jump to a moment instead of waiting for it.</p>
       </div>
       <div class="group">
-        <button class="shot" data-action="Shot" id="shot">Pull a shot<span>Plays a recorded 33-second shot</span></button>
+        <button class="shot" data-action="Shot" id="shot"><b>Pull a shot</b><span>Plays a recorded 33-second shot</span></button>
         <button data-action="Shot > review">Fast-forward to the review</button>
       </div>
       <div class="group">
@@ -231,6 +297,50 @@ footer p { margin: 0; max-width: 80ch; }
       </div>
     </aside>
   </div>
+  <p class="sr" id="live" aria-live="polite"></p>
+
+  <section class="build" id="build">
+    <header>
+      <h3>Build one</h3>
+      <p>Brewdeck runs on its own small touchscreen next to the machine, connected only by Wi-Fi. No soldering, no
+        wiring, nothing changed on the machine: you flash the screen over USB and pick your network on it.</p>
+    </header>
+    <div>
+      <h4>What you need</h4>
+      <ul class="need">
+        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          <span><b>A 4.3″ Sunton ESP32-8048S043-style screen</b> (ESP32-S3, 800 × 480, touch, USB-C). The Guition
+          JC4880P443 (ESP32-P4) works too, experimentally.</span></li>
+        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M2 9a15 15 0 0 1 20 0"/><path
+          d="M12 19.5h.01"/></svg>
+          <span><b>A Gaggiuino machine with its Wi-Fi web UI</b>, on the same 2.4 GHz network as the screen.</span></li>
+        <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/></svg>
+          <span><b>A Mac or Linux computer</b> with a USB cable and esptool.</span></li>
+      </ul>
+      <div class="spare" role="note"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path
+        d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+        <span><b>Use a spare screen.</b> Never flash the screen fitted to your machine: on a Gaggiuino Gen 3 machine it
+        also runs the machine's Wi-Fi and web UI, which Brewdeck needs.</span></div>
+    </div>
+    <div>
+      <h4>How it goes</h4>
+      <ol class="steps">
+        <li><span><b>Download</b> the package for your screen from the releases.</span></li>
+        <li><span><b>Back up</b> the screen's flash: the only way back to its original firmware.</span></li>
+        <li><span><b>Flash</b> it with the script in the package. It checks the chip and the backup first.</span></li>
+        <li><span><b>Choose your Wi-Fi</b> on the screen. It finds the machine by itself.</span></li>
+      </ol>
+      <div class="links">
+        <a class="go" href="https://github.com/pongells/brewdeck#installing">Installation guide</a>
+        <a href="https://github.com/pongells/brewdeck/releases">Releases</a>
+        <a href="https://github.com/pongells/brewdeck/blob/main/docs/manual.md">Manual</a>
+      </div>
+    </div>
+  </section>
 
   <div class="explain">
     <section>
@@ -302,8 +412,6 @@ footer p { margin: 0; max-width: 80ch; }
     return;
   }
   document.getElementById('loading').remove();
-  const hint = document.getElementById('hint');
-  hint.hidden = false;
   const fb = M._web_fb() >> 1;                      // uint16 index of the 800x480 RGB565 frame buffer
   const lut = new Uint32Array(65536);               // RGB565 -> RGBA (little endian: 0xAABBGGRR)
   for (let v = 0; v < 65536; v++) {
@@ -315,6 +423,7 @@ footer p { margin: 0; max-width: 80ch; }
   // "Machine on, Wi-Fi on\nScale on (Bluetooth), water 100 %\nready, shot idle. Keys: ..."
   const sw = {};
   for (const b of document.querySelectorAll('.sw')) sw[b.dataset.key] = b;
+  let machineOn = true, wifiOn = true;
   function setSw(key, on, text, warn) {
     const b = sw[key];
     b.dataset.warn = !!warn;
@@ -322,13 +431,54 @@ footer p { margin: 0; max-width: 80ch; }
     b.setAttribute('aria-checked', on ? 'true' : 'false');
   }
   function showState(s) {
-    const machine = /Machine on/.test(s), wifi = /Wi-Fi on/.test(s);
+    machineOn = /Machine on/.test(s); wifiOn = /Wi-Fi on/.test(s);
     const scale = /Scale on/.test(s), water = +(s.match(/water (\d+)/) || [0, 100])[1], heating = /heating/.test(s);
-    setSw('machine', machine, machine ? 'on' : 'off');
+    setSw('machine', machineOn, machineOn ? 'on' : 'off');
     setSw('heat', !heating, heating ? 'heating up' : 'ready');
     setSw('water', water >= 20, water < 20 ? water + ' %, refill' : water + ' %', water < 20);
     setSw('scale', scale, scale ? 'connected' : 'not connected');
-    setSw('wifi', wifi, wifi ? 'on' : 'off');
+    setSw('wifi', wifiOn, wifiOn ? 'on' : 'off');
+  }
+
+  // the status line under the screen: what to do, what the lines mean, or what a switch just did (one at a time)
+  const caption = document.getElementById('caption'), msg = document.getElementById('msg');
+  const HAND = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11V5a2 2 0 0 1 4 0v6"/><path d="M13 10a2 2 0 0 1 4 0v1a2 2 0 0 1 4 0v4a7 7 0 0 1-7 7h-1a7 7 0 0 1-6-3.4L4.5 15a2 2 0 0 1 3.3-2.2L9 14.5"/></svg>';
+  const DASH = '<svg width="16" height="4" viewBox="0 0 16 4" aria-hidden="true"><line x1="1" y1="2" x2="15" y2="2" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 4"/></svg>';
+  const key = (c, t, dash) => `<span class="key" style="--c:${c}">${dash ? DASH : '<i></i>'}${t}</span>`;
+  const MSG = {
+    tip: `<span class="tip">${HAND}<span>Click or tap the screen: it works like the real one.</span></span>`,
+    splash: `<span class="tip">${HAND}<span>The start-up screen. Tap it to skip; the shortcuts wait for it.</span></span>`,
+    off: '<span>The fake machine is off: this is what the screen shows when yours is switched off. Turn <b>Power</b> back on.</span>',
+    nowifi: '<span>The screen has no Wi-Fi: this is what it shows when the network is gone. Turn <b>Wi-Fi</b> back on.</span>',
+    shot: key('var(--text)', 'Weight') + key('var(--blue)', 'Pressure') + key('var(--gold)', 'Flow') +
+          key('var(--coral)', 'Temperature') + key('var(--muted)', 'target or previous shot', true),
+    steam: key('var(--coral)', 'Boiler temperature') + key('var(--blue)', 'Pressure') + key('var(--coral)', 'set point', true),
+  };
+  let shown = '', touched = false;
+  function setMsg(k) {
+    if (k === shown) return;
+    shown = k;
+    msg.innerHTML = MSG[k] || '';
+    caption.classList.toggle('note', k === 'off' || k === 'nowifi');
+  }
+
+  // "Pull a shot": while the recording plays it shows the time and stops the shot instead
+  const shot = document.getElementById('shot'), shotSub = shot.querySelector('span'), shotTitle = shot.querySelector('b');
+  const live = document.getElementById('live');
+  let playing = false;
+  function showShot(on, ms) {
+    if (on !== playing) {
+      playing = on;
+      shot.classList.toggle('playing', on);
+      shot.dataset.action = on ? 'Stop shot' : 'Shot';
+      shotTitle.textContent = on ? 'Stop the shot' : 'Pull a shot';
+      if (!on) shotSub.textContent = 'Plays a recorded 33-second shot';
+      live.textContent = on ? 'Shot playing on the screen.' : 'The shot has finished; its review is on the screen.';
+    }
+    if (on) {
+      const s = Math.max(0, Math.floor((ms - 500) / 1000));      // the recording starts 0.5 s before the first point
+      shotSub.textContent = 'Playing ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }
   }
 
   const steam = document.getElementById('steam'), steam10 = document.getElementById('steam10');
@@ -349,6 +499,9 @@ footer p { margin: 0; max-width: 80ch; }
     steam10.setAttribute('aria-pressed', sp === 10 ? 'true' : 'false');
     const sh = !!M._web_splash();                  // the start-up splash covers the screen: nothing to press meanwhile
     if (sh !== splash) { splash = sh; for (const b of btns) b.disabled = sh; }
+    showShot(!!M._web_shot_playing(), M._web_shot_ms());
+    const brew = M._web_brew_shown();
+    setMsg(sh ? 'splash' : !machineOn ? 'off' : !wifiOn ? 'nowifi' : sp ? 'steam' : brew ? 'shot' : touched ? '' : 'tip');
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -356,7 +509,7 @@ footer p { margin: 0; max-width: 80ch; }
   // pointer = finger, in panel coordinates
   const at = (e) => { const r = cv.getBoundingClientRect(); return [Math.round((e.clientX - r.left) * 800 / r.width), Math.round((e.clientY - r.top) * 480 / r.height)]; };
   let down = false;
-  cv.addEventListener('pointerdown', (e) => { hint.hidden = true; down = true; cv.setPointerCapture(e.pointerId); M._web_touch(...at(e), 1); e.preventDefault(); });
+  cv.addEventListener('pointerdown', (e) => { touched = true; down = true; cv.setPointerCapture(e.pointerId); M._web_touch(...at(e), 1); e.preventDefault(); });
   cv.addEventListener('pointermove', (e) => { if (down) M._web_touch(...at(e), 1); });
   const up = (e) => { if (!down) return; down = false; M._web_touch(...at(e), 0); };
   cv.addEventListener('pointerup', up);
@@ -364,6 +517,33 @@ footer p { margin: 0; max-width: 80ch; }
 
   for (const b of btns)
     b.addEventListener('click', () => M.ccall('web_action', 'number', ['string'], [b.dataset.action]));
+
+  // bigger screen: the browser's full screen (turned sideways on phones that allow it), else the device over the page
+  const box = document.getElementById('screenbox'), bigger = document.getElementById('bigger');
+  const biggerLabel = bigger.querySelector('span');
+  const isBig = () => document.fullscreenElement === box || box.classList.contains('expanded');
+  function syncBig() {
+    const big = isBig();
+    bigger.setAttribute('aria-pressed', big ? 'true' : 'false');
+    biggerLabel.textContent = big ? 'Close' : 'Bigger';
+    bigger.setAttribute('aria-label', big ? 'Close the bigger screen' : 'Bigger screen');
+  }
+  bigger.addEventListener('click', async () => {
+    if (isBig()) {
+      if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+      box.classList.remove('expanded');
+    } else if (box.requestFullscreen && document.fullscreenEnabled) {
+      try {
+        await box.requestFullscreen();
+        await screen.orientation?.lock?.('landscape').catch(() => {});
+      } catch { box.classList.add('expanded'); }
+    } else {
+      box.classList.add('expanded');
+    }
+    syncBig();
+  });
+  document.addEventListener('fullscreenchange', syncBig);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && box.classList.contains('expanded')) { box.classList.remove('expanded'); syncBig(); } });
 })();
 </script>
 </body>

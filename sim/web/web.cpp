@@ -29,6 +29,9 @@ EMSCRIPTEN_KEEPALIVE void web_touch(int x, int y, int down) {
 EMSCRIPTEN_KEEPALIVE int web_action(const char *name) { return run_named(name); }
 EMSCRIPTEN_KEEPALIVE const char *web_status(void) { return g_status_txt; }
 EMSCRIPTEN_KEEPALIVE int web_shot_playing(void) { return g_shot_on; }
+// how far the recorded shot has played, in ms of shot time (the review fast-forward runs it at 10x)
+EMSCRIPTEN_KEEPALIVE int web_shot_ms(void) { return g_shot_on ? (int)((SDL_GetTicks() - g_shot_t0) * (uint32_t)g_speed) : 0; }
+EMSCRIPTEN_KEEPALIVE int web_brew_shown(void) { return ui_test_brew_shown(); }   // 0 none, 1 brewing, 2 done / review
 EMSCRIPTEN_KEEPALIVE int web_steam_speed(void) { return steam_speed(); }   // 0 none, 1, 10
 EMSCRIPTEN_KEEPALIVE int web_splash(void) { return ui_test_splash_shown(); }
 }
