@@ -9,8 +9,9 @@
 #define SCREEN_H 480
 
 // Rotation (Arduino_GFX): 1 = the panel's right edge (held in portrait) is the picture's top, 3 = its left edge.
+// 3: the board's SD card slot is at the bottom of the picture.
 #ifndef PANEL_ROT
-#define PANEL_ROT 1
+#define PANEL_ROT 3
 #endif
 #define PANEL_W 480
 #define PANEL_H 800

@@ -40,7 +40,8 @@ Custom UIs:
 New board:
 - The Guition JC4880P443 (ESP32-P4, 4.3" MIPI-DSI panel shown in landscape, Wi-Fi through its ESP32-C6): a release
   package `brewdeck-<version>-esp32p4.zip`, or `./build.sh ui-p4`. Tested like the Sunton: shots, review, previous
-  shot, history and steam.
+  shot, history and steam. The picture has the board's SD card slot at the bottom (`PANEL_ROT` in
+  `src/board/p4/board.h`; 1 turns it 180°).
 - `p4-c6-update`: a one-off tool that updates the P4 board's Wi-Fi chip firmware; with the firmware these boards ship
   with, the first Wi-Fi join dropped at every start (now retried after 1 s, so it is only slower). In the P4 package
   as `c6-update/`.
