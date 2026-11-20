@@ -78,23 +78,24 @@ control of the pump, valves or heater, and never a delete.
 > **Brewdeck needs its own screen.** Do not flash the screen fitted to your machine: on a Gaggiuino Gen 3 machine that
 > screen also runs the machine's Wi-Fi, web UI and network API, which Brewdeck itself needs. Use a spare screen.
 
-- **Screen**: a Sunton ESP32-8048S043-style 4.3" 800x480 RGB panel with an ESP32-S3 (16 MB flash, 8 MB PSRAM) and
-  GT911 capacitive touch, powered over USB-C. Pins and timings: [`firmware/src/board/s3/board.h`](firmware/src/board/s3/board.h).
-  Experimental: the Guition JC4880P443 (ESP32-P4), see [below](#esp32-p4-board-experimental).
+- **Screen**: one of two tested 4.3" touchscreens, both powered over USB-C:
+  - a Sunton ESP32-8048S043-style 800x480 RGB panel with an ESP32-S3 (16 MB flash, 8 MB PSRAM) and GT911 capacitive
+    touch. Pins and timings: [`firmware/src/board/s3/board.h`](firmware/src/board/s3/board.h).
+  - the Guition JC4880P443 with an ESP32-P4, see [below](#esp32-p4-board).
 - **Machine**: a Gaggiuino machine with its Wi-Fi web UI, on the same 2.4 GHz network as the screen. Tested with one
   machine (Gaggiuino core 8aaf6f0 on an STM32U585 board, release c929939); a Gaggiuino update can change the protocol.
   Brewdeck keeps one of the machine's three WebSocket connections open and shows up to 24 profiles.
 
-**Tested on one screen only**: a spare Gaggiuino Gen 3 screen (the Sunton hardware above) that had not yet received
-Gaggiuino's update [v.8aaf6f0](https://github.com/Zer0-bit/gaggiuino/releases/tag/main-8aaf6f0). That update locks the
-Gen 3 screen it runs on (it migrates the partitions and sets eFuses), so a screen that has had it cannot take other
-firmware; the Gen 3.5 screen is locked too. The same Sunton model bought on its own should work (the flash script then
-writes it plainly), but that is untested: if you try one, please say how it went in the
+**The Sunton was tested on one unit only**: a spare Gaggiuino Gen 3 screen (the Sunton hardware above) that had not yet
+received Gaggiuino's update [v.8aaf6f0](https://github.com/Zer0-bit/gaggiuino/releases/tag/main-8aaf6f0). That update
+locks the Gen 3 screen it runs on (it migrates the partitions and sets eFuses), so a screen that has had it cannot take
+other firmware; the Gen 3.5 screen is locked too. The same Sunton model bought on its own should work (the flash script
+then writes it plainly), but that is untested: if you try one, please say how it went in the
 [discussions](https://github.com/pongells/brewdeck/discussions).
 
 ## Installing
 
-For the Sunton ESP32-S3 screen; the P4 board is [below](#esp32-p4-board-experimental). You need
+For the Sunton ESP32-S3 screen; the P4 board is [below](#esp32-p4-board). You need
 [esptool](https://github.com/espressif/esptool) v5 (`brew install esptool` or `pip install esptool`; esptool 4.x spells
 the commands `read_flash` / `write_flash`) and bash (macOS, Linux; on Windows untested, WSL may work). The serial port
 is `/dev/cu.usbserial-…` on macOS, `/dev/ttyUSB0` or similar on Linux.
@@ -147,11 +148,11 @@ write it back as it is, **without** `--encrypt` (a Gen 3 backup already holds th
 esptool --port /dev/cu.usbserial-XXXX --baud 460800 write-flash 0x0 backup/gaggiuino-screen-backup.bin
 ```
 
-### ESP32-P4 board (experimental)
+### ESP32-P4 board
 
 The Guition JC4880P443 (ESP32-P4, 4.3" 480x800 MIPI-DSI panel shown in landscape, Wi-Fi through an ESP32-C6) is a
-retail board with no flash encryption. It runs every screen live from the machine and has been through a full shot
-(brewing, review, previous shot, history). Use the USB-C socket that carries data (on our board the top one, marked
+retail board with no flash encryption. It runs every screen live from the machine, through shots (brewing,
+review, previous shot, history) and steam. Use the USB-C socket that carries data (on our board the top one, marked
 D4D5; the other one only powers it). Each release has a package for it, `brewdeck-<version>-esp32p4.zip`: follow its
 INSTALL.txt. Or build it (next section), from `firmware/`:
 
@@ -226,8 +227,7 @@ talks to the machine. Security problems: please report them privately, see [SECU
 
 Plans, not promises:
 
-- **The ESP32-P4 board** out of experimental: more daily use, and its speaker for optional sounds
-  ([#2](https://github.com/pongells/brewdeck/issues/2)).
+- **The ESP32-P4 board's speaker** for optional sounds ([#2](https://github.com/pongells/brewdeck/issues/2)).
 - **Updates over Wi-Fi** for the screen, and later **switching between UIs** from the screen itself
   ([#3](https://github.com/pongells/brewdeck/issues/3)).
 - **Your own UI in your own repository**, built against a tagged core release, with a list of UIs here
@@ -267,4 +267,4 @@ Not covered by Brewdeck's license:
 ## Status
 
 A personal project, in daily use on one machine, where every screen above has been checked. The first-run setup on a
-new Sunton board is untested, and the P4 board is experimental (one full shot so far).
+new Sunton board is untested.

@@ -1,7 +1,7 @@
 name: Release
 
 # A tag like v0.1.0 builds the release images (no debug web server, no Wi-Fi network built in) and publishes them as
-# one GitHub release: brewdeck-<tag>-esp32s3.zip and brewdeck-<tag>-esp32p4.zip (experimental) (images, flash.sh,
+# one GitHub release: brewdeck-<tag>-esp32s3.zip and brewdeck-<tag>-esp32p4.zip (images, flash.sh,
 # SHA256SUMS, INSTALL.txt), notes from CHANGELOG.md.
 on:
   push:
@@ -62,7 +62,7 @@ jobs:
             echo
             echo "Install: download the zip for your board, read INSTALL.txt (backup first)."
             echo "- \`brewdeck-$GITHUB_REF_NAME-esp32s3.zip\`: Sunton ESP32-S3 screen"
-            echo "- \`brewdeck-$GITHUB_REF_NAME-esp32p4.zip\`: Guition ESP32-P4 board (experimental)"
+            echo "- \`brewdeck-$GITHUB_REF_NAME-esp32p4.zip\`: Guition ESP32-P4 board"
             echo
             echo "SHA-256:"
             echo '```'

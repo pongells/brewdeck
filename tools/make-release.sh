@@ -2,8 +2,8 @@
 # Package a release of Brewdeck for one board: the prebuilt images, flash.sh, checksums and a short INSTALL.txt, as
 # dist/brewdeck-<version>-<chip>.zip. Builds the board's release env (no debug web server) first.
 #   tools/make-release.sh v0.1.0          the Sunton ESP32-S3 screen  -> brewdeck-v0.1.0-esp32s3.zip
-#   tools/make-release.sh v0.1.0 p4       the Guition ESP32-P4 board  -> brewdeck-v0.1.0-esp32p4.zip (experimental; also
-#                                         carries the board's Wi-Fi chip updater in c6-update/)
+#   tools/make-release.sh v0.1.0 p4       the Guition ESP32-P4 board  -> brewdeck-v0.1.0-esp32p4.zip (also carries
+#                                         the board's Wi-Fi chip updater in c6-update/)
 # The image has no Wi-Fi network built in (wifi_config.h from the example): the screen starts on "No Wi-Fi set up".
 set -euo pipefail
 VER="${1:?usage: tools/make-release.sh <version, e.g. v0.1.0> [s3|p4]}"
@@ -69,8 +69,8 @@ EOF
 else
 cat > "$OUT/INSTALL.txt" <<EOF
 Brewdeck $VER: unofficial Wi-Fi screen for Gaggiuino machines (not affiliated with the Gaggiuino project).
-EXPERIMENTAL: for the Guition JC4880P443 4.3" ESP32-P4 board (480x800 panel shown in landscape). Full instructions:
-https://github.com/pongells/brewdeck#esp32-p4-board-experimental
+For the Guition JC4880P443 4.3" ESP32-P4 board (480x800 panel shown in landscape). Full instructions:
+https://github.com/pongells/brewdeck#esp32-p4-board
 
 You need esptool v5 (brew install esptool, or pip install esptool) and bash (macOS, Linux). Use the board's USB-C
 socket that carries data (on our board the top one, marked D4D5; the other one only powers it).

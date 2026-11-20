@@ -4,7 +4,7 @@
 //
 // The firmware in three layers:
 //   board  panel, touch, backlight, pins, frame buffer (one per hardware: the Sunton ESP32-S3 RGB panel, the Guition
-//          ESP32-P4 MIPI-DSI panel (experimental), the emulator and the web demo); hidden behind bd_display_* / bd_touch_*
+//          ESP32-P4 MIPI-DSI panel, the emulator and the web demo); hidden behind bd_display_* / bd_touch_*
 //   core   Wi-Fi, finding the machine, REST + WebSocket, protobuf, settings storage, logging, and the ONLY place
 //          that sends anything to the machine (it enforces when a command is allowed)
 //   UI     screens and interaction: anything that implements the four bd_ui_* functions at the end of this file,
