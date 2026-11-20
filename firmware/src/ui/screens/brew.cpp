@@ -281,6 +281,7 @@ static void br_start(void) {
   br_target();
   lv_obj_set_hidden(g_brew, false);
   lv_obj_move_to_index(g_brew, -1);
+  ready_cover();
   lv_obj_invalidate(g_br_chart);
 }
 
@@ -301,6 +302,7 @@ void br_hide(void) {
   g_rv_hist = false;
   lv_obj_set_hidden(g_brew, true);
   rv_hide();
+  ready_cover();
 }
 
 // ---- shot review ----------------------------------------------------------------------------------------------------
@@ -389,6 +391,7 @@ static void rv_open(void) {
   lv_obj_set_hidden(g_brew, true);
   lv_obj_set_hidden(g_rv, false);
   lv_obj_move_to_index(g_rv, -1);
+  ready_cover();
   lv_obj_invalidate(g_rv_chart);
 }
 

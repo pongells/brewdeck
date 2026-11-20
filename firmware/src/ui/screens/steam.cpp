@@ -15,7 +15,7 @@ static int16_t g_st_s[ST_PTS];                      // temperature x10
 static int16_t g_st_ps[ST_PTS];                     // pressure x100
 static int g_st_n = 0, g_st_set_deg = 0;
 static uint32_t g_st_last = 0, g_st_t0 = 0;
-static bool g_st_on = false;
+bool g_st_on = false;
 static void st_draw(lv_event_t *e) {
   lv_layer_t *ctx = lv_event_get_layer(e);
   lv_area_t a;
@@ -138,6 +138,7 @@ void st_update(const bd_machine *d, bool on) {
   if (on != g_st_on) {
     g_st_on = on;
     set_hidden(g_st, !on);                          // stays in its build order: menu, brewing, offline, idle above
+    ready_cover();
     if (on) {
       g_st_n = 0;                                   // a new steam session: chart and clock from now
       g_st_last = 0;

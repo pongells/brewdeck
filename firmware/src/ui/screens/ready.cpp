@@ -21,6 +21,7 @@ int g_fl_mode = FL_UNKNOWN;                // machine's mode as bd_flush (BD_FLU
 bool g_fl_idle = false;                   // online, HOME, nothing running
 int g_fl_want = FL_UNKNOWN;                // mode asked for, until the machine reports it or the core refuses it
 static uint32_t g_fl_auto_ms = 0;          // FLUSH_AUTO seen since
+lv_obj_t *g_ready;                         // holds all of Ready (hidden while brewing, the review or steam covers it)
 // header and live values
 lv_obj_t *g_pill, *g_pill_dot, *g_pill_lbl;      // state pill
 lv_obj_t *g_prof_lbl;                      // active profile's name
@@ -696,20 +697,27 @@ static void footer_flush(lv_obj_t *scr) {
   lv_obj_align(fb, LV_ALIGN_TOP_RIGHT, -24, 406);
 }
 
+// Ready is hidden while the brewing screen, the review or steam covers it
+void ready_cover(void) { set_hidden(g_ready, g_br_state != BR_HIDDEN || g_st_on); }
+
 void build_ready(lv_obj_t *scr) {
-  ready_header(scr);
-  ready_temperature(scr);
-  ready_brew_temp(scr);
-  ready_stop_weight(scr);
-  ready_preview(scr);
-  lv_obj_t *fl = flex(scr, LV_FLEX_FLOW_ROW, 22);
+  // one full-screen container, so a screen that covers Ready can hide it: LVGL redraws a changed value even under an
+  // opaque layer, and each such redraw also draws the chart on top
+  g_ready = box(scr, 0, 0, 800, 480, COL_BG, 0);
+  lv_obj_set_style_bg_opa(g_ready, LV_OPA_TRANSP, 0);
+  ready_header(g_ready);
+  ready_temperature(g_ready);
+  ready_brew_temp(g_ready);
+  ready_stop_weight(g_ready);
+  ready_preview(g_ready);
+  lv_obj_t *fl = flex(g_ready, LV_FLEX_FLOW_ROW, 22);
   lv_obj_set_pos(fl, 24, 406);
   lv_obj_set_height(fl, 48);
   footer_water(fl);
   footer_scale(fl);
   footer_pressure(fl);
   footer_tare(fl);
-  footer_flush(scr);
+  footer_flush(g_ready);
 }
 
 // ---- building the keypad --------------------------------------------------------------------------------------------

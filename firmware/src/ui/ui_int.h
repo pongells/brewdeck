@@ -102,6 +102,8 @@ extern lv_obj_t *g_cursor;
 extern bool g_cursor_on;
 extern lv_obj_t *g_pill, *g_pill_dot, *g_pill_lbl;
 extern lv_obj_t *g_tank, *g_tank_fill, *g_tank_lbl, *g_tank_pct;
+extern lv_obj_t *g_ready;
+void ready_cover(void);   // hide Ready while brewing, the review or steam covers it
 extern lv_obj_t *g_prof_lbl;
 extern lv_obj_t *g_temp_lbl;
 extern lv_obj_t *g_scale_lbl;
@@ -167,6 +169,7 @@ void snap_apply(void);
 
 // ---- screens/steam.cpp ----------------------------------------------------------------------------------------------
 extern lv_obj_t *g_st;
+extern bool g_st_on;   // the steam screen is shown
 void st_update(const bd_machine *d, bool on);
 void build_steam(lv_obj_t *scr);
 
