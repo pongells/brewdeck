@@ -176,11 +176,13 @@ const char *ws_mode_name(int m) {
 
 uint32_t shot_name_hash(const char *s, size_t n) {
   uint32_t h = 2166136261u;
-  for (size_t i = 0; i < n && s[i]; i++) {
+  size_t kept = 0;
+  for (size_t i = 0; i < n && s[i] && kept < SHOT_NAME_HASH_MAX; i++) {
     const uint8_t c = (uint8_t)s[i];
     if (c < 32 || c > 126) continue;   // ASCII only, like the names the REST readers keep
     h ^= c;
     h *= 16777619u;
+    kept++;
   }
   return h;
 }

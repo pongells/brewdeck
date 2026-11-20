@@ -49,6 +49,7 @@ static const size_t SHOT_BUF_CAP = 64 * 1024;
 static uint32_t g_before_id = 0;
 static uint32_t g_prev_hash = 0, g_prev_dur10 = 0;
 static int g_prev_tries = 0;          // > 0: a request is pending
+static uint32_t g_prev_asked_ms = 0;  // when it was asked (dropped after 2 min)
 static int g_prev_state = PREV_NONE;
 static bd_shot *g_prev = NULL;      // PSRAM
 static uint32_t g_prev_seq = 0, g_prev_seen = 0;
@@ -150,9 +151,13 @@ static void profiles_step(const IPAddress &ip, char *buf, size_t cap, const Live
           next.p[i].weight = cur.p[j].weight;
           next.p[i].temp = cur.p[j].temp;
         }
+    int stale_id[BD_MAX_PROFILES], n_stale = 0;     // a re-read after a save that has not worked yet survives this
+    for (int i = 0; i < cur.count; i++) if (stale[i]) stale_id[n_stale++] = cur.p[i].id;
     cur = next;
     memset(tries, 0, sizeof tries);
     memset(stale, 0, sizeof stale);
+    for (int k = 0; k < n_stale; k++)
+      for (int i = 0; i < cur.count; i++) if (cur.p[i].id == stale_id[k]) stale[i] = true;
     shape_id = 0;                                   // re-read the active profile too (it may have been edited)
     shape_tries = 0;
     have_list = true;
@@ -203,10 +208,18 @@ static void prev_publish(int state) {
 // After a shot: find the previous shot of the same profile and load it. The newest stored shot must be newer than
 // g_before_id (the shot just shown); until the machine has stored it and re-sent the index, retry on the next cycles.
 // If nothing new is stored by the last try, the machine did not keep the shot: take the newest of the profile.
+// A request that could not run for 2 min (machine busy or off) is dropped.
 static void prev_step(const IPAddress &ip, const LiveData *d) {
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const int tries = g_prev_tries;
   if (tries <= 0) { xSemaphoreGive(g_net_mtx); return; }   // nothing asked for: no copy of the index
+  if (millis() - g_prev_asked_ms > 120000) {
+    g_prev_tries = 0;
+    xSemaphoreGive(g_net_mtx);
+    Log.println("previous shot: not found within 2 min, dropped");
+    prev_publish(PREV_FAILED);
+    return;
+  }
   const uint32_t hash = g_prev_hash, dur = g_prev_dur10;
   xSemaphoreGive(g_net_mtx);
   static WsShotIndex *ixp = NULL;
@@ -216,7 +229,13 @@ static void prev_step(const IPAddress &ip, const LiveData *d) {
   char *const buf = g_shot_buf;
   const size_t CAP = SHOT_BUF_CAP;
   if (!g_prev) g_prev = (bd_shot *)heap_caps_malloc(sizeof(bd_shot), MALLOC_CAP_SPIRAM);
-  if (!buf || !g_prev || !ixp) { g_prev_tries = 0; prev_publish(PREV_FAILED); return; }
+  if (!buf || !g_prev || !ixp) {
+    xSemaphoreTake(g_net_mtx, portMAX_DELAY);
+    g_prev_tries = 0;
+    xSemaphoreGive(g_net_mtx);
+    prev_publish(PREV_FAILED);
+    return;
+  }
   const WsShotIndex &ix = *ixp;
   bool last_try = false;
   auto retry = [&](const char *why) {
@@ -235,9 +254,11 @@ static void prev_step(const IPAddress &ip, const LiveData *d) {
   const int dd = at < 0 ? 0 : (int)ix.r[at].dur10 - (int)dur;
   const bool newer = g_before_id ? (uint32_t)latest > g_before_id : (dd >= -10 && dd <= 10);
   int from = at + 1;                                // search older shots of this profile from here
-  // stored (the REST id is newer) but not in the index yet: the index push was missed (a WebSocket gap), and the
-  // machine does not send it again. Every shot in it is older, so its newest of the profile is the previous one.
+  // stored (the REST id is newer) but not in the index yet: usually the index push is on its way, so wait for it; by
+  // the last try it was missed (a WebSocket gap) and the machine does not send it again. Every shot in the index is
+  // older then, so its newest of the profile is the previous one (wrong only if more than one push was missed).
   const bool ix_stale = at < 0 && g_before_id && (uint32_t)latest > g_before_id;
+  if (ix_stale && tries > 1) { retry("this shot is stored but not in the index yet"); return; }
   if (ix_stale) {
     from = 0;
     Log.printf("previous shot: shot %d is stored but not in the index yet, using the index as it is\n", latest);
@@ -553,6 +574,7 @@ void net_request_prev(const char *profile, int dur10) {
   g_prev_hash = shot_name_hash(profile, strlen(profile));
   g_prev_dur10 = dur10 < 0 ? 0 : (uint32_t)dur10;
   g_prev_tries = 8;                   // ~8 s for the machine to store the shot
+  g_prev_asked_ms = millis();
   g_prev_state = PREV_LOADING;
   g_prev_seq++;
   xSemaphoreGive(g_net_mtx);

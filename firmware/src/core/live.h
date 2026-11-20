@@ -64,4 +64,7 @@ typedef struct {                // ShotSnapshotDto  (action d_shot_snap, ~7/s wh
 // list); ts: Unix time of the shot (small = machine clock not set, a Gaggiuino quirk). ~2.8 KB: keep copies in PSRAM.
 typedef struct { uint32_t id, name_hash, dur10, ts; char name[40]; } WsShotRec;
 typedef struct { int n; WsShotRec r[BD_HISTORY_MAX]; } WsShotIndex;
-uint32_t shot_name_hash(const char *s, size_t n);   // FNV-1a over the printable ASCII bytes (stops at NUL)
+// FNV-1a over the first SHOT_NAME_HASH_MAX printable ASCII bytes (stops at NUL): profile names on the screen are cut
+// at 47 characters, the machine's shot index carries them whole, and both must hash the same
+#define SHOT_NAME_HASH_MAX 47
+uint32_t shot_name_hash(const char *s, size_t n);
