@@ -13,9 +13,9 @@ on:
 permissions:
   contents: read
 
-concurrency:
+concurrency:   # deploys wait their turn instead of cancelling each other (a cancelled run marks its commit as failing)
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:

@@ -8,9 +8,9 @@ on:
 permissions:
   contents: read
 
-concurrency:   # a newer push to the same branch or PR replaces the running checks
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+concurrency:   # a newer push to a PR replaces its running checks; every push to main runs to the end (a cancelled run
+  group: ci-${{ github.ref }}                 # there marks the commit as not passing)
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   tests:
