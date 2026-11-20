@@ -212,11 +212,16 @@ def scene(name, tmp):
         else:
             lines.append(ln)
     lines += ['wait 500', 'quit']
-    r = subprocess.run([EMU], input='\n'.join(lines) + '\n', text=True, capture_output=True, timeout=600)
+    # commands in and log out through files, not pipes: with both as pipes the emulator can block writing its log while
+    # this script is still writing the commands, and both wait for ever
+    cmd, log = os.path.join(tmp, 'commands.txt'), os.path.join(tmp, 'emu.log')
+    with open(cmd, 'w') as f: f.write('\n'.join(lines) + '\n')
+    with open(cmd) as fin, open(log, 'w') as fout:
+        r = subprocess.run([EMU], stdin=fin, stdout=fout, stderr=subprocess.STDOUT, timeout=600)
     missing = [f for f in frames + [f for _, f, _ in stills] if not os.path.exists(f)]
     if r.returncode != 0 or missing:   # a crashed emulator must not leave a shorter GIF over the good one
         sys.exit('%s: the emulator exited with %d and %d of %d frames are missing; nothing written\n%s'
-                 % (name, r.returncode, len(missing), len(frames) + len(stills), r.stderr[-2000:]))
+                 % (name, r.returncode, len(missing), len(frames) + len(stills), open(log).read()[-2000:]))
     os.makedirs(OUT, exist_ok=True)
     for nm, f, d in stills:
         raw_to_image(f).save(os.path.join(d, nm + '.png'), optimize=True)
