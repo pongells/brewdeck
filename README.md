@@ -164,6 +164,10 @@ INSTALL.txt. Or build it (next section), from `firmware/`:
    firmware: update it once with
    `./build.sh p4-c6-update --flash` (it uses the network saved on the screen and installs Espressif's image only
    if its checksum matches; progress in the [serial log](docs/development.md#serial-log)), then flash `ui-p4` again.
+4. Fit an antenna. The board's Wi-Fi (the ESP32-C6) is wired to the small IPEX Gen3 (MHF3) socket on the module, next
+   to its shield: without an antenna it still joins, but weakly. On our board, by the machine: about -83 dBm without
+   one, -60 dBm with a 3 cm flexible 2.4 GHz antenna stuck inside the case, away from the board's metal. Plug it in
+   only with the board unpowered, and press it straight on.
 
 Pins: [`firmware/src/board/p4/board.h`](firmware/src/board/p4/board.h).
 

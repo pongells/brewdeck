@@ -83,3 +83,13 @@ tools/record.sh free                               # give the memory back
 ```
 
 Frames are copied while the UI may be drawing, so a changing value can look torn in a frame; the panel itself is fine.
+
+`tools/rssi_log.sh` logs the Wi-Fi signal (from `/heap`) to compare antennas or places, and prints all its runs side by
+side:
+
+```sh
+HOST=brewdeck-p4.local OUT=antenna tools/rssi_log.sh none 5        # 5 min, a read every 2 s -> antenna/rssi-none.csv
+HOST=brewdeck-p4.local OUT=antenna tools/rssi_log.sh fpc-3cm 5     # same place, another antenna: the table compares both
+```
+
+Compare runs on the same access point (the `ap` column): the screen may join or roam to another one.
