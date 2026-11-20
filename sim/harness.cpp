@@ -104,7 +104,7 @@ int main(int argc, char **argv) {
     d.scale_present = true; d.scale_type = BD_SCALE_BT; d.weight = 0.4f;
     d.link = BD_LINK_ONLINE; ui_set_live(&d);
     ui_set_wifi("HomeMesh", -61, 6, "02:00:00:00:00:02");
-    ui_set_sysinfo("Nov  5 2026 00:40", "0 h 12 min", "84 KB internal, 6.1 MB PSRAM");
+    ui_set_sysinfo("Nov  5 2026 00:40", "", "0 h 12 min", "84 KB internal, 6.1 MB PSRAM");
     static const char *const MP[] = {"menu", "menu_display", "menu_scale", "menu_wifi", "menu_about"};
     for (int k = -1; k < 4; k++) {
       ui_test_menu(k); lv_tick_inc(1100); lv_timer_handler();

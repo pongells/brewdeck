@@ -179,6 +179,8 @@ typedef struct {
   uint32_t uptime_s;
   bd_reset reset;                 // why the screen last started
   uint32_t free_internal, free_psram;   // bytes
+  char     version[40];           // the firmware's version: its release tag ("v0.2.0"), "v0.2.0-3-gabc1234" between
+                                  // releases, "" when not known (emulator)
 } bd_core_info;
 
 // ---- reading state (UI task only; valid until the next bd_ui_tick) -------------------------------------------------

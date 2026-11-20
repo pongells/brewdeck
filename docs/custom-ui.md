@@ -62,7 +62,7 @@ void bd_ui_wake(void);                 // the core wants the screen on (a shot, 
 | `bd_shot_history()` | the machine's newest 50 stored shots | `bd_seq_history()` |
 | `bd_live_shot()` | the running (or last) shot as recorded on this screen | `BD_EV_SHOT_*` events |
 | `bd_network_state()` | the screen's Wi-Fi, its address, the machine's address | `bd_seq_network()` |
-| `bd_core()`, `bd_local_time()` | core version, uptime, free memory, restart reason; the time (after NTP) | |
+| `bd_core()`, `bd_local_time()` | API version, firmware version (`version`, e.g. "v0.2.0"), uptime, free memory, restart reason; the time (after NTP) | |
 
 The `bd_seq_*` counters change whenever their data does: keep the last value you drew and redraw only when it moved.
 Live values are meaningful only while `link == BD_LINK_ONLINE`.

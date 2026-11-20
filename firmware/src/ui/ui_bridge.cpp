@@ -70,7 +70,7 @@ static void info_tick(void) {
   if (!c->free_internal && !c->free_psram) snprintf(mem, sizeof mem, "n/a (desktop)");
   else snprintf(mem, sizeof mem, "%u KB internal, %.1f MB PSRAM", (unsigned)(c->free_internal / 1024),
                 c->free_psram / 1048576.0);
-  ui_set_sysinfo(c->build, up, mem);
+  ui_set_sysinfo(c->build, c->version, up, mem);
   int h, mi;
   if (bd_local_time(&h, &mi, NULL)) ui_set_clock(h, mi);
   else ui_set_clock(-1, -1);

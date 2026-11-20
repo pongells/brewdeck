@@ -2,6 +2,12 @@
 
 Each release has a section here; its text becomes the release notes on GitHub.
 
+Versions follow [semantic versioning](https://semver.org): a release is a git tag `vMAJOR.MINOR.PATCH`. While Brewdeck is
+0.x (early), a new minor version (0.2, 0.3) brings features and a patch version (0.2.1) only fixes; 1.0 comes when it
+is ready for wider use. The screen shows its version on the splash and in Menu > About (between releases, e.g.
+`v0.2.0-3-gabc1234`: 3 commits after v0.2.0). The UI API (`BD_API_VERSION` in `brewdeck_core.h`) has its own number,
+which changes only when a custom UI would need changes.
+
 ## Unreleased
 
 On the screen:
@@ -14,6 +20,8 @@ On the screen:
 - A router that blocks or drops the screen no longer shows "did not accept the password": that message now needs the
   network to have refused the password before the screen's first join since it started.
 - A dropped first Wi-Fi join is retried after 1 s instead of 15 s.
+- The screen shows its version (the release tag, or how far past it a build is) on the splash, in Menu > About and
+  in the serial log at start.
 - No placeholder profile name on Ready: the name stays empty until the machine reports it.
 - The brewing chart's time axis starts at 30 s and grows in 15 s steps (fewer full redraws during a shot).
 - Shot history: a stored shot with a larger stop weight than the active profile's is drawn to its own scale.
@@ -39,8 +47,8 @@ For developers:
 - Scripts renamed: `firmware/build-pio.sh` is now `firmware/build.sh`, `sim/build.sh` is `sim/build-render.sh`,
   `tools/make_release.sh` is `tools/make-release.sh`.
 - A screen recorder in debug builds (`tools/record.sh`), [docs/development.md](docs/development.md), shared command
-  rules between the device and the emulator. The UI API (`brewdeck_core.h`, version 1) is unchanged; its comments
-  are clearer.
+  rules between the device and the emulator. The UI API (`brewdeck_core.h`, version 1) gains `bd_core()->version`;
+  nothing else changed, its comments are clearer.
 
 ## v0.1.0
 

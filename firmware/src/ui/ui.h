@@ -28,7 +28,7 @@ void ui_set_clock(int h, int m);                          // local time for the 
 void ui_on_settings(void (*cb)(int bright, int idle_min, bool bounce, bool splash));
 void ui_set_settings(int bright, int idle_min, bool bounce, bool splash);   // saved settings at boot
 void ui_set_wifi(const char *ssid, int rssi, int channel, const char *ap);   // menu: Wi-Fi page
-void ui_set_sysinfo(const char *build, const char *uptime, const char *memory);   // menu: About page
+void ui_set_sysinfo(const char *build, const char *version, const char *uptime, const char *memory);   // About page
 void ui_set_wifi_scan(const bd_wifi_net *n, int count, bool scanning);
 void ui_set_wifi_join(int state);                         // bd_join
 void ui_set_offline_reason(int why, const char *ip);     // bd_why: why the link is down

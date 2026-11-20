@@ -17,3 +17,21 @@ if board not in ("s3", "p4"):
     raise SystemExit("custom_board=%s: expected s3 or p4" % board)
 env.Replace(SRC_FILTER=["-<*>", "+<board/common/>", "+<board/%s/>" % board, "+<core/>", "+<%s/>" % ui])
 print("Brewdeck UI: src/%s, board %s" % (ui, board))
+
+# The firmware's version: the git tag ("v0.2.0" on a release), "v0.2.0-3-gabc1234" between releases (3 commits after
+# it), "-dirty" with uncommitted changes, a bare commit hash without tags (shallow CI checkouts). Written to a header
+# in the build folder (core.cpp includes it if present), rewritten only when it changes so only that file recompiles.
+import subprocess
+try:
+    ver = subprocess.check_output(["git", "describe", "--tags", "--always", "--dirty"],
+                                  cwd=env.subst("$PROJECT_DIR"), stderr=subprocess.DEVNULL).decode().strip()
+except Exception:
+    ver = ""
+gen = os.path.join(env.subst("$BUILD_DIR"), "gen")
+os.makedirs(gen, exist_ok=True)
+hdr = os.path.join(gen, "brewdeck_version.h")
+text = '#pragma once\n#define BREWDECK_VERSION "%s"\n' % ver.replace('"', "")
+if not os.path.exists(hdr) or open(hdr).read() != text:
+    open(hdr, "w").write(text)
+env.Append(CPPPATH=[gen])
+print("Brewdeck version: %s" % (ver or "unknown"))

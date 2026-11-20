@@ -19,7 +19,8 @@ static lv_obj_t *g_disp_tog[2][2], *g_disp_tog_l[2][2];
 static void (*g_settings_cb)(int bright, int idle_min, bool bounce, bool splash) = NULL;
 bd_machine g_menu_live;
 int g_menu_link = BD_LINK_CONNECTING;
-static char g_sys_txt[3][64] = {"", "", ""};   // build, uptime (+ restart reason), memory
+static char g_sys_txt[3][64] = {"", "", ""};   // build (version + date), uptime (+ restart reason), memory
+static char g_sys_ver[40] = "";                  // the firmware version, "" when not known
 static const int IDLE_OPTS[] = {0, 1, 2, 5, 10, 20, 30, 60};
 static const char *const PAGE_NAMES[MENU_PAGES] = {"Display", "Scale", "Wi-Fi", "About", "", "", "Machine address",
                                                      "Shot history"};
@@ -32,14 +33,16 @@ void ui_set_settings(int bright, int idle_min, bool bounce, bool splash) {
   g_idle_bounce = bounce;
   bl_set(g_bright);
 }
-void ui_set_sysinfo(const char *build, const char *uptime, const char *memory) {
-  // the compiler's "Nov  5 2026 00:40:12" as "5 Nov 2026, 00:40"
-  char mon[4]; int day, year, hh, mm;
+void ui_set_sysinfo(const char *build, const char *version, const char *uptime, const char *memory) {
+  // the compiler's "Nov  5 2026 00:40:12" as "5 Nov 2026, 00:40", after the version when there is one
+  char mon[4], when[40]; int day, year, hh, mm;
   const bool emu = !strncmp(build, "emulator ", 9);
   if (sscanf(build + (emu ? 9 : 0), "%3s %d %d %d:%d", mon, &day, &year, &hh, &mm) == 5)
-    snprintf(g_sys_txt[0], sizeof g_sys_txt[0], "%s%d %s %d, %02d:%02d", emu ? "emulator " : "", day, mon, year, hh,
-             mm);
-  else snprintf(g_sys_txt[0], sizeof g_sys_txt[0], "%s", build);
+    snprintf(when, sizeof when, "%s%d %s %d, %02d:%02d", emu ? "emulator " : "", day, mon, year, hh, mm);
+  else snprintf(when, sizeof when, "%s", build);
+  snprintf(g_sys_ver, sizeof g_sys_ver, "%s", version ? version : "");
+  if (g_sys_ver[0]) snprintf(g_sys_txt[0], sizeof g_sys_txt[0], "%s \xC2\xB7 %s", g_sys_ver, when);
+  else snprintf(g_sys_txt[0], sizeof g_sys_txt[0], "%s", when);
   snprintf(g_sys_txt[1], sizeof g_sys_txt[1], "%s", uptime);
   snprintf(g_sys_txt[2], sizeof g_sys_txt[2], "%s", memory);
 }
@@ -71,6 +74,7 @@ static void menu_refresh(void) {
     const char *bd = g_sys_txt[0];
     if (!strncmp(bd, "emulator ", 9)) bd += 9;
     if (g_upd_known) snprintf(b, sizeof b, "Machine update available");
+    else if (g_sys_ver[0]) snprintf(b, sizeof b, "%s", g_sys_ver);
     else if (sscanf(bd, "%d %3s", &day, mon) == 2 || sscanf(bd, "%3s %d", mon, &day) == 2)
       snprintf(b, sizeof b, "Built %d %s", day, mon);
     else snprintf(b, sizeof b, "Screen firmware");

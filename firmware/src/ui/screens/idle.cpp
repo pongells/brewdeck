@@ -197,10 +197,12 @@ void ui_splash(void) {
   lv_obj_align(name, LV_ALIGN_TOP_MID, 0, 230);
   lv_obj_t *sub = label(g_splash, "Unofficial Wi-Fi screen for Gaggiuino machines", F_TEXT, COL_MUTED);
   lv_obj_align(sub, LV_ALIGN_TOP_MID, 0, 304);
-  char b[40], mon[4] = "";
+  char b[72], mon[4] = "";
   int day = 0, year = 0;
-  if (sscanf(__DATE__, "%3s %d %d", mon, &day, &year) == 3) snprintf(b, sizeof b, "Built %d %s %d", day, mon, year);
-  else snprintf(b, sizeof b, " ");
+  const char *ver = bd_core()->version;              // "v0.2.0 · Built 20 Nov 2026" (no version: the date alone)
+  if (sscanf(__DATE__, "%3s %d %d", mon, &day, &year) == 3)
+    snprintf(b, sizeof b, "%s%sBuilt %d %s %d", ver, ver[0] ? " \xC2\xB7 " : "", day, mon, year);
+  else snprintf(b, sizeof b, "%s", ver[0] ? ver : " ");
   lv_obj_t *bl = label(g_splash, b, F_TEXT, COL_FAINT);
   lv_obj_align(bl, LV_ALIGN_TOP_MID, 0, 430);
   lv_timer_t *t = lv_timer_create(on_splash_timer, 5000, NULL);

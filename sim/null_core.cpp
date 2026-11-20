@@ -18,6 +18,7 @@ void bd_set_machine_address(const char *) {}
 void bd_set_backlight(int) {}
 void bd_display_stats(uint32_t *us, uint32_t *px, bool) { if (us) *us = 0; if (px) *px = 0; }
 void bd_debug_route(const char *, bd_debug_fn) {}
+const bd_core_info *bd_core(void) { static bd_core_info i; return &i; }   // no version, no build: the renders stay fixed
 void bd_log(const char *, ...) {}
 void *bd_alloc(size_t n, bd_mem) { return malloc(n); }
 void bd_free(void *p) { free(p); }

@@ -13,7 +13,7 @@ void cs_take_shape(const bd_profile_shape *s);
 void cs_take_index(const WsShotIndex *ix);
 bd_network *cs_network(void);                           // fill it, then cs_network_done()
 void cs_network_done(void);
-void cs_core_info(const char *build, bd_reset reset);   // once at start
+void cs_core_info(const char *build, bd_reset reset, const char *version = "");   // once at start
 
 // events: each calls bd_ui_event at once (on the caller's task: the UI task)
 void cs_shot_point(const WsShot *s);                    // also records the live shot (bd_live_shot)

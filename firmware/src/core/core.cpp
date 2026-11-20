@@ -10,6 +10,12 @@
 #include <stddef.h>
 #include <stdio.h>
 #include "brewdeck_core.h"
+#if __has_include("brewdeck_version.h")    // written by ui_select.py at build time (git describe)
+#include "brewdeck_version.h"
+#endif
+#ifndef BREWDECK_VERSION
+#define BREWDECK_VERSION ""
+#endif
 #include "core_internal.h"
 #include "core_state.h"
 #include "board_core.h"
@@ -185,8 +191,9 @@ void bd_core_setup(void) {
   board_serial_begin();   // the board's log port (src/board/<board>)
   delay(200);
   const esp_reset_reason_t r = esp_reset_reason();
-  cs_core_info(__DATE__ " " __TIME__, reset_of(r));
-  Log.printf("boot: started (reset reason %d)\n", (int)r);
+  cs_core_info(__DATE__ " " __TIME__, reset_of(r), BREWDECK_VERSION);
+  Log.printf("boot: Brewdeck %s, built %s %s, started (reset reason %d)\n", BREWDECK_VERSION[0] ? BREWDECK_VERSION : "?",
+             __DATE__, __TIME__, (int)r);
   net_begin();                      // before the panel starts (see net.h)
   Log.println(board_begin() ? "touch ok" : "touch NOT found");
   cs_blank_screen();

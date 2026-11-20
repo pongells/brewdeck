@@ -174,9 +174,10 @@ void cs_take_index(const WsShotIndex *ix) {
 }
 bd_network *cs_network(void) { return &g_net; }
 void cs_network_done(void) { g_seq_net++; }
-void cs_core_info(const char *build, bd_reset reset) {
+void cs_core_info(const char *build, bd_reset reset, const char *version) {
   g_info.api_version = BD_API_VERSION;
   cpy(g_info.build, sizeof g_info.build, build);
+  cpy(g_info.version, sizeof g_info.version, version);
   g_info.reset = reset;
 }
 

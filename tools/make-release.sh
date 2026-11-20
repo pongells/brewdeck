@@ -23,6 +23,9 @@ fi
 cp "$FW/include/wifi_config.example.h" "$FW/include/wifi_config.h"
 (cd "$FW" && UI=ui ./build.sh "$ENV")
 [[ $BOARD == p4 ]] && (cd "$FW" && ./build.sh p4-c6-update)
+# the version built into the image (git describe, firmware/ui_select.py) should be the release's own tag
+BUILT="$(sed -n 's/^#define BREWDECK_VERSION "\(.*\)"$/\1/p' "$FW/.pio/build/$ENV/gen/brewdeck_version.h" 2>/dev/null || true)"
+[[ "$BUILT" == "$VER" ]] || echo "WARNING: the image says version '${BUILT:-unknown}', not $VER (tag the commit first, no local changes)"
 NAME="brewdeck-$VER-$CHIP"
 OUT="$ROOT/dist/$NAME"
 rm -rf "$OUT" "$ROOT/dist/$NAME.zip"
