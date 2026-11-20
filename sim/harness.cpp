@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
   }
   {
     // profile preview + target weight from real profiles (sim/data, GET /api/profile/<id>)
-    static const int ids[] = {8, 1, 4, 5, 2};
+    static const int ids[] = {8, 1, 4, 5, 7};
     bd_machine d; memset(&d, 0, sizeof d); d.readiness = BD_RD_UNKNOWN;
     d.temperature = 90.1f; d.target_temp = 90; d.water_level = 18; strcpy(d.mode, "HOME");
     for (int id : ids) {

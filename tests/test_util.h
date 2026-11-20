@@ -7,7 +7,10 @@
 static int fails = 0;
 #define CHECK(c) do { if (!(c)) { printf("FAIL %s:%d  %s\n", __FILE__, __LINE__, #c); fails++; } } while (0)
 
-// the file's bytes plus a 0 terminator; never freed (a test runs once)
+// the file's bytes plus a 0 terminator; kept until the test exits (listed here, so the leak checker does not flag
+// them; a test runs once)
+static char *g_slurped[32];
+static int g_nslurped = 0;
 static inline char *slurp(const char *path, size_t *len = NULL) {
   FILE *f = fopen(path, "rb");
   if (!f) { perror(path); exit(1); }
@@ -20,6 +23,7 @@ static inline char *slurp(const char *path, size_t *len = NULL) {
   if (!buf || n != (size_t)size) { fprintf(stderr, "%s: could not read\n", path); exit(1); }
   buf[n] = 0;
   if (len) *len = n;
+  if (g_nslurped < (int)(sizeof g_slurped / sizeof g_slurped[0])) g_slurped[g_nslurped++] = buf;
   return buf;
 }
 
