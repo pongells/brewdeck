@@ -33,8 +33,9 @@ example UI (firmware and emulator) and the P4 C6 updater automatically; the rend
 
 ## Hardware
 
-Brewdeck has been tested on one screen only (see the README). Merged changes are confirmed on that screen before a
-release; please say in your pull request what you tested and how (emulator, sim, your own hardware).
+Brewdeck has been tested on one screen of each supported model, the Sunton ESP32-S3 and the Guition ESP32-P4 (see the
+README). Merged changes are confirmed on those screens before a release; please say in your pull request what you
+tested and how (emulator, sim, your own hardware).
 
 ## Style
 
@@ -46,6 +47,24 @@ release; please say in your pull request what you tested and how (emulator, sim,
 - The UI follows the design system in [docs/design-system.md](docs/design-system.md): take fonts, colours and
   radii from `firmware/src/ui/theme.h` by name, never as raw values.
 - Never commit Wi-Fi credentials (`firmware/include/wifi_config.h` is git-ignored) or a backup of a screen's flash.
+
+## Commits
+
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/):
+
+```
+<type>(<scope>): <summary>
+
+<body: what changed and why, wrapped at 72 columns>
+```
+
+- **type**: `feat` (something new for users or UI authors), `fix` (a bug), `perf`, `refactor` (no change in
+  behaviour), `docs`, `test`, `build` (build scripts, PlatformIO, toolchains), `ci`, `chore` (anything else).
+- **scope** (optional): the part it touches: `core`, `ui`, `board`, `s3`, `p4`, `sim`, `web`, `tools`, `docs`.
+- **summary**: imperative, lower case, no full stop, up to about 72 characters ("fix(core): find the previous shot
+  after a WebSocket gap").
+- A change that breaks the UI API (`brewdeck_core.h`) or a saved setting: `!` after the type or scope and a
+  `BREAKING CHANGE:` line in the body.
 
 By contributing you agree that your contribution is licensed under this project's license (the PolyForm
 Noncommercial License 1.0.0; MIT for the example UI in `firmware/src/ui_minimal`), and that the project's author may
