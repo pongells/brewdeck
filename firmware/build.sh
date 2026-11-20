@@ -7,6 +7,7 @@
 #   ./build.sh p4-c6-update --flash   P4 board: update its Wi-Fi chip's firmware (src/c6update), then flash ui-p4
 #   ./build.sh touchtest --flash      S3: raw touch test (src/touchtest)
 #   UI=ui_minimal ./build.sh ui   another UI folder under src/ (default: ui, Brewdeck's own)
+#   UI=../my-ui ./build.sh ui     a UI folder outside this repository (any path containing a /)
 # Env: PORT=/dev/cu.usbserial-XXXX (default: esptool auto-detect)  GAGGI_BACKUP=path to the 16 MB backup
 #      FLASH_ENC=encrypted|plain|auto (what you expect; checked against the chip)  NO_BACKUP=1 (plain boards only)
 #      DRY_RUN=1 (show the flash decision and command, write nothing)
@@ -15,6 +16,7 @@
 # `pio run -t upload`: it ignores all this.
 set -euo pipefail
 TARGET="${1:-ui}"; FLASH=0
+CALLER="$PWD"
 case "${2:-}" in "") ;; --flash) FLASH=1 ;; *) echo "unknown option '$2' (only --flash)" >&2; exit 2 ;; esac
 [[ "$TARGET" == -* ]] && { echo "first argument is the env (ui, ui-debug, ui-p4, ...), then --flash" >&2; exit 2; }
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,7 +30,11 @@ fi
 # pioarduino needs Python <= 3.14 (Homebrew's platformio runs on 3.15): run PlatformIO in an isolated uv env
 PIO="${PIO:-uvx --python 3.14 --from platformio pio}"
 # which UI folder under src/ is built with the core (ui_select.py): Brewdeck's own by default
-export BREWDECK_UI="${UI:-ui}"
+UI="${UI:-ui}"
+if [[ "${UI%/}" == */* ]]; then   # a path, not a folder name under src/: resolve it from where build.sh was called
+  UI="$(cd "$CALLER" && cd "$UI" && pwd)" || { echo "no UI folder '${UI}'" >&2; exit 2; }
+fi
+export BREWDECK_UI="$UI"
 # the build date and time (__DATE__ / __TIME__, shown in About and on the splash) are fixed when a file compiles.
 # PlatformIO (SCons) recompiles by content, not by date, so remove the objects of the files that use them: they always
 # recompile and the date is this build's

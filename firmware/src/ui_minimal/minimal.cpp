@@ -8,7 +8,7 @@
 // Everything here runs on the UI task: the core calls bd_ui_init once, then bd_ui_tick every loop pass and
 // bd_ui_event for each event. Read state with bd_*_state() / bd_profile_list(); redraw only what changed (bd_seq_*).
 #include <stdio.h>
-#include "../core/bd_lvgl9.h"   // LVGL 9 on the core's display and touch (include it in one file)
+#include "bd_lvgl9.h"           // LVGL 9 on the core's display and touch (include it in one file)
 
 extern "C" const bd_ui_desc BD_UI = {"minimal", "1.0", 1};   // name = its own settings namespace; 1 = the API version it was written for
 

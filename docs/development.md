@@ -39,7 +39,7 @@ Prerequisites and the first build: README, [Building](../README.md#building). In
 | `p4-c6-update` | one-off: updates the P4 board's ESP32-C6 Wi-Fi firmware (`src/c6update`) |
 | `touchtest` | raw touch test for the S3: shows touch coordinates, tap the corners to check the axes |
 
-`./build.sh <env>` builds, `--flash` flashes through `flash.sh`; `UI=<folder>` builds another UI folder. Options are
+`./build.sh <env>` builds, `--flash` flashes through `flash.sh`; `UI=<folder>` builds another UI folder (a folder name under `src/`, or a path to one outside the repository). Options are
 in the header of [`build.sh`](../firmware/build.sh). Switching between S3 and P4 builds recompiles the Arduino
 libraries (2-3 minutes).
 

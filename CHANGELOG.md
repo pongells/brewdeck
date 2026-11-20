@@ -34,6 +34,9 @@ On the screen:
 - A pressure reading that is not a number no longer reaches the charts.
 - After a profile is saved, its stored values are read again even if the first read fails.
 
+Custom UIs:
+- A UI can live outside this repository: `UI=<path>` for `./build.sh` and `sim/build-emu.sh` (docs/custom-ui.md).
+
 New board:
 - The Guition JC4880P443 (ESP32-P4, 4.3" MIPI-DSI panel shown in landscape, Wi-Fi through its ESP32-C6): a release
   package `brewdeck-<version>-esp32p4.zip`, or `./build.sh ui-p4`. Tested like the Sunton: shots, review, previous

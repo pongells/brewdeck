@@ -35,3 +35,4 @@ __pycache__/
 ws_schema*.json
 firmware/include/wifi_config.h.local
 dist/
+firmware/src/ui_ext

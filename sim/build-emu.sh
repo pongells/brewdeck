@@ -2,10 +2,18 @@
 # Interactive emulator: a UI on the core API in an SDL2 window with a fake machine from sim/data (see emu.cpp).
 # Usage: sim/build-emu.sh && sim/emu        Needs: brew install sdl2 (SDL2 API; Homebrew ships sdl2-compat on SDL3).
 #        UI=ui_minimal sim/build-emu.sh && sim/emu-ui_minimal    another UI folder under firmware/src (default: ui)
+#        UI=../my-ui sim/build-emu.sh && sim/emu-my-ui           a UI folder outside this repository (a path)
 set -euo pipefail
+CALLER="$PWD"
 cd "$(dirname "$0")"
 HERE="$PWD"; P="$HERE/../firmware"
-UI="${UI:-ui}"; UI="${UI%/}"; UD="$P/src/$UI"
+UI="${UI:-ui}"; UI="${UI%/}"
+if [[ "$UI" == */* ]]; then   # a UI outside this repository: a path from where the script was called
+  UD="$(cd "$CALLER" && cd "$UI" && pwd)" || { echo "no UI folder $UI"; exit 1; }; UI="$(basename "$UD")"
+  [[ "$UI" == ui ]] && UI=ui-ext   # keep Brewdeck's own sim/emu
+else
+  UD="$P/src/$UI"
+fi
 [[ -d "$UD" ]] || { echo "no UI folder $UD"; exit 1; }
 SDL_CFLAGS="$(sdl2-config --cflags)"; SDL_LIBS="$(sdl2-config --libs)"
 LV_FLAGS="-O1 -DSIM_DIR=\"$HERE\" -DLV_SIM_HOST -DLV_CONF_INCLUDE_SIMPLE -I$P/include -I$HERE/lvgl -I$P/src/core -w"

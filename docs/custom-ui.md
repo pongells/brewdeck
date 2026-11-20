@@ -22,6 +22,12 @@ where a tap selects a profile. It is under the MIT license, so you can copy it a
    ([README, Installing](../README.md#installing);
    `DRY_RUN=1` shows what it would do).
 
+Your UI can also live in its own repository: give `UI` a path instead of a folder name, e.g.
+`UI=../../my-ui ./build.sh ui` or `UI=../my-ui sim/build-emu.sh` (the emulator is then `sim/emu-my-ui`). A path is
+anything with a `/` in it, taken from where you run the script. The firmware build links the folder into
+`firmware/src/ui_ext` (PlatformIO compiles only inside `src/`; the link is git-ignored). Include the core's headers by
+name (`#include "brewdeck_core.h"`, `#include "bd_lvgl9.h"`): both builds put `src/core` on the include path.
+
 Brewdeck's own UI (`firmware/src/ui`) is the large example: every screen, the settings, the shot review.
 
 ## What a UI implements
