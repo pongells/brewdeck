@@ -959,7 +959,9 @@ static void emu_step(uint32_t now) {
       if (!g_st.on && !g_heating && !g_shot_on) g_m.temperature += (g_m.target - g_m.temperature) * 0.006f;
     }
   }
-  if (now - last_live >= 150 / (uint32_t)sp) {           // live updates as often in the screen's time
+  static bool first_live = true;                           // the first pass reports at once: the screen starts online,
+  if (first_live || now - last_live >= 150 / (uint32_t)sp) {   // not on "Joining Wi-Fi"; then as often as in its time
+    first_live = false;
     last_live = now;
     g_link = g_nowifi || g_no_cfg ? BD_LINK_CONNECTING : g_offline || !host_ok() ? BD_LINK_NO_MACHINE : BD_LINK_ONLINE;
     LiveData d = g_m;
