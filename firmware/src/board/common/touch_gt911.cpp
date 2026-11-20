@@ -29,6 +29,30 @@ static bool reg_read(uint16_t reg, uint8_t *buf, size_t n) {
 }
 
 uint8_t touch_address() { return g_addr; }
+
+// what usually sits at an address on these boards (a guess from the address alone)
+static const char *i2c_guess(uint8_t a) {
+  switch (a) {
+    case 0x14: case 0x5D: return "GT911 touch";
+    case 0x18: case 0x19: return "audio codec? (ES8311)";
+    case 0x40: case 0x41: return "microphone ADC? (ES7210)";
+    default: return "";
+  }
+}
+
+size_t board_i2c_scan(char *out, size_t cap) {
+  size_t n = 0;
+  int found = 0;
+  for (uint8_t a = 0x08; a < 0x78 && n + 48 < cap; a++) {
+    Wire.beginTransmission(a);
+    if (Wire.endTransmission() != 0) continue;
+    found++;
+    n += snprintf(out + n, cap - n, "0x%02X %s\n", a, i2c_guess(a));
+  }
+  n += snprintf(out + n, cap - n, "%d device%s on SDA %d / SCL %d\n", found, found == 1 ? "" : "s", PIN_TOUCH_SDA,
+                PIN_TOUCH_SCL);
+  return n < cap ? n : cap - 1;
+}
 void touch_cfg(int *xmax, int *ymax) { *xmax = g_xmax; *ymax = g_ymax; }
 
 bool touch_begin() {

@@ -16,7 +16,9 @@ static WiFiServer g_srv(80);
 // the UI's own debug route (bd_debug_route)
 static char g_rt_path[24] = "";
 static bd_debug_fn g_rt_fn = NULL;
-static volatile bool g_rt_req = false, g_rt_done = false;
+// a job for the UI task (the UI's route, the I2C scan): the server task waits for its text
+static bd_debug_fn volatile g_rt_job = NULL;
+static volatile bool g_rt_done = false;
 static char g_rt_out[1024];
 static bool route_match(const char *line) {      // "GET <path> " or "GET <path>?..."
   const size_t n = strlen(g_rt_path);
@@ -222,9 +224,9 @@ static void task(void *) {
     } else if (strncmp(line, "GET /roam ", 10) == 0) {   // roaming test (debug): scan now, move if clearly better (log)
       net_roam_check();
       c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nroaming check started, see the serial log\n");
-    } else if (route_match(line)) {                  // the UI's route (bd_debug_route): run by the UI task
-      g_rt_done = false;
-      g_rt_req = true;
+    } else if (route_match(line) || strncmp(line, "GET /i2c ", 9) == 0) {   // run by the UI task: the UI's route
+      g_rt_done = false;                             // (bd_debug_route) or the I2C scan (touch reads share the bus)
+      g_rt_job = route_match(line) ? g_rt_fn : board_i2c_scan;
       const uint32_t t0 = millis();
       while (!g_rt_done && millis() - t0 < 30000) delay(20);
       c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n%s", g_rt_done ? g_rt_out : "timeout\n");
@@ -238,7 +240,7 @@ static void task(void *) {
       if (pp) bd_set_backlight(atoi(pp + 4));
       c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nok\n");
     } else {
-      c.print("HTTP/1.0 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nGET /screen.bmp, /rec?every=ms[&max=n], /rec, /rec/stop, /rec.bin, /rec/free, /heap, /tasks, /flash, /roam, /touch?x=&y=&ms=, /bl?pct=&hz=\n");
+      c.print("HTTP/1.0 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nGET /screen.bmp, /rec?every=ms[&max=n], /rec, /rec/stop, /rec.bin, /rec/free, /heap, /tasks, /flash, /roam, /i2c, /touch?x=&y=&ms=, /bl?pct=&hz=\n");
     }
     c.stop();
   }
@@ -252,9 +254,10 @@ void debug_http_route(const char *path, bd_debug_fn fn) {
   g_rt_fn = fn;
 }
 void debug_http_service(void) {
-  if (!g_rt_req) return;
-  g_rt_req = false;
-  const size_t n = g_rt_fn ? g_rt_fn(g_rt_out, sizeof g_rt_out) : 0;
+  const bd_debug_fn job = g_rt_job;
+  if (!job) return;
+  g_rt_job = NULL;
+  const size_t n = job(g_rt_out, sizeof g_rt_out);
   g_rt_out[n < sizeof g_rt_out ? n : sizeof g_rt_out - 1] = 0;
   g_rt_done = true;
 }

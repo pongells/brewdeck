@@ -14,3 +14,6 @@ const uint16_t *board_screen_rows(int y, int n);
 // debug server (GET /flash): the flash read mode ("QIO", "DIO", ...) and the flash controller's register
 const char *board_flash_mode(uint32_t *ctrl);
 void board_backlight_hz(uint32_t hz);   // debug server (GET /bl): the backlight PWM frequency
+// debug server (GET /i2c): every address that answers on the touch controller's I2C bus, one line each, into out;
+// returns the length. Call on the UI task (touch reads share the bus).
+size_t board_i2c_scan(char *out, size_t cap);

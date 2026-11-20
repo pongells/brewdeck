@@ -67,6 +67,7 @@ waits about 5 s for IPv6 over mDNS.
 | `/heap`, `/tasks`, `/flash` | free memory and Wi-Fi link, stack left per task, flash mode and read speed |
 | `/touch?x=&y=&ms=` | presses the screen |
 | `/roam` | starts a Wi-Fi roaming check (result in the serial log) |
+| `/i2c` | every address that answers on the touch controller's I2C bus, with a guess at what it is (audio codec, ...) |
 | `/bl?pct=&hz=` | sets the backlight level and PWM frequency |
 
 A UI can add one route of its own with `bd_debug_route` (Brewdeck's UI: `/bench`).
