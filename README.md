@@ -8,9 +8,17 @@
 [License: PolyForm Noncommercial 1.0.0](#license) · [Web demo](https://pongells.github.io/brewdeck/) ·
 [User manual](docs/manual.md)
 
-Brewdeck is a touchscreen that sits next to a [Gaggiuino](https://gaggiuino.github.io/)-modded espresso machine and
-talks to it over Wi-Fi. It shows the machine at a glance, draws every shot live, lets you review it against the
-profile or your previous shot, and handles the everyday controls: profile, brew temperature, stop weight, flushing.
+Brewdeck is an unofficial touchscreen for everyday brewing on a [Gaggiuino](https://gaggiuino.github.io/)-modded
+espresso machine, talking to it over Wi-Fi. It shows the machine at a glance, draws every shot live, lets you review it
+against the profile or your previous shot, and handles the everyday controls: profile, brew temperature, stop weight,
+flushing.
+Use it on a [headless](https://gaggiuino.github.io/#/guides/interface-headless) machine or with the built-in screen
+tucked away; everything else (editing profiles, settings, maintenance) stays in the machine's web UI.
+
+It is also a base for your own screens and interfaces on Gaggiuino's network API. Wi-Fi, finding the machine, live
+data, shots and the few commands live in a core behind one C header, so a new interface (any graphics library) or
+another screen does not touch the network code; start from the [custom UI guide](docs/custom-ui.md). Ideas, ports and
+interfaces of your own are welcome in the [discussions](https://github.com/pongells/brewdeck/discussions).
 
 The machine's built-in screen does not take custom firmware, so Brewdeck takes the other route: it is a separate
 screen on the same network, using the machine's documented network API (REST and the WebSocket the official web UI
@@ -61,7 +69,9 @@ the machine is idle on its home screen (to end a flush, while flushing; never du
 | Flush button | `c_opmode` FLUSH / FLUSH_AUTO / back to HOME |
 | Tare (hidden by default) | `c_tare_pend` |
 
-It never sends brewing, steam, pump, valve, heater, descaling or calibration commands, and never deletes anything.
+A flush runs the machine's own flush mode, as the web UI does: the machine then runs the pump (the brew switch in
+FLUSH, a timed flush in FLUSH_AUTO). Nothing else: no brewing, steam, descaling or calibration commands, no direct
+control of the pump, valves or heater, and never a delete.
 
 ## Hardware
 

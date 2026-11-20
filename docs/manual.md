@@ -1,8 +1,9 @@
 # Brewdeck user manual
 
-Brewdeck is an unofficial Wi-Fi screen for Gaggiuino machines. It sits next to the machine and talks to it over your
-Wi-Fi; nothing on the machine is rewired or reflashed (the profile, brew temperature and stop weight you set are
-saved on the machine, as the web UI saves them). This manual walks through every screen. The animations are recorded from
+Brewdeck is an unofficial Wi-Fi screen for everyday brewing on Gaggiuino machines, on a headless machine or with the
+built-in screen tucked away; editing profiles, settings and maintenance stay in the machine's web UI. It talks to the
+machine over your Wi-Fi; nothing on the machine is rewired or reflashed (the profile, brew temperature and stop weight
+you set are saved on the machine, as the web UI saves them). This manual walks through every screen. The animations are recorded from
 the emulator, which runs the same screen code against a recorded shot and a recorded steam session.
 
 - [Starting up](#starting-up)
