@@ -12,7 +12,7 @@ Each scene is an emulator script (stdin commands, see sim/emu.cpp) plus a few sh
   image NAME         save a PNG as docs/images/NAME.png (the README's screenshots, scene "readme")
 Screen coordinates are the panel's (800 x 480). The emulator runs in real time; steam plays at 10x ("Steam, fast").
 """
-import os, subprocess, sys, tempfile
+import os, shutil, subprocess, sys, tempfile
 from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -188,8 +188,15 @@ def raw_to_image(path):
 
 
 def run(name):
-    script, ms, hold = SCENES[name]
     tmp = tempfile.mkdtemp(prefix='manual-')
+    try:
+        scene(name, tmp)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def scene(name, tmp):
+    script, ms, hold = SCENES[name]
     lines, frames, stills, n = [], [], [], 0
     for ln in script.strip().split('\n'):
         p = ln.split()
@@ -205,12 +212,16 @@ def run(name):
         else:
             lines.append(ln)
     lines += ['wait 500', 'quit']
-    subprocess.run([EMU], input='\n'.join(lines) + '\n', text=True, capture_output=True, timeout=600)
+    r = subprocess.run([EMU], input='\n'.join(lines) + '\n', text=True, capture_output=True, timeout=600)
+    missing = [f for f in frames + [f for _, f, _ in stills] if not os.path.exists(f)]
+    if r.returncode != 0 or missing:   # a crashed emulator must not leave a shorter GIF over the good one
+        sys.exit('%s: the emulator exited with %d and %d of %d frames are missing; nothing written\n%s'
+                 % (name, r.returncode, len(missing), len(frames) + len(stills), r.stderr[-2000:]))
     os.makedirs(OUT, exist_ok=True)
     for nm, f, d in stills:
         raw_to_image(f).save(os.path.join(d, nm + '.png'), optimize=True)
         print('still', nm)
-    imgs = [raw_to_image(f).resize((W, H), Image.LANCZOS) for f in frames if os.path.exists(f)]
+    imgs = [raw_to_image(f).resize((W, H), Image.LANCZOS) for f in frames]
     if imgs:
         # one palette for all frames (no flicker), built from samples across the whole scene so that colours that
         # appear only in some frames (the gold Done button, a banner) survive

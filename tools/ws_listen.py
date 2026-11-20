@@ -95,7 +95,10 @@ key = base64.b64encode(os.urandom(16)).decode()
 sock.sendall((f'GET /ws HTTP/1.1\r\nHost: {host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
               f'Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n').encode())
 resp = b''
-while b'\r\n\r\n' not in resp: resp += sock.recv(1)
+while b'\r\n\r\n' not in resp:
+    c = sock.recv(1)
+    if not c: sys.exit('handshake: the machine closed the connection (all 3 WebSocket slots taken?)')
+    resp += c
 status = resp.split(b'\r\n')[0].decode()
 print('handshake:', status)
 if ' 101' not in status: sys.exit(1)
@@ -133,6 +136,12 @@ try:
             st = stats[act]
             st['n'] += 1; st['bytes'] += len(data); st['t'].append(now)
             body = env.get('data', b'')
+            if act == 'd_settings':   # MQTT and Wi-Fi settings, API tokens: never decoded, kept or printed
+                dec = {'raw_bytes': len(body), 'not decoded': 'd_settings'}
+                if st['first'] is None: st['first'] = dec
+                st['last'] = dec
+                if st['n'] == 1: print(f'{now:6.2f}s first {act} ({len(data)} B)')
+                continue
             try:
                 dec = decode(body, PAYLOAD[act]) if act in PAYLOAD else {'raw_bytes': len(body)}
             except Exception as e:

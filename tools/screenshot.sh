@@ -5,8 +5,9 @@
 set -euo pipefail
 HOST="${HOST:-brewdeck.local}"
 OUT="${1:-screen-$(date +%Y%m%d-%H%M%S).png}"
-BMP="${OUT%.*}.bmp"
 # -4: macOS otherwise waits ~5 s for an IPv6 answer from mDNS first
+if [[ "$OUT" == *.bmp ]]; then curl -4 -fsS -m 60 -o "$OUT" "http://$HOST/screen.bmp"; echo "$OUT"; exit 0; fi
+BMP="${OUT%.*}.bmp"
 curl -4 -fsS -m 60 -o "$BMP" "http://$HOST/screen.bmp"
 if command -v sips >/dev/null; then sips -s format png "$BMP" --out "$OUT" >/dev/null && rm "$BMP" && echo "$OUT"
 else echo "$BMP"; fi

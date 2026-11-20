@@ -11,7 +11,7 @@ if [[ "$(git -C "$SIM/lvgl" describe --tags 2>/dev/null)" != "$LV" ]]; then
   git clone --quiet --depth 1 --branch "$LV" https://github.com/lvgl/lvgl.git "$SIM/lvgl"
 fi
 mkdir -p "$OUT"
-STAMP="$LV $(cksum < "$P/include/lv_conf.h" | cut -d' ' -f1) $CC $FLAGS"
+STAMP="$LV $(cksum < "$P/include/lv_conf.h" | cut -d' ' -f1) $CC $($CC --version 2>/dev/null | head -1) $FLAGS"
 [[ "$(cat "$OUT/.stamp" 2>/dev/null)" == "$STAMP" ]] || { rm -f "$OUT"/*.o; echo "$STAMP" > "$OUT/.stamp"; }
 export CC FLAGS SIM OUT
 # the file goes in as $1, not -I{}: BSD xargs on macOS limits -I replacements to 255 bytes

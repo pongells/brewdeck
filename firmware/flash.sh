@@ -50,6 +50,16 @@ PORTARG=(); [[ -n "${PORT:-}" ]] && PORTARG=(--port "$PORT")
 # the only way back. A Sunton board bought on its own has it off: it needs a plain write (an encrypted one would not
 # boot). The firmware never turns encryption on, so a plain board stays plain.
 INFO="$("${ESP[@]}" ${PORTARG[@]+"${PORTARG[@]}"} $SI 2>&1)" || { echo "$INFO" | tail -5; echo "Could not read the chip's security info. Refusing to flash."; exit 1; }
+# Without PORT, esptool finds a board by itself, and the write must go to the board just checked (with two boards
+# plugged in, a second search could reach the other one: an encrypted screen given a plain write does not boot)
+if [[ -z "${PORT:-}" ]]; then
+  FOUND="$(echo "$INFO" | sed -n -e 's/^Connected to .* on \(.*\):$/\1/p' -e 's/^Serial port \(.*\)$/\1/p' | tail -1)"
+  if [[ -z "$FOUND" ]]; then
+    echo "Could not tell which serial port the chip answered on. Set PORT=... and try again. Refusing to flash."; exit 1
+  fi
+  PORTARG=(--port "$FOUND")
+  echo "Port: $FOUND (found by esptool; set PORT to choose another)"
+fi
 CHIP="$(echo "$INFO" | sed -n 's/^Chip ID: *\([0-9]*\).*/\1/p' | head -1)"
 if [[ "$CHIP" != "$IMG_CHIP" ]]; then
   echo "These images are for the $IMG_NAME (chip id $IMG_CHIP), the connected chip says chip id ${CHIP:-unknown}. Refusing to flash."; exit 1

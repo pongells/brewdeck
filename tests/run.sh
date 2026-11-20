@@ -5,7 +5,8 @@
 # Usage: tests/run.sh [-v]     (-v: preview test also prints ASCII plots). Needs a C++ compiler (c++ / clang++).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-CORE=firmware/src/core; D=sim/data; OUT="${TMPDIR:-/tmp}/gaggi-tests"; mkdir -p "$OUT"
+CORE=firmware/src/core; D=sim/data
+OUT="$(mktemp -d "${TMPDIR:-/tmp}/gaggi-tests.XXXXXX")"; trap 'rm -rf "$OUT"' EXIT   # own folder: runs can overlap
 CXX="${CXX:-c++}"; FLAGS="-std=c++14 -Wall -Wextra -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I$CORE"
 V="${1:-}"
 fail=0
