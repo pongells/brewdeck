@@ -89,7 +89,8 @@ control of the pump, valves or heater, and never a delete.
 Gaggiuino's update [v.8aaf6f0](https://github.com/Zer0-bit/gaggiuino/releases/tag/main-8aaf6f0). That update locks the
 Gen 3 screen it runs on (it migrates the partitions and sets eFuses), so a screen that has had it cannot take other
 firmware; the Gen 3.5 screen is locked too. The same Sunton model bought on its own should work (the flash script then
-writes it plainly), but that is untested.
+writes it plainly), but that is untested: if you try one, please say how it went in the
+[discussions](https://github.com/pongells/brewdeck/discussions).
 
 ## Installing
 
