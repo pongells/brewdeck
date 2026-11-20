@@ -45,7 +45,9 @@ Brewdeck's HTTP code can only send GET and POST.
 
 `readinessState` (also `dashboardReadinessState` over the WebSocket; names from the web UI): 0 WAITING, 1 WARMING
 ("Warming up" with a countdown), 2 HEATING, 3 READY, 4 STANDBY, 5 STEAMING, 6 FLUSHING, 7 MAINTENANCE; the web UI shows
-anything above 7 as WAITING.
+anything above 7 as WAITING. 6 FLUSHING is reported for the whole of flush mode (FLUSH, the brew switch flushes),
+water running or not, and stays for a moment after the mode is back to HOME: take "is it flushing" from the
+operation mode (FLUSH / FLUSH_AUTO), not from the readiness (seen on the machine, 2026-11).
 
 ## WebSocket
 
