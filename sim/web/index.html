@@ -24,7 +24,7 @@
   accent-color: var(--blue);
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 var(--font); }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--font); }
 ::selection { background: #24415E; color: var(--text); }
 a { color: var(--blue); text-underline-offset: 3px; }
 main { max-width: 1240px; margin: 0 auto; padding-block: 28px 64px;
@@ -42,13 +42,11 @@ main { max-width: 1240px; margin: 0 auto; padding-block: 28px 64px;
 @media (max-width: 480px) { .top nav a { padding: 9px 10px; } .top nav .to-build { display: none; } }
 
 /* intro: what it is, in two sentences, then the demo */
-.intro { margin: 48px 0 32px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px 56px; align-items: end; }
+.intro { margin: 56px 0 40px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px 56px; align-items: end; }
 .intro h1 { margin: 0; font-size: clamp(34px, 4.6vw, 52px); font-weight: 300; line-height: 1.08; letter-spacing: -0.02em;
   text-wrap: balance; }
 .intro p { margin: 0; color: var(--muted); font-size: 17px; max-width: 52ch; }
 .intro p b { color: var(--text); font-weight: 500; }
-.try { margin: 0 0 12px; color: var(--muted); font-size: 15px; display: flex; align-items: baseline; gap: 10px; }
-.try i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; transform: translateY(-1px); }
 @media (max-width: 1000px) { .intro { grid-template-columns: 1fr; margin-top: 36px; } }
 
 /* stage: the screen (device + status line) and the shortcuts */
@@ -111,11 +109,11 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
 @media (prefers-reduced-motion: no-preference) { .sw .track, .sw .track::after { transition: all 140ms ease; } }
 
 /* rail: shortcuts, "Pull a shot" first and loudest */
-.rail { display: flex; flex-direction: column; gap: 20px; position: sticky; top: 20px; }
+.rail { display: flex; flex-direction: column; gap: 28px; position: sticky; top: 20px; }
 .rail-head h2 { margin: 0; font-size: 17px; font-weight: 600; color: var(--text); }
-.rail-head p { margin: 2px 0 0; font-size: 14px; color: var(--muted); }
 .group { display: flex; flex-direction: column; gap: 8px; }
-.group h2 { margin: 0 0 2px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.group h2 { margin: 0 0 2px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.group .row button { min-height: 42px; font-size: 14px; }
 .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 button { font: 500 15px/1.2 var(--font); color: var(--text); background: var(--raised); border: 0; border-radius: 14px;
   min-height: 46px; padding: 0 16px; cursor: pointer; text-align: left; }
@@ -135,25 +133,26 @@ button:disabled:hover { background: var(--raised); }
 .shot.playing span { color: var(--gold); }
 
 /* build one: for owners, right after the demo */
-.build { margin-top: 88px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px 56px; }
+.build { margin-top: 120px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px 72px; }
 .build > header { grid-column: 1 / -1; }
 .build > header p { margin: 0; color: var(--muted); }
-h3 { margin: 0 0 10px; font-size: 28px; font-weight: 300; letter-spacing: -0.01em; line-height: 1.2; text-wrap: balance; }
-h4 { margin: 0 0 8px; font-size: 17px; font-weight: 600; }
-.need { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; color: var(--muted); }
+h3 { margin: 0 0 12px; font-size: 28px; font-weight: 300; letter-spacing: -0.01em; line-height: 1.2; text-wrap: balance; }
+h4 { margin: 0 0 14px; font-size: 17px; font-weight: 600; }
+.need { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; color: var(--muted); }
 .need li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; }
 .need svg { margin-top: 3px; color: var(--text); }
 .need b { color: var(--text); font-weight: 500; }
-.spare { margin-top: 18px; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; padding: 14px 16px;
-  border-radius: 14px; background: var(--warn-bg); color: #FFD9B0; font-size: 15px; }
+.spare { margin-top: 24px; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; padding: 14px 16px;
+  border-radius: 14px; background: rgba(255, 169, 77, 0.07); box-shadow: inset 0 0 0 1px rgba(255, 169, 77, 0.22);
+  color: var(--muted); font-size: 15px; }
 .spare svg { margin-top: 2px; color: var(--warn); }
-.spare b { color: #FFE8CF; font-weight: 600; }
-.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 12px; color: var(--muted); }
+.spare b { color: var(--warn); font-weight: 600; }
+.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 16px; color: var(--muted); }
 .steps li { counter-increment: s; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; }
 .steps li::before { content: counter(s); width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
   font-size: 13px; font-weight: 600; color: var(--text); background: var(--raised-hi); }
 .steps b { color: var(--text); font-weight: 500; }
-.links { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; }
+.links { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 8px; }
 .links a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 12px; font-weight: 500;
   text-decoration: none; color: var(--text); background: var(--raised); }
 .links a:hover { background: var(--raised-hi); }
@@ -161,30 +160,27 @@ h4 { margin: 0 0 8px; font-size: 17px; font-weight: 600; }
 .links a.go:hover { background: #FFFFFF; }
 
 /* for developers: how it works, make it yours */
-.explain { margin-top: 88px; padding-top: 40px; border-top: 1px solid var(--line); display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; }
+.explain { margin-top: 120px; padding-top: 64px; border-top: 1px solid var(--line); display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 72px; }
 .explain p { margin: 0; color: var(--muted); }
 .explain p + p { margin-top: 10px; }
 code { font-family: var(--mono); font-size: 0.84em; color: var(--text); background: var(--raised); padding: 1px 5px;
   border-radius: 5px; overflow-wrap: anywhere; }
 
-.layers { list-style: none; margin: 22px 0 0; padding: 0; position: relative; }
+.layers { list-style: none; margin: 28px 0 0; padding: 0; position: relative; }
 .layers::before { content: ""; position: absolute; left: 5px; top: 10px; bottom: 10px; width: 2px; background: var(--line); }
-.layers li { position: relative; padding: 0 0 18px 30px; }
+.layers li { position: relative; padding: 0 0 22px 30px; }
 .layers li:last-child { padding-bottom: 0; }
 .layers li::before { content: ""; position: absolute; left: 0; top: 7px; width: 12px; height: 12px; border-radius: 50%;
   background: var(--bg); border: 2px solid var(--c, var(--faint)); }
 .layers b { display: block; font-size: 17px; font-weight: 600; }
 .layers span { color: var(--muted); font-size: 15px; }
-.layers .via { padding-bottom: 14px; color: var(--muted); font-size: 14px; }
-.layers .via::before { display: none; }
 
-.ways { margin-top: 22px; display: flex; flex-direction: column; gap: 26px; }
+.ways { margin-top: 28px; display: flex; flex-direction: column; gap: 32px; }
 .way p { font-size: 15px; }
-.way ol { margin: 10px 0 0; padding-left: 20px; color: var(--muted); font-size: 15px; display: flex; flex-direction: column; gap: 5px; }
-.way a { display: inline-block; margin-top: 10px; font-weight: 500; }
+.way a { display: inline-block; margin-top: 12px; font-weight: 500; }
 
-footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px;
+footer { margin-top: 112px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px;
   display: flex; flex-direction: column; gap: 6px; }
 footer p { margin: 0; }
 
@@ -231,8 +227,6 @@ footer p { margin: 0; }
       flushing. <b>Nothing on the machine is rewired or reflashed.</b></p>
   </section>
 
-  <p class="try"><i></i>The real screen software, running here against a fake machine.</p>
-
   <div class="stage">
     <div class="left">
       <div class="screen" id="screenbox">
@@ -266,7 +260,6 @@ footer p { margin: 0; }
     <aside class="rail" aria-label="Shortcuts">
       <div class="rail-head">
         <h2>Shortcuts</h2>
-        <p>Jump to a moment instead of waiting for it.</p>
       </div>
       <div class="group">
         <button class="shot" data-action="Shot" id="shot"><b>Pull a shot</b><span>Plays a recorded 33-second shot</span></button>
@@ -280,19 +273,19 @@ footer p { margin: 0; }
         </div>
       </div>
       <div class="group">
-        <h2>Messages from the machine</h2>
-        <div class="row">
-          <button data-action="Pressure release">Pressure release</button>
-          <button data-action="Notification">A notice</button>
-        </div>
-      </div>
-      <div class="group">
         <h2>Go to</h2>
         <div class="row">
           <button data-action="Ready">Ready</button>
-          <button data-action="Idle">Idle clock</button>
           <button data-action="Shot history">Shot history</button>
+          <button data-action="Idle">Idle clock</button>
           <button data-action="Splash">Start-up</button>
+        </div>
+      </div>
+      <div class="group">
+        <h2>More</h2>
+        <div class="row">
+          <button data-action="Pressure release">Pressure release</button>
+          <button data-action="Notification">A notice</button>
         </div>
       </div>
     </aside>
@@ -302,8 +295,7 @@ footer p { margin: 0; }
   <section class="build" id="build">
     <header>
       <h3>Build one</h3>
-      <p>Brewdeck runs on its own small touchscreen next to the machine, connected only by Wi-Fi. No soldering, no
-        wiring, nothing changed on the machine: you flash the screen over USB and pick your network on it.</p>
+      <p>No soldering, no wiring: flash a spare screen over USB and pick your Wi-Fi on it.</p>
     </header>
     <div>
       <h4>What you need</h4>
@@ -349,15 +341,12 @@ footer p { margin: 0; }
         documented REST and WebSocket API. The firmware has three layers, each replaceable on its own.</p>
       <ol class="layers">
         <li style="--c: var(--gold)"><b>UI</b><span>The screens above. Any graphics library; Brewdeck's own uses LVGL 9. It
-          reads plain state, asks the core for things and is told what happened.</span></li>
-        <li class="via">through <code>brewdeck_core.h</code>, the core API</li>
+          talks to the core through one header, <code>brewdeck_core.h</code>.</span></li>
         <li style="--c: var(--blue)"><b>Core</b><span>Wi-Fi, finding the machine, live data, shots, settings. The only part
           that sends anything, and only a short list: pick a profile, stop weight, brew temperature, save them, flush,
           tare. Never pumps, valves, heater or steam.</span></li>
-        <li class="via">through the panel, touch, backlight and memory</li>
         <li style="--c: var(--muted)"><b>Board</b><span>One folder per screen model: the Sunton ESP32-S3 4.3″ (800 × 480),
           and an experimental Guition ESP32-P4.</span></li>
-        <li class="via">over Wi-Fi</li>
         <li style="--c: var(--green)"><b>Machine</b><span>Gaggiuino's own firmware, untouched. Here it is fake: it replays a
           recorded shot and steam session, and answers profile, weight and temperature changes.</span></li>
       </ol>
@@ -370,20 +359,14 @@ footer p { margin: 0; }
       <div class="ways">
         <div class="way">
           <h4>Write your own interface</h4>
-          <p>A UI names itself in <code>BD_UI</code>, implements four functions (<code>bd_ui_init</code>,
-            <code>tick</code>, <code>event</code>, <code>wake</code>) and calls the rest of the core API.</p>
-          <ol>
-            <li>Copy <code>firmware/src/ui_minimal</code>, a 150-line example under the MIT license.</li>
-            <li>Try it against the fake machine: <code>UI=myui sim/build-emu.sh &amp;&amp; sim/emu-myui</code></li>
-            <li>Build the firmware, in <code>firmware/</code>: <code>UI=myui ./build.sh ui</code></li>
-          </ol>
+          <p>Start from the 150-line example interface (MIT licensed), try it against this same fake machine on your
+            computer, then build it into the firmware. Four functions and one header are all it needs.</p>
           <a href="https://github.com/pongells/brewdeck/blob/main/docs/custom-ui.md">Read the custom UI guide</a>
         </div>
         <div class="way">
           <h4>Bring it to another screen</h4>
-          <p>A board folder provides the panel, touch, backlight and memory; the core and the UI stay the same. The P4 port
-            was done this way. There is no step-by-step guide yet: start from <code>firmware/src/board/s3</code> or
-            <code>board/p4</code>, or open a discussion on GitHub.</p>
+          <p>A board folder provides the panel, touch, backlight and memory; the core and the interface stay the same.
+            The ESP32-P4 port was done this way. No step-by-step guide yet: ask in the GitHub discussions.</p>
           <a href="https://github.com/pongells/brewdeck/blob/main/docs/architecture.md">Read the architecture notes</a>
         </div>
       </div>
