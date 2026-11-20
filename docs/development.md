@@ -65,7 +65,7 @@ waits about 5 s for IPv6 over mDNS.
 |---|---|
 | `/screen.bmp` | screenshot of the frame buffer (`tools/screenshot.sh out.png`) |
 | `/rec?every=ms[&max=n]`, `/rec`, `/rec/stop`, `/rec.bin`, `/rec/free` | screen recorder: frames kept in PSRAM, downloaded at the end (`tools/record.sh`) |
-| `/heap`, `/tasks`, `/flash` | free memory and Wi-Fi link, stack left per task, flash mode and read speed |
+| `/heap`, `/tasks`, `/flash` | free memory, Wi-Fi link, uptime and the raw reset reason (`esp_reset_reason`); stack left per task; flash mode and read speed |
 | `/touch?x=&y=&ms=` | presses the screen |
 | `/roam` | starts a Wi-Fi roaming check (result in the serial log) |
 | `/i2c` | every address that answers on the touch controller's I2C bus, with a guess at what it is (audio codec, ...) |

@@ -52,7 +52,7 @@ static void on_settings(int bright, int idle_min, bool bounce, bool splash) {
 // ---- state: bd_* -> the screens -------------------------------------------------------------------------------------
 static const char *const RESET_TXT[] = {"since power-on", "after the reset pin", "after a software restart",
                                         "after a crash", "after a freeze (watchdog)", "after a power dip",
-                                        "after deep sleep", "after a USB reset", "after an unknown reset"};
+                                        "after deep sleep", "after a USB reset", "after a system reset"};
 static void info_tick(void) {
   const bd_network *n = bd_network_state();
   const bd_machine *m = bd_machine_state();

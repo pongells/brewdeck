@@ -33,6 +33,8 @@ On the screen:
   steam clock, and past 4 min its labels follow the rolling window. A set point changed in the web UI is redrawn.
 - A pressure reading that is not a number no longer reaches the charts.
 - After a profile is saved, its stored values are read again even if the first read fails.
+- About no longer says "after a freeze" after flashing a P4 board: the system watchdog reset that ends every flash
+  there now reads "after a system reset"; a freeze is a hang of the screen's own code.
 
 Custom UIs:
 - A UI can live outside this repository: `UI=<path>` for `./build.sh` and `sim/build-emu.sh` (docs/custom-ui.md).

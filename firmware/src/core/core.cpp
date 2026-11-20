@@ -178,8 +178,10 @@ static bd_reset reset_of(esp_reset_reason_t r) {
     case ESP_RST_SW:        return BD_RESET_SOFTWARE;
     case ESP_RST_PANIC:     return BD_RESET_CRASH;
     case ESP_RST_INT_WDT:
-    case ESP_RST_TASK_WDT:
-    case ESP_RST_WDT:       return BD_RESET_WATCHDOG;
+    case ESP_RST_TASK_WDT:  return BD_RESET_WATCHDOG;   // our code hung
+    // ESP_RST_WDT (the RTC / system watchdog) is not a freeze of ours: on the ESP32-P4 every flash ends with it
+    // (esptool's reset, then this watchdog ~3 s into the first boot; a read-only esptool reset gives ESP_RST_USB)
+    case ESP_RST_WDT:       return BD_RESET_OTHER;
     case ESP_RST_BROWNOUT:  return BD_RESET_BROWNOUT;
     case ESP_RST_DEEPSLEEP: return BD_RESET_DEEP_SLEEP;
     case ESP_RST_USB:       return BD_RESET_USB;

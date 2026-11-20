@@ -177,7 +177,8 @@ typedef struct {
   int      api_version;           // BD_API_VERSION of the core
   char     build[24];             // core build date
   uint32_t uptime_s;
-  bd_reset reset;                 // why the screen last started
+  bd_reset reset;                 // why the screen last started (OTHER: e.g. the system watchdog, which ends every
+                                  // flash on the ESP32-P4; WATCHDOG: our code hung)
   uint32_t free_internal, free_psram;   // bytes
   char     version[40];           // the firmware's version: its release tag ("v0.2.0"), "v0.2.0-3-gabc1234" between
                                   // releases, "" when not known (emulator)

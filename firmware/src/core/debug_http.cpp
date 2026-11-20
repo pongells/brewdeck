@@ -6,6 +6,7 @@
 #include <WiFi.h>
 #include <esp_flash.h>
 #include <esp_heap_caps.h>
+#include <esp_system.h>
 #include <string.h>
 #include "debug_http.h"
 #include "board_core.h"
@@ -197,11 +198,13 @@ static void task(void *) {
       int ch;
       net_wifi_info(ssid, sizeof ssid, &rssi, &ch, ap, sizeof ap);
       c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n"
-               "internal free %u, largest block %u, lowest since boot %u\npsram free %u\nwifi rssi %d dBm, channel %d, ap %s\n",
+               "internal free %u, largest block %u, lowest since boot %u\npsram free %u\nwifi rssi %d dBm, channel %d, ap %s\n"
+               "uptime %lu s, reset reason %d (esp_reset_reason)\n",
                (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
                (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
                (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
-               (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), (int)rssi, ch, ap);
+               (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), (int)rssi, ch, ap, (unsigned long)(millis() / 1000),
+               (int)esp_reset_reason());
     } else if (strncmp(line, "GET /flash ", 11) == 0) {   // flash read mode + raw read speed (debug)
       uint32_t ctrl = 0;
       const char *mode = board_flash_mode(&ctrl);   // chip-specific registers: the board layer reads them
