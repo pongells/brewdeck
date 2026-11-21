@@ -30,6 +30,9 @@ done
 cp "$WEB/index.html" "$DIST/index.html"
 cp "$SIM/../THIRD_PARTY_NOTICES.txt" "$DIST/THIRD_PARTY_NOTICES.txt"
 cp "$SIM/../docs/images/logo.svg" "$DIST/logo.svg"
+for ui in brewdeck:ready ledger:ui-ledger minimal:ui-minimal; do   # the "Interfaces" section
+  cp "$SIM/../docs/images/${ui#*:}.png" "$DIST/ui-${ui%%:*}.png"
+done
 cp "$SIM/../docs/images/social-card.png" "$DIST/social-card.png"   # the picture a shared link shows
 ls -la "$DIST" | awk 'NR>1 {print $5, $9}'
 echo "built sim/web/dist"
