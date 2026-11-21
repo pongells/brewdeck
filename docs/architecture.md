@@ -118,6 +118,48 @@ code directly, and takes its memory with `bd_alloc` (only the debug-build `/benc
 
 ## Writing another UI
 
-A UI is a folder under `firmware/src/` that implements `bd_ui_init`, `bd_ui_tick`, `bd_ui_event` and `bd_ui_wake` on
-the API in [`brewdeck_core.h`](../firmware/src/core/brewdeck_core.h). The guide, starting from the example UI:
-[Writing your own UI](custom-ui.md).
+A UI is a folder that implements `bd_ui_init`, `bd_ui_tick`, `bd_ui_event` and `bd_ui_wake` on the API in
+[`brewdeck_core.h`](../firmware/src/core/brewdeck_core.h). It can live under `firmware/src/` (Brewdeck's own `ui/`, the
+example `ui_minimal/`) or anywhere else: `UI=<path>` points `firmware/build.sh` and `sim/build-emu.sh` at it. The
+guide, starting from the example UI: [Writing your own UI](custom-ui.md).
+
+## UIs in their own repositories
+
+A UI in another repository (made from the
+[UI template](https://github.com/pongells/brewdeck-ui-template), like
+[Ledger](https://github.com/pongells/brewdeck-ui-ledger)) holds only its own code. It depends on Brewdeck's
+**source** at a pinned release, not on built files: the UI and the core are always compiled together into one image.
+
+```mermaid
+flowchart LR
+  subgraph uirepo["brewdeck-ui-NAME repository"]
+    direction TB
+    ref["BREWDECK_REF<br/>a Brewdeck release tag, e.g. v0.2.0"]
+    fetch["tools/brewdeck.sh<br/>clones that tag into .brewdeck/<br/>(git-ignored; BREWDECK=path uses a local checkout)"]
+    scripts["emu.sh / fw.sh"]
+    code["ui/<br/>the UI's code and fonts"]
+    ref --> fetch
+    scripts --> fetch
+  end
+  subgraph bd[".brewdeck/ = Brewdeck at that tag"]
+    direction TB
+    build["firmware/build.sh, sim/build-emu.sh<br/>run with UI=repo/ui"]
+    corelib["core + board<br/>(brewdeck_core.h)"]
+  end
+  fetch --> bd
+  scripts -->|"UI=.../ui"| build
+  build --> out["one firmware image or emulator:<br/>Brewdeck's core + board + this UI"]
+  code --> out
+  corelib --> out
+```
+
+- **The contract** is `brewdeck_core.h` (`BD_API_VERSION` 1). Within version 1 every newer Brewdeck release keeps a
+  UI compiling and working, so updating is a new tag in `BREWDECK_REF` and a rebuild. A UI declares the API version it
+  was written for (`BD_UI {name, version, api}`); the core logs both at boot and warns when the UI wants a newer one.
+- **Brewdeck does not know about these UIs**: nothing in this repository depends on them. Their CI builds them
+  against the pinned release (the emulator and both boards).
+- **How it is wired**: `firmware/ui_select.py` links an outside folder as `firmware/src/ui_ext` (git-ignored) and adds
+  the core's headers to the include path; `sim/build-emu.sh` compiles it into `sim/emu-<folder>` (a folder called
+  `ui` gives `sim/emu-ui-ext`).
+- **Settings**: each UI's settings are stored under its `BD_UI` name; Wi-Fi and the machine address belong to the
+  core, so they survive a switch to another UI.
