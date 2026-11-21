@@ -77,6 +77,8 @@ https://github.com/pongells/brewdeck#esp32-p4-board
 
 You need esptool v5 (brew install esptool, or pip install esptool) and bash (macOS, Linux). Use the board's USB-C
 socket that carries data (on our board the top one, marked D4D5; the other one only powers it).
+Fit a 2.4 GHz antenna to the small IPEX Gen3 (MHF3) socket on the module, with the board unpowered: without one its
+Wi-Fi is weak (about -83 dBm on our board, -60 dBm with a 3 cm flexible antenna).
 
 1. Check the board (writes nothing):
      esptool --port <port> get-security-info

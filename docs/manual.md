@@ -170,8 +170,9 @@ the machine has released it.
 - **Display**: brightness (20-100 %), *Dim after* (off or 1-60 minutes), *Idle clock* (still or bouncing) and
   *Splash at start* (on or off). Saved on the screen.
 - **Wi-Fi**: networks and the machine's address (next section).
-- **About**: Brewdeck's build, how long it has been running and why it last started (power-on, crash, freeze or power
-  dip), memory, and the machine's firmware, screen and web UI versions, plus a pending machine update.
+- **About**: Brewdeck's version and build, how long it has been running and why it last started (power-on, crash,
+  freeze, power dip or a system reset, e.g. after flashing a P4 board), memory, and the machine's firmware, screen and
+  web UI versions, plus a pending machine update.
 
 Profiles and maintenance are edited in the machine's web UI.
 

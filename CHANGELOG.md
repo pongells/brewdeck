@@ -59,7 +59,7 @@ Releases and licenses:
 
 Web demo:
 - Opens on the screen's start-up screen and starts on a click; then the screen to use, scenes beside it (a recorded
-  shot with a stop button, steam, the rarer ones under "More scenes", keys S / M / R / H) and switches for the fake
+  shot with a stop button, steam, the rarer ones under "Other screens", keys S / M / R / H) and switches for the fake
   machine, with a line under the screen that explains what it shows. How to install it, how it works, and how to
   build your own interface or bring it to another screen.
 

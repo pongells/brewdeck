@@ -15,6 +15,10 @@ flushing.
 Use it on a [headless](https://gaggiuino.github.io/#/guides/interface-headless) machine or with the built-in screen
 tucked away; everything else (editing profiles, settings, maintenance) stays in the machine's web UI.
 
+**Try it** in the [web demo](https://pongells.github.io/brewdeck/) (no hardware, a recorded machine). **You need** a
+spare 4.3" ESP32 touchscreen (the Guition JC4880P443 or a Sunton ESP32-8048S043-style board, see [Hardware](#hardware))
+and a Mac or Linux computer to flash it ([Installing](#installing)).
+
 It is also a base for your own screens and interfaces on Gaggiuino's network API. Wi-Fi, finding the machine, live
 data, shots and the few commands live in a core behind one C header, so a new interface (any graphics library) or
 another screen does not touch the network code; start from the
@@ -84,7 +88,8 @@ control of the pump, valves or heater, and never a delete.
     touch. Pins and timings: [`firmware/src/board/s3/board.h`](firmware/src/board/s3/board.h).
   - the Guition JC4880P443 with an ESP32-P4, see [below](#esp32-p4-board).
 - **Machine**: a Gaggiuino machine with its Wi-Fi web UI, on the same 2.4 GHz network as the screen. Tested with one
-  machine (Gaggiuino core 8aaf6f0 on an STM32U585 board, release c929939); a Gaggiuino update can change the protocol.
+  machine (Gaggiuino core 8aaf6f0 on an STM32U585 board, release c929939: fine on the machine; only a *spare screen*
+  that received that update is locked, see below); a Gaggiuino update can change the protocol.
   Brewdeck keeps one of the machine's three WebSocket connections open and shows up to 24 profiles.
 
 **The Sunton was tested on one unit only**: a spare Gaggiuino Gen 3 screen (the Sunton hardware above) that had not yet
@@ -99,7 +104,8 @@ then writes it plainly), but that is untested: if you try one, please say how it
 For the Sunton ESP32-S3 screen; the P4 board is [below](#esp32-p4-board). You need
 [esptool](https://github.com/espressif/esptool) v5 (`brew install esptool` or `pip install esptool`; esptool 4.x spells
 the commands `read_flash` / `write_flash`) and bash (macOS, Linux; on Windows untested, WSL may work). The serial port
-is `/dev/cu.usbserial-…` on macOS, `/dev/ttyUSB0` or similar on Linux.
+is `/dev/cu.usbserial-…` on macOS, `/dev/ttyUSB0` or similar on Linux: to find it, list `ls /dev/cu.*` (Linux:
+`ls /dev/tty*`) before and after plugging the screen in; the new entry is the screen.
 
 **1. Check the screen** (reads only, writes nothing). "Flash Encryption: Enabled" is a Gaggiuino Gen 3 screen,
 "Disabled" a plain board; "Secure download mode" means it is locked and cannot take other firmware.
@@ -108,8 +114,12 @@ is `/dev/cu.usbserial-…` on macOS, `/dev/ttyUSB0` or similar on Linux.
 esptool --port /dev/cu.usbserial-XXXX get-security-info
 ```
 
-**2. Back up its flash** (the whole 16 MB). It is the only way back to the original firmware: keep a copy somewhere
-safe.
+**2. Download a release.** Download `brewdeck-<version>-esp32s3.zip` from
+[Releases](https://github.com/pongells/brewdeck/releases), unzip it and open a terminal in its folder
+(`cd brewdeck-<version>-esp32s3`). The next steps run there.
+
+**3. Back up its flash** (the whole 16 MB), into that folder's `backup/`, where `flash.sh` looks for it. It is the only
+way back to the original firmware: keep a copy somewhere safe too.
 
 ```sh
 mkdir -p backup
@@ -117,9 +127,7 @@ esptool --port /dev/cu.usbserial-XXXX --baud 460800 read-flash 0 0x1000000 backu
 ls -l backup/gaggiuino-screen-backup.bin    # must be exactly 16777216 bytes
 ```
 
-**3. Flash a release.** Download `brewdeck-<version>-esp32s3.zip` from
-[Releases](https://github.com/pongells/brewdeck/releases) and unzip it. Put the backup in its `backup/` folder (or
-point `GAGGI_BACKUP` at it), then from that folder:
+**4. Flash it** (a backup kept elsewhere: point `GAGGI_BACKUP` at it):
 
 ```sh
 PORT=/dev/cu.usbserial-XXXX ./flash.sh
@@ -134,14 +142,15 @@ would leave the screen unbootable):
 
 `FLASH_ENC=encrypted` or `plain` states what you expect (the script stops if the chip disagrees); `DRY_RUN=1` shows
 the decision and the esptool command without writing. If esptool cannot connect, hold BOOT, tap RST, release BOOT. The
-screen restarts by itself after flashing; if the picture looks wrong, unplug and replug USB.
+screen restarts by itself after flashing; if the picture looks wrong (stripes, shifted or frozen), unplug and replug
+USB.
 
-**4. Set it up on the screen.** It starts on "No Wi-Fi set up": choose your network and type the password. It then
+**5. Set it up on the screen.** It starts on "No Wi-Fi set up": choose your network and type the password. It then
 looks for the machine as `gaggiuino.local`; another name or an IP can be set under Menu > Wi-Fi (tap the connected
 network, then Machine).
 
-**Updating**: flash the new release the same way (step 3). The backup stays valid, and the screen keeps its Wi-Fi,
-machine address and settings.
+**Updating**: download the new release and flash it the same way (step 4, with your backup). The backup stays valid,
+and the screen keeps its Wi-Fi, machine address and settings.
 
 **Back to the original firmware**: check the backup's size again (a short file would leave the screen unbootable), then
 write it back as it is, **without** `--encrypt` (a Gen 3 backup already holds the encrypted contents):
@@ -153,12 +162,14 @@ esptool --port /dev/cu.usbserial-XXXX --baud 460800 write-flash 0x0 backup/gaggi
 ### ESP32-P4 board
 
 The Guition JC4880P443 (ESP32-P4, 4.3" 480x800 MIPI-DSI panel shown in landscape, Wi-Fi through an ESP32-C6) is a
-retail board with no flash encryption. It runs every screen live from the machine, through shots (brewing,
-review, previous shot, history) and steam. Use the USB-C socket that carries data (on our board the top one, marked
-D4D5; the other one only powers it). Each release has a package for it, `brewdeck-<version>-esp32p4.zip`: follow its
-INSTALL.txt. Or build it (next section), from `firmware/`:
+retail board with no flash encryption. It runs every screen live from the machine, through shots (brewing, review,
+previous shot, history) and steam. **Fit a 2.4 GHz antenna** (step 4 below): without one its Wi-Fi is weak. Use the
+USB-C socket that carries data (on our board the top one, marked D4D5; the other one only powers it). Each release has
+a package for it, `brewdeck-<version>-esp32p4.zip`: follow its INSTALL.txt. Or build it (next section), from
+`firmware/`:
 
-1. Back up its flash (also 16 MB) as in step 2, to `backup/p4-guition-original.bin` (or point `GAGGI_BACKUP` at it; a plain board
+1. Back up its flash (also 16 MB) as in step 3, to `backup/p4-guition-original.bin` at the repository root, where
+   `build.sh` looks for it (or point `GAGGI_BACKUP` at it; a plain board
    can also be flashed without one, `NO_BACKUP=1`). Its port is `/dev/cu.usbmodem…` on macOS, `/dev/ttyACM0` on Linux.
 2. `./build.sh ui-p4 --flash`, then join Wi-Fi on the screen. On the network it is `brewdeck-p4`.
 3. If the first Wi-Fi join is slow at every start (it drops once and is retried), the board's ESP32-C6 runs old
@@ -185,7 +196,7 @@ not support newer Python yet), git and esptool. The first build downloads the to
 old (`6.2.0.post1` does not satisfy `>=6.2.0`), pin it:
 `uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0`.
 
-Make the backup first (step 2 above, from the repository root), then:
+Make the backup first (step 3 above, into `backup/` at the repository root), then:
 
 ```sh
 cd firmware

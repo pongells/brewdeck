@@ -350,7 +350,7 @@ footer p { margin: 0; }
           <a href="https://github.com/pongells/brewdeck/releases">releases</a>.</span></li>
         <li><span><b>Back up</b> the screen's flash: the only way back to its original firmware.</span></li>
         <li><span><b>Flash</b> it with the script in the package. It checks the chip and the backup first.</span></li>
-        <li><span><b>Choose your Wi-Fi</b> on the screen. It finds the machine by itself.</span></li>
+        <li><span><b>Choose your Wi-Fi</b> on the screen. It finds the machine by itself (or type its address).</span></li>
       </ol>
       <a class="go" href="https://github.com/pongells/brewdeck#installing">Read the installation guide</a>
     </section>
@@ -372,7 +372,8 @@ footer p { margin: 0; }
 <b>void bd_ui_tick(uint32_t now_ms);</b>     // every pass: draw what changed
 <b>void bd_ui_event(const bd_event *e);</b>  // shot point, notice, answer
 <b>void bd_ui_wake(void);</b>                // turn the screen on</code></pre>
-      <p>Start from the 150-line example interface (MIT licensed) and try it against this same fake machine on your
+      <p>Start from the <a href="https://github.com/pongells/brewdeck-ui-template">UI template</a> (the 150-line
+        example interface, MIT licensed, with build scripts and CI) and try it against this same fake machine on your
         computer. Ideas, bugs and ports are welcome in the
         <a href="https://github.com/pongells/brewdeck/discussions">discussions</a>.</p>
       <a class="go" href="https://github.com/pongells/brewdeck/blob/main/docs/custom-ui.md">Read the custom UI guide</a>
