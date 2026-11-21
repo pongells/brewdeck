@@ -48,6 +48,8 @@ Naming a UI in its own repository, so people can find it and tell UIs apart:
   template, gives `sim/emu-ui-ext`).
 
 Brewdeck's own UI (`firmware/src/ui`) is the large example: every screen, the settings, the shot review.
+[Ledger](https://github.com/pongells/brewdeck-ui-ledger) is a complete UI in its own repository, built like the
+template: a different look, its own fonts, every screen in one file.
 
 ## What a UI implements
 

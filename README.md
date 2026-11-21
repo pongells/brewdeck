@@ -25,6 +25,11 @@ another screen does not touch the network code; start from the
 [UI template](https://github.com/pongells/brewdeck-ui-template) and the [custom UI guide](docs/custom-ui.md). Ideas, ports and
 interfaces of your own are welcome in the [discussions](https://github.com/pongells/brewdeck/discussions).
 
+For an idea of how far that goes, [Ledger](https://github.com/pongells/brewdeck-ui-ledger) is a whole different UI on
+the same core: light and printed-looking, sharing no code or look with Brewdeck's own.
+
+<a href="https://github.com/pongells/brewdeck-ui-ledger"><img src="https://raw.githubusercontent.com/pongells/brewdeck-ui-ledger/main/docs/images/ready.png" alt="Ledger, another UI on the Brewdeck core" width="400"></a>
+
 The machine's built-in screen does not take custom firmware, so Brewdeck takes the other route: it is a separate
 screen on the same network, using the machine's documented network API (REST and the WebSocket the official web UI
 uses). Nothing on the machine is rewired or reflashed; the changes you make on Brewdeck (profile, brew temperature, stop
