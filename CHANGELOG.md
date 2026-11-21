@@ -8,7 +8,7 @@ is ready for wider use. The screen shows its version on the splash and in Menu >
 `v0.2.0-3-gabc1234`: 3 commits after v0.2.0). The UI API (`BD_API_VERSION` in `brewdeck_core.h`) has its own number,
 which changes only when a custom UI would need changes.
 
-## Unreleased
+## v0.2.0 (2026-11-21)
 
 On the screen:
 - Profiles: the list is ordered by, and shows, when each profile was last selected (on the screen or in the web
@@ -38,6 +38,8 @@ On the screen:
 
 Custom UIs:
 - A UI can live outside this repository: `UI=<path>` for `./build.sh` and `sim/build-emu.sh` (docs/custom-ui.md).
+- Start one from [brewdeck-ui-template](https://github.com/pongells/brewdeck-ui-template): the example UI, scripts that
+  fetch Brewdeck at a release tag, and CI. UIs pin a Brewdeck release (this one is the first that can be pinned).
 
 New board:
 - The Guition JC4880P443 (ESP32-P4, 4.3" MIPI-DSI panel shown in landscape, Wi-Fi through its ESP32-C6): a release

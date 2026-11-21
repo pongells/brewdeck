@@ -22,7 +22,19 @@ where a tap selects a profile. It is under the MIT license, so you can copy it a
    ([README, Installing](../README.md#installing);
    `DRY_RUN=1` shows what it would do).
 
-Your UI can also live in its own repository: give `UI` a path instead of a folder name, e.g.
+## Your own repository
+
+The quickest start: [brewdeck-ui-template](https://github.com/pongells/brewdeck-ui-template), a GitHub template with
+the example UI, scripts that fetch Brewdeck at a pinned release and build your UI into the emulator and the firmware,
+and CI for both boards. Press "Use this template", then follow its README.
+
+**Which Brewdeck you build against.** Pin a Brewdeck release tag, `v0.2.0` or later (v0.1.0 cannot build a UI from
+outside the repository). Within API version 1 every newer release keeps your UI compiling and working (see
+"Compatibility" in `brewdeck_core.h`), so moving to a newer release is a one-line change; the release notes say when
+the API gains something, and a new major version of the API would be announced there first. Building against `main`
+works too, but it can change under you.
+
+How it works, if you set it up yourself: give `UI` a path instead of a folder name, e.g.
 `UI=../../my-ui ./build.sh ui` or `UI=../my-ui sim/build-emu.sh` (the emulator is then `sim/emu-my-ui`). A path is
 anything with a `/` in it, taken from where you run the script. The firmware build links the folder into
 `firmware/src/ui_ext` (PlatformIO compiles only inside `src/`; the link is git-ignored). Include the core's headers by
@@ -32,7 +44,8 @@ Naming a UI in its own repository, so people can find it and tell UIs apart:
 - **Repository:** `brewdeck-ui-<name>` (e.g. `brewdeck-ui-ledger`), with the GitHub topic `brewdeck-ui`.
 - **`BD_UI` name:** `<name>` alone (at most 15 characters, lower case; it is also the namespace of the UI's saved
   settings, so keep it once people use the UI).
-- **Emulator:** `sim/emu-brewdeck-ui-<name>` (named after the folder).
+- **Emulator:** the binary is named after the UI's folder (`sim/emu-<folder>`; a folder called `ui`, as in the
+  template, gives `sim/emu-ui-ext`).
 
 Brewdeck's own UI (`firmware/src/ui`) is the large example: every screen, the settings, the shot review.
 

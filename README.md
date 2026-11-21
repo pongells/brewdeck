@@ -17,7 +17,8 @@ tucked away; everything else (editing profiles, settings, maintenance) stays in 
 
 It is also a base for your own screens and interfaces on Gaggiuino's network API. Wi-Fi, finding the machine, live
 data, shots and the few commands live in a core behind one C header, so a new interface (any graphics library) or
-another screen does not touch the network code; start from the [custom UI guide](docs/custom-ui.md). Ideas, ports and
+another screen does not touch the network code; start from the
+[UI template](https://github.com/pongells/brewdeck-ui-template) and the [custom UI guide](docs/custom-ui.md). Ideas, ports and
 interfaces of your own are welcome in the [discussions](https://github.com/pongells/brewdeck/discussions).
 
 The machine's built-in screen does not take custom firmware, so Brewdeck takes the other route: it is a separate
@@ -236,8 +237,8 @@ Plans, not promises:
 - **The ESP32-P4 board's speaker** for optional sounds ([#2](https://github.com/pongells/brewdeck/issues/2)).
 - **Updates over Wi-Fi** for the screen, and later **switching between UIs** from the screen itself
   ([#3](https://github.com/pongells/brewdeck/issues/3)).
-- **Your own UI in your own repository**, built against a tagged core release, with a list of UIs here
-  ([#1](https://github.com/pongells/brewdeck/issues/1)).
+- **A list of UIs** made by others, built by CI against the current core ([#1](https://github.com/pongells/brewdeck/issues/1));
+  your own UI in its own repository works already (the template above).
 - Maybe: an optional beeper on the current board (a small hardware addition).
 
 ## License
