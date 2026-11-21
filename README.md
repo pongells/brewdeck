@@ -21,14 +21,7 @@ and a Mac or Linux computer to flash it ([Installing](#installing)).
 
 It is also a base for your own screens and interfaces on Gaggiuino's network API. Wi-Fi, finding the machine, live
 data, shots and the few commands live in a core behind one C header, so a new interface (any graphics library) or
-another screen does not touch the network code; start from the
-[UI template](https://github.com/pongells/brewdeck-ui-template) and the [custom UI guide](docs/custom-ui.md). Ideas, ports and
-interfaces of your own are welcome in the [discussions](https://github.com/pongells/brewdeck/discussions).
-
-For an idea of how far that goes, [Ledger](https://github.com/pongells/brewdeck-ui-ledger) is a whole different UI on
-the same core: light and printed-looking, sharing no code or look with Brewdeck's own.
-
-<a href="https://github.com/pongells/brewdeck-ui-ledger"><img src="https://raw.githubusercontent.com/pongells/brewdeck-ui-ledger/main/docs/images/ready.png" alt="Ledger, another UI on the Brewdeck core" width="400"></a>
+another screen does not touch the network code ([Your own interface](#your-own-interface)).
 
 The machine's built-in screen does not take custom firmware, so Brewdeck takes the other route: it is a separate
 screen on the same network, using the machine's documented network API (REST and the WebSocket the official web UI
@@ -222,6 +215,18 @@ The emulator runs the real UI code in a desktop window against a fake machine th
 session (`sim/build-emu.sh && sim/emu`, needs SDL2). The same runs in a browser as the
 [web demo](https://pongells.github.io/brewdeck/). Tests, renders and the other tools: [development](docs/development.md).
 
+## Your own interface
+
+A UI is built on the core's API and compiled with it into one image; it can live in its own repository, pinned to a
+Brewdeck release. Start from the [UI template](https://github.com/pongells/brewdeck-ui-template) and the
+[custom UI guide](docs/custom-ui.md). Ideas, ports and interfaces of your own are welcome in the
+[discussions](https://github.com/pongells/brewdeck/discussions).
+
+For an idea of how far that goes, [Ledger](https://github.com/pongells/brewdeck-ui-ledger) is a whole different UI on
+the same core: light and printed-looking, sharing no code or look with Brewdeck's own.
+
+<a href="https://github.com/pongells/brewdeck-ui-ledger"><img src="https://raw.githubusercontent.com/pongells/brewdeck-ui-ledger/main/docs/images/ready.png" alt="Ledger, another UI on the Brewdeck core" width="400"></a>
+
 ## Project layout
 
 How the parts fit together (board, core, UI, the network tasks, the emulator): [architecture](docs/architecture.md).
@@ -250,12 +255,18 @@ talks to the machine. Security problems: please report them privately, see [SECU
 
 Plans, not promises:
 
-- **The ESP32-P4 board's speaker** for optional sounds ([#2](https://github.com/pongells/brewdeck/issues/2)).
-- **Updates over Wi-Fi** for the screen, and later **switching between UIs** from the screen itself
+- **Updates over Wi-Fi**: a new release installed without USB, the old one kept as a fallback
   ([#3](https://github.com/pongells/brewdeck/issues/3)).
+- **Switching between UIs** from the screen itself, built on the updates over Wi-Fi
+  ([#5](https://github.com/pongells/brewdeck/issues/5)).
 - **A list of UIs** made by others, built by CI against the current core ([#1](https://github.com/pongells/brewdeck/issues/1));
-  your own UI in its own repository works already (the template above).
-- Maybe: an optional beeper on the current board (a small hardware addition).
+  your own UI in its own repository works already ([Your own interface](#your-own-interface)).
+- **Faster redraws on the ESP32-P4**: turn the picture with the chip's hardware instead of the CPU
+  ([#4](https://github.com/pongells/brewdeck/issues/4)).
+- Maybe: **sounds**, off by default: a beep before the pressure release, perhaps when a shot ends. The ESP32-P4 board
+  has a speaker output; the ESP32-S3 board needs a small piezo added.
+- Maybe, for fun: **a camera on the ESP32-P4**, watching the shot pour, or taking a picture of you waiting for
+  your morning espresso (the chip has a camera interface).
 
 ## License
 
