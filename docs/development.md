@@ -31,7 +31,7 @@ since the previous check; reads of stored shots do not count) and `expect_cmd <t
 text, e.g. `expect_cmd select id=7`). Checks print PASS / FAIL, and the emulator exits with 1 if one failed.
 Tags (the names a UI gives its objects, [ui-features.md](ui-features.md#how-the-checks-work)): `tags` lists them
 (shown / covered / hidden, position, text), `tap_tag <tag>`, `hold_tag <tag> <ms>`, `expect_visible <tag> [ms]`,
-`expect_hidden <tag> [ms]`, `expect_text <tag> <a|b> [ms]` (waiting up to ms, default 1.5 s). A tag the UI does not
+`expect_hidden <tag> [ms]`, `expect_text <tag> <a|b> [ms]` (waiting up to ms, default 1.5 s), `wait_for <tag> [ms]` (waits until shown; not a check, and goes on at once when the UI has no such tag). A tag the UI does not
 have prints `MISSING <tag>` and ends the script (exit code 3). `machine shot [10]` / `machine steam [10]` start the
 recorded shot / steam on the fake machine without touching the screen (the panel buttons go back to Ready first).
 

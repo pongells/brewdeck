@@ -2,10 +2,12 @@
 # O3 a way out for each case; O5 back to Ready as soon as the machine answers.
 # checks: O1, O3, O4, O5
 wait 500
+wait_for screen.ready 10000
 # a 3 s drop
 button Machine on/off
 wait 3000
 expect_hidden screen.offline 100
+expect_text value.state Ready|Heating|Cooling|Warming 100
 button Machine on/off
 wait 3000
 # the machine gone

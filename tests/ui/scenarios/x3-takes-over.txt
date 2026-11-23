@@ -1,6 +1,7 @@
 # X3 a shot or steam takes over whatever is open: the menu, the profile list, a review.
 # checks: X3
 wait 500
+wait_for screen.ready 10000
 tap_tag action.menu
 wait 800
 machine shot 10
