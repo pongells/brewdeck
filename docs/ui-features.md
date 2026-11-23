@@ -230,7 +230,7 @@ V1    missing   planned
   itself says where a feature applies.
 
 **The report.** A run prints the UI's status table from the results and the file together (done / partial / missing
-/ omitted per ID, with the notes), so it replaces a hand-kept table like Ledger's `FEATURES.md`.
+/ omitted per ID, with the notes) and writes it as `status.md`, so a UI needs no hand-kept feature table.
 
 ## Open questions
 
