@@ -25,7 +25,15 @@ UI only). `EMU_SHOT_CUT=5` cuts the shot after 5 s; `EMU_IGNORE=1` makes the fak
 For scripts the emulator reads commands on stdin, one per line: `key s`, `tap x y`, `drag x1 y1 x2 y2`, `hold x y ms`,
 `click x y` (window coordinates), `button <panel label>`, `wait ms`, `save f.raw` (RGB565, `sim/topng.py` converts it),
 `savewin f.bmp`, `redraw` (the whole screen; a `save` before and after checks that partial redraws left nothing
-behind), `quit`.
+behind), `quit`. Lines starting with `#` are comments. Every command the UI asks the core for is printed as
+`ui -> core: ...` (and written to the file in `EMU_CMDLOG`); two checks look at them: `expect_no_cmd` (no command
+since the previous check; reads of stored shots do not count) and `expect_cmd <text>` (a command starting with that
+text, e.g. `expect_cmd select id=7`). Checks print PASS / FAIL, and the emulator exits with 1 if one failed.
+
+**Shared UI scenarios.** `tests/ui/run.sh [ui]` runs every script in `tests/ui/scenarios` against a UI (a folder
+under `firmware/src`, default Brewdeck's `ui`, or a path to a UI folder) without a window, and keeps the logs in
+`tests/ui/out/`. The scenarios check the features in [ui-features.md](ui-features.md) that do not depend on the
+layout; so far X1, no command without a user action (~2 min).
 
 ## Building the firmware
 

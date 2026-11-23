@@ -53,9 +53,9 @@ static const char *HELP =
     "       I idle screen now   M steam (recorded session)   R reload profiles   Esc/Q quit\n"
     "mouse = finger. Profile taps and weight changes go to the fake machine (printed here).\n"
     "stdin: key s | tap x y | drag x1 y1 x2 y2 | hold x y ms | click x y | button <label> | wait ms | save f.raw |\n"
-    "       savewin f.bmp | redraw | quit\n"
+    "       savewin f.bmp | redraw | expect_no_cmd | expect_cmd <text> | # comment | quit\n"
     "env:   EMU_DATA=<dir> other machine data   EMU_SHOT_CUT=s cut the shot   EMU_SHOT_PROFILE=id   EMU_IGNORE=1 the\n"
-    "       machine ignores commands   EMU_FLUSHLOG=1 log big screen flushes\n";
+    "       machine ignores commands   EMU_FLUSHLOG=1 log big screen flushes   EMU_CMDLOG=<file> the UI's commands\n";
 
 // ---- board layer (brewdeck_core.h): the emulator's screen is a frame buffer, its touch the mouse ----------------
 #include "bd_lvgl9.h"
@@ -648,6 +648,60 @@ static void t_release(void) {               // pressed again, it starts over
   }, 1000, NULL);
   lv_timer_ready(g_release_t);
 }
+// ---- command log: every command the UI asks the core for, with its values and the core's answer -----------------
+// Kept for the scenario checks (expect_cmd / expect_no_cmd), printed as "ui -> core: ...", and written to the file
+// in EMU_CMDLOG. Reads of stored shots are marked: they are not commands to the machine (feature X1).
+struct CmdRec { std::string line; bool read; };
+static std::vector<CmdRec> g_cmds;
+static size_t g_cmd_from = 0;                  // the checks look at what came after the previous check
+static int g_checks = 0, g_fails = 0;
+static const char *res_name(bd_result r) {
+  static const char *const N[] = {"OK", "OFFLINE", "BUSY", "RANGE", "PROFILE_CHANGED", "NO_SCALE", "PENDING", "UNKNOWN_ID"};
+  return (unsigned)r < sizeof N / sizeof N[0] ? N[r] : "?";
+}
+static void cmd_log(bool read, const char *answer, const char *fmt, ...) {
+  char b[200];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(b, sizeof b, fmt, ap);
+  va_end(ap);
+  std::string line = b;
+  if (answer) { line += " -> "; line += answer; }
+  g_cmds.push_back({line, read});
+  printf("ui -> core: %s\n", line.c_str());
+  static FILE *f = getenv("EMU_CMDLOG") ? fopen(getenv("EMU_CMDLOG"), "w") : NULL;
+  if (f) { fprintf(f, "%s%s\n", read ? "read " : "", line.c_str()); fflush(f); }
+}
+static bd_result logged(bd_result r, bool read, const char *fmt, ...) {
+  char b[200];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(b, sizeof b, fmt, ap);
+  va_end(ap);
+  cmd_log(read, res_name(r), "%s", b);
+  return r;
+}
+static void check(bool ok, const char *what) {
+  g_checks++;
+  if (!ok) g_fails++;
+  printf("%s %s\n", ok ? "PASS" : "FAIL", what);
+}
+// expect_no_cmd: no command since the previous check (reads of stored shots do not count)
+static void expect_no_cmd(void) {
+  std::string got;
+  for (size_t i = g_cmd_from; i < g_cmds.size(); i++)
+    if (!g_cmds[i].read) got += (got.empty() ? "" : "; ") + g_cmds[i].line;
+  g_cmd_from = g_cmds.size();
+  check(got.empty(), got.empty() ? "expect_no_cmd" : ("expect_no_cmd: got " + got).c_str());
+}
+// expect_cmd <text>: a command since the previous check starts with the text (e.g. "select id=7")
+static void expect_cmd(const char *text) {
+  bool found = false;
+  for (size_t i = g_cmd_from; i < g_cmds.size() && !found; i++) found = !g_cmds[i].line.compare(0, strlen(text), text);
+  g_cmd_from = g_cmds.size();
+  check(found, (std::string("expect_cmd ") + text).c_str());
+}
+
 // ---- fake core (brewdeck_core.h): commands go to the fake machine above; the state is in core_state.cpp --------
 // a save changes the stored profile (GET /api/profile/<id>, the list's details): as the machine does
 static void emu_stored(int id, float grams, int deg) {
@@ -661,7 +715,7 @@ static void emu_stored(int id, float grams, int deg) {
 // the device core's rules (core_state.cpp cs_cmd_*), then the fake machine instead of the network
 bd_result bd_select_profile(int id, bool save) {
   const char *name;
-  const bd_result r = cs_cmd_select(id, &name);
+  const bd_result r = logged(cs_cmd_select(id, &name), false, "select id=%d save=%d", id, save);
   if (r != BD_OK) return r;
   if (getenv("EMU_IGNORE")) { printf("machine: ignores the pick (EMU_IGNORE)\n"); return BD_OK; }
   on_select(id);
@@ -671,7 +725,8 @@ bd_result bd_select_profile(int id, bool save) {
 bd_result bd_set_stop_weight(int profile_id, float grams, bool save) {
   int w10;
   const char *name;
-  const bd_result r = cs_cmd_weight(profile_id, grams, &w10, &name);
+  const bd_result r = logged(cs_cmd_weight(profile_id, grams, &w10, &name), false, "stop_weight profile=%d grams=%.1f save=%d",
+                             profile_id, grams, save);
   if (r != BD_OK) return r;
   if (getenv("EMU_IGNORE")) { printf("machine: ignores the weight (EMU_IGNORE)\n"); return BD_OK; }
   on_weight(name, w10);
@@ -681,7 +736,8 @@ bd_result bd_set_stop_weight(int profile_id, float grams, bool save) {
 }
 bd_result bd_set_brew_temp(int profile_id, int deg, bool save) {
   const char *name;
-  const bd_result r = cs_cmd_temp(profile_id, deg, &name);
+  const bd_result r = logged(cs_cmd_temp(profile_id, deg, &name), false, "brew_temp profile=%d deg=%d save=%d", profile_id,
+                             deg, save);
   if (r != BD_OK) return r;
   if (getenv("EMU_IGNORE")) { printf("machine: ignores the temperature (EMU_IGNORE)\n"); return BD_OK; }
   on_temp(name, deg);
@@ -691,26 +747,35 @@ bd_result bd_set_brew_temp(int profile_id, int deg, bool save) {
 }
 bd_result bd_flush_mode(bd_flush mode) {
   int pm;
-  const bd_result r = cs_cmd_flush(mode, &pm);
+  static const char *const FM[3] = {"off", "on", "timed"};
+  const bd_result r = logged(cs_cmd_flush(mode, &pm), false, "flush mode=%s", (unsigned)mode < 3 ? FM[mode] : "?");
   if (r != BD_OK) return r;
   if (getenv("EMU_IGNORE")) { printf("machine: ignores the flush change (EMU_IGNORE)\n"); return BD_OK; }
   on_flush(pm);
   return BD_OK;
 }
 bd_result bd_tare(void) {
-  const bd_result r = cs_cmd_tare();
+  const bd_result r = logged(cs_cmd_tare(), false, "tare");
   if (r != BD_OK) return r;
   if (getenv("EMU_IGNORE")) { printf("machine: ignores the tare (EMU_IGNORE)\n"); return BD_OK; }
   on_tare();
   return r;
 }
-bd_result bd_load_previous_shot(const char *profile, int dur10) { on_prev(profile, dur10); return BD_OK; }
-bd_result bd_load_stored_shot(uint32_t id) { on_hist(id); return BD_OK; }
-void bd_wifi_scan(void) { on_wifi_scan(); }
-void bd_wifi_join(const char *ssid, const char *pass) { on_wifi_join(ssid, pass); }
-void bd_wifi_forget(void) { on_forget(); }
-void bd_wifi_retry(void) { on_retry(); }
-void bd_set_machine_address(const char *host) { on_mhost(host); }
+bd_result bd_load_previous_shot(const char *profile, int dur10) {
+  logged(BD_OK, true, "load_previous_shot profile=\"%s\" dur=%.1f", profile ? profile : "", dur10 / 10.0);
+  on_prev(profile, dur10);
+  return BD_OK;
+}
+bd_result bd_load_stored_shot(uint32_t id) {
+  logged(BD_OK, true, "load_stored_shot id=%u", (unsigned)id);
+  on_hist(id);
+  return BD_OK;
+}
+void bd_wifi_scan(void) { cmd_log(false, NULL, "wifi_scan"); on_wifi_scan(); }
+void bd_wifi_join(const char *ssid, const char *pass) { cmd_log(false, NULL, "wifi_join ssid=\"%s\"", ssid); on_wifi_join(ssid, pass); }
+void bd_wifi_forget(void) { cmd_log(false, NULL, "wifi_forget"); on_forget(); }
+void bd_wifi_retry(void) { cmd_log(false, NULL, "wifi_retry"); on_retry(); }
+void bd_set_machine_address(const char *host) { cmd_log(false, NULL, "machine_address host=\"%s\"", host); on_mhost(host); }
 void bd_set_backlight(int pct) { on_backlight(pct); }
 const bd_core_info *bd_core(void) {
   bd_core_info *i = cs_info();
@@ -834,6 +899,9 @@ static bool run_named(const char *name) {
 //   button Shot > review   press a panel button (its label)     savewin f.bmp   the whole window
 //   click 1194 164 mouse click in window coordinates (screen at 48,48; panel at 896,20)
 //   redraw         redraw the whole screen (a save before and after checks that partial redraws left nothing behind)
+//   expect_no_cmd  check: the UI asked the core for no command since the previous check (stored-shot reads allowed)
+//   expect_cmd select id=7   check: a command since the previous check starts with this text (as printed "ui -> core:")
+//   Checks print PASS / FAIL; the exit code is 1 if any failed. Lines starting with # are comments.
 static char g_cmd_buf[512];
 static char g_savewin[400] = "";
 static int g_click_up = 0, g_click_x, g_click_y;   // release a "click" a few passes later         // write the whole window (BMP) after the next frame
@@ -843,6 +911,7 @@ static int g_tap_phase = 0, g_tx = 0, g_ty = 0, g_tx2 = 0, g_ty2 = 0, g_tap_ms =
 static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
   int a, b, c, d;
   char f[400];
+  if (l[0] == '#' || !l[0]) return true;
   if (sscanf(l, "key %c", (char *)f) == 1) *key = (SDL_Keycode)f[0];
   else if (sscanf(l, "hold %d %d %d", &a, &b, &c) == 3) { g_tx = g_tx2 = a; g_ty = g_ty2 = b; g_tap_ms = c; g_tap_phase = 1; }
   else if (sscanf(l, "tap %d %d", &a, &b) == 2) { g_tx = g_tx2 = a; g_ty = g_ty2 = b; g_tap_ms = 120; g_tap_phase = 1; }
@@ -865,6 +934,10 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
   } else if (!strncmp(l, "redraw", 6)) {
     lv_obj_invalidate(lv_screen_active());
     lv_obj_invalidate(lv_layer_top());
+  } else if (!strcmp(l, "expect_no_cmd")) {
+    expect_no_cmd();
+  } else if (!strncmp(l, "expect_cmd ", 11)) {
+    expect_cmd(l + 11);
   } else if (!strncmp(l, "quit", 4)) return false;
   fflush(stdout);
   return true;
@@ -1007,6 +1080,8 @@ int main(int argc, char **argv) {
   SDL_Window *win = SDL_CreateWindow("Brewdeck emulator (fake machine)", SDL_WINDOWPOS_CENTERED,
                                      SDL_WINDOWPOS_CENTERED, WIN_W, WIN_H, SDL_WINDOW_ALLOW_HIGHDPI);
   SDL_Renderer *ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+  if (!ren) ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE);   // no GPU (SDL_VIDEODRIVER=dummy, CI)
+  if (!win || !ren) { printf("SDL: %s\n", SDL_GetError()); return 1; }
   SDL_RenderSetLogicalSize(ren, WIN_W, WIN_H);
   SDL_Texture *tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, W, H);
   SDL_Texture *ptex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, PW, PH);
@@ -1119,6 +1194,7 @@ int main(int argc, char **argv) {
     }
   }
   SDL_Quit();
-  return 0;
+  if (g_checks) printf("%d checks, %d failed\n", g_checks, g_fails);
+  return g_fails ? 1 : 0;
 }
 #endif  // !EMU_WEB

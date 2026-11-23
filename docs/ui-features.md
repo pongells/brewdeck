@@ -177,10 +177,11 @@ going offline, a notice, a command the machine ignores) and checks two things th
   name (`lv_obj_set_name_static`; needs `LV_USE_OBJ_NAME` in `lv_conf.h`), found with `lv_obj_find_by_name`. A UI
   that draws without LVGL is not covered for now; if one appears, a small hook (`bd_test_find(tag)`: area, visible, text) can answer the same questions, and the core would answer it from LVGL names for the others.
 
-New emulator commands (proposed): `tap_tag <tag>`, `hold_tag <tag> <ms>`, `type <tag> <text>`,
-`expect_screen <tag> [within ms]`, `expect_visible` / `expect_hidden <tag>`, `expect_text <tag> <pattern>`,
-`expect_cmd <command> [values]`, `expect_no_cmd`, `expect_backlight <op> <pct>`, `fast <factor>` (time
-fast-forward), `shot` (screenshot for the contact sheet).
+Emulator commands for the checks: `expect_cmd <text>` and `expect_no_cmd` exist (the emulator logs every command
+the UI asks for; runner: `tests/ui/run.sh`, see [development.md](development.md)). Proposed: `tap_tag <tag>`,
+`hold_tag <tag> <ms>`, `type <tag> <text>`, `expect_screen <tag> [within ms]`, `expect_visible` / `expect_hidden
+<tag>`, `expect_text <tag> <pattern>`, `expect_backlight <op> <pct>`, `fast <factor>` (time fast-forward), `shot`
+(screenshot for the contact sheet).
 
 A missing tag is reported as **missing feature**, not as a failure, so the run fills in the UI's status table.
 Required features that are missing are listed first. The screenshots of every scenario go on one contact sheet per UI.

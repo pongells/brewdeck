@@ -1,0 +1,61 @@
+# X1 (Required): no command without a user action. Nothing touches the screen: only the fake machine changes.
+# Reads of stored shots (the previous shot after a shot) are allowed.
+
+# warm-up from a cold boiler
+button Heat on/off
+wait 15000
+button Heat on/off
+wait 2000
+
+# the machine's notices: the update notice (info), a warning, a success, an error
+button Notification
+wait 1500
+button Notification
+wait 1500
+button Notification
+wait 1500
+button Notification
+wait 6000
+
+# pressure left in the system, then the machine's release sequence
+button Pressure left
+wait 3000
+button Pressure release
+wait 6000
+button Pressure left
+wait 3000
+
+# the scale comes and goes, the water tank runs low and is filled
+button Scale on/off
+wait 1500
+button Scale on/off
+wait 1500
+button Water
+wait 1500
+button Water
+wait 1500
+
+# a shot (played at 10x) and its review
+button Shot > review
+wait 15000
+
+# a steam session (played at 10x)
+button Steam, fast
+wait 26000
+
+# the machine switched off and back on, then the Wi-Fi gone and back (+20 s skips the screen's timeouts)
+button Machine on/off
+wait 6000
+button +20 s
+wait 3000
+button Machine on/off
+wait 4000
+button Wi-Fi on/off
+wait 6000
+button +20 s
+wait 2000
+button Wi-Fi on/off
+wait 5000
+
+expect_no_cmd
+quit

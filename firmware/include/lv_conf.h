@@ -40,6 +40,8 @@
 #define LV_USE_ASSERT_OBJ 0
 #define LV_USE_SYSMON 0
 #define LV_USE_OBSERVER 0
+// object names: the tags the shared UI scenarios look for (docs/ui-features.md); one pointer per named object
+#define LV_USE_OBJ_NAME 1
 
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_FONT_MONTSERRAT_20 1   // the example UI (src/ui_minimal); unused fonts are dropped at link time
