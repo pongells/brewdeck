@@ -24,7 +24,9 @@ def read_features(path):
             continue
         m = re.match(r'^\| ([A-Z]\d+) \| (.*?) \| (Required|Expected|Optional) \| (.*?) \|', line)
         if m:
-            feats.append(dict(id=m[1], name=m[2].strip(), level=m[3], check=m[4].strip(), section=section))
+            rest = line[m.end():]
+            feats.append(dict(id=m[1], name=m[2].strip(), level=m[3], check=m[4].strip(), section=section,
+                              checked=rest.rsplit('|', 1)[0] if '|' in rest else rest))
     return feats
 
 
@@ -81,8 +83,12 @@ def run_scenario(emu, path, out, name):
     lines = open(log, encoding='utf-8', errors='replace').read().splitlines()
     passed = [l[5:] for l in lines if l.startswith('PASS ')]
     failed = [l[5:] for l in lines if l.startswith('FAIL ')]
+    missing = [l[8:] for l in lines if l.startswith('MISSING ')]
+    tags = {l[4:] for l in lines if l.startswith('TAG ')}
     ok = rc == 0 and passed and not failed
-    return dict(ok=bool(ok), rc=rc, passed=passed, failed=failed, log=log)
+    # a tag the UI does not have ends the scenario: the feature is missing, not failed (emulator exit code 3)
+    absent = rc == 3 and not failed and bool(missing)
+    return dict(ok=bool(ok), absent=absent, rc=rc, passed=passed, failed=failed, missing=missing, tags=tags, log=log)
 
 
 def main():
@@ -103,41 +109,62 @@ def main():
         errors += ['%s: checks %s, not in docs/ui-features.md' % (name, i) for i in ids if i not in levels]
 
     # run what applies
-    results = {}                      # feature id -> list of (scenario, ok)
+    results = {}                      # feature id -> list of (scenario, ok, missing tags)
+    seen = set()                      # every tag seen in any scenario
+    ran = False
     any_fail = False
     for name, path, ids in scenarios:
         if ids and all(exc.get(i, ('',))[0] in ('omitted', 'missing') for i in ids):
             print('skip  %s (%s left out)' % (name, ', '.join(ids)))
             continue
         r = run_scenario(a.emu, path, a.out, name)
-        any_fail |= not r['ok']
+        ran = True
+        seen |= r['tags']
+        any_fail |= not r['ok'] and not r['absent']
         if r['ok']:
             print('ok    %s (%d checks)' % (name, len(r['passed'])))
+        elif r['absent']:
+            print('miss  %s (no tag %s)' % (name, ', '.join(r['missing'])))
         else:
             print('FAIL  %s (exit %s, log %s)' % (name, r['rc'], os.path.relpath(r['log'], ROOT)))
             for f in r['failed']:
                 print('      ' + f)
         for i in ids:
-            results.setdefault(i, []).append((name, r['ok']))
+            results.setdefault(i, []).append((name, r['ok'] or r['absent'], r['missing'] if r['absent'] else []))
 
     # one status per feature
-    rows = []
+    rows, warnings = [], []
     for f in feats:
         st, note = exc.get(f['id'], ('', ''))
         res = results.get(f['id'])
+        ftags = [t for t in re.findall(r'`([a-z_]+\.[a-z_.<>]+)`', f['checked'])] if 'Tag' in f['check'] else []
+        absent = sorted({t for _, _, m in (res or []) for t in m})
         if st in ('omitted', 'missing'):
             status = st
-        elif res and not all(ok for _, ok in res):
+            if any(t in seen for t in ftags):
+                warnings.append('%s is marked %s, but its tag %s is there' % (f['id'], st, ' / '.join(ftags)))
+        elif res and not all(ok for _, ok, _ in res):
             status = 'FAILED'
-            note = (note + '; ' if note else '') + 'failed: ' + ', '.join(n for n, ok in res if not ok)
+            note = (note + '; ' if note else '') + 'failed: ' + ', '.join(n for n, ok, _ in res if not ok)
+        elif absent:
+            status = 'partial' if st == 'partial' else 'missing'
+            note = (note + '; ' if note else '') + 'no tag ' + ', '.join(absent)
         elif res:
             status = 'partial' if st == 'partial' else 'done'
+        elif ftags and ran:             # a Tag check: the feature is there when its tag is (one of them, if several)
+            if any(t in seen for t in ftags):
+                status = 'partial' if st == 'partial' else 'done'
+            else:                       # not seen: maybe built only when opened; a scenario that looks for it decides
+                status = 'partial' if st == 'partial' else 'not checked yet'
+                note = (note + '; ' if note else '') + 'tag %s not seen' % ' / '.join(ftags)
         elif st == 'partial':
             status = 'partial'
         elif re.search(r'Test|Tag', f['check']):
             status = 'not checked yet'
         else:
             status = 'by hand'          # Look, Panel, None: a person looks, or it is measured on the panel
+        if status == 'done' and 'Look' in f['check']:
+            note = (note + '; ' if note else '') + 'its look: by hand'
         rows.append(dict(f, status=status, note=note))
 
     ui_name = os.path.basename(os.path.normpath(a.ui))
@@ -177,6 +204,10 @@ def main():
     open(os.path.join(a.out, 'status.md'), 'w', encoding='utf-8').write('\n'.join(md) + '\n')
     print('\n%s written' % os.path.relpath(os.path.join(a.out, 'status.md'), ROOT))
 
+    if warnings:
+        print('\nWarnings:')
+        for w in warnings:
+            print('  ' + w)
     if errors:
         print('\nErrors:')
         for e in errors:

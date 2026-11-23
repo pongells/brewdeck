@@ -451,6 +451,25 @@ int today_key(void) {
   return now > (time_t)CLOCK_SET_TS ? c.tm_year * 400 + c.tm_yday : -1;
 }
 // a pill-shaped row (round ends, filled): the state pills of the brewing, review and steam headers, steam's Refill
+lv_obj_t *tag_marker(lv_obj_t *p, const char *t) {
+  lv_obj_t *m = lv_obj_create(p);
+  lv_obj_remove_style_all(m);
+  lv_obj_set_size(m, 1, 1);
+  lv_obj_set_ignore_layout(m, true);
+  lv_obj_set_clickable(m, false);
+  lv_obj_set_hidden(m, true);
+  tag(m, t);
+  return m;
+}
+void tag_markers_show(lv_obj_t *p, bool on) {
+  const uint32_t n = lv_obj_get_child_count(p);
+  for (uint32_t i = 0; i < n; i++) {
+    lv_obj_t *c = lv_obj_get_child(p, (int32_t)i);
+    const char *nm = lv_obj_get_name(c);
+    if (nm && !strncmp(nm, "warn.", 5) && lv_obj_is_hidden(c) == on) lv_obj_set_hidden(c, !on);
+  }
+}
+
 lv_obj_t *pill_row(lv_obj_t *p) {
   lv_obj_t *r = flex(p, LV_FLEX_FLOW_ROW, 8);
   lv_obj_set_flex_align(r, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);

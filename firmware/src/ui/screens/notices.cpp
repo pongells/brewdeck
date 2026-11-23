@@ -192,6 +192,7 @@ void build_frame(void) {
                         {800 - FR_D, FR_D, FR_D, 480 - 2 * FR_D}};
   for (int i = 0; i < 4; i++) {
     g_fr[i] = box(lv_layer_top(), st[i][0], st[i][1], st[i][2], st[i][3], COL_BLUE, 0);
+    if (i == 0) tag(g_fr[i], "warn.release");     // the four edges show together
     lv_obj_set_style_bg_opa(g_fr[i], LV_OPA_TRANSP, 0);
     lv_obj_set_hidden(g_fr[i], true);
   }
@@ -261,6 +262,7 @@ static void on_ntc_btn(lv_event_t *e) {
 }
 void ntc_build_btn(lv_obj_t *scr, int32_t x) {
   g_ntc_btn = box(scr, x, 24, 52, 52, COL_CARD, RAD_CTRL);
+  tag(g_ntc_btn, "action.notices");
   make_button(g_ntc_btn, COL_CARD_PR);
   lv_obj_add_event_cb(g_ntc_btn, on_ntc_btn, LV_EVENT_CLICKED, NULL);
   lv_obj_center(line_icon(g_ntc_btn, IC_BELL, 24, COL_PALE_TX));
@@ -275,6 +277,7 @@ void ntc_build_btn(lv_obj_t *scr, int32_t x) {
   lv_obj_set_clickable(g_ntc_back, true);
   lv_obj_add_event_cb(g_ntc_back, [](lv_event_t *) { ntc_close(); }, LV_EVENT_CLICKED, NULL);
   g_ntc_card = flex(g_ntc_back, LV_FLEX_FLOW_COLUMN, 0);
+  tag(g_ntc_card, "screen.notices");
   lv_obj_set_pos(g_ntc_card, 800 - 24 - 440, 84);   // under the bell, right-aligned with the header's buttons
   lv_obj_set_width(g_ntc_card, 440);
   lv_obj_set_style_pad_hor(g_ntc_card, 20, 0);
@@ -419,6 +422,7 @@ void ui_update_notice(int type, const char *release) {
 // the banner (top layer), hidden until a notice comes
 void build_notif(void) {
   g_nb = flex(lv_layer_top(), LV_FLEX_FLOW_ROW, 8);
+  tag(g_nb, "info.notice");
   lv_obj_set_height(g_nb, 40);
   lv_obj_set_style_pad_hor(g_nb, 16, 0);
   lv_obj_set_style_radius(g_nb, RAD_PILL, 0);

@@ -42,6 +42,7 @@ EMU_WEAK void ui_test_home(void) {}
 EMU_WEAK void ui_test_wifi_password(const char *) {}
 EMU_WEAK void ui_test_menu(int) {}
 #include <map>
+#include <set>
 #include <string>
 
 #define W 800
@@ -902,6 +903,135 @@ static bool run_named(const char *name) {
 //   expect_no_cmd  check: the UI asked the core for no command since the previous check (stored-shot reads allowed)
 //   expect_cmd select id=7   check: a command since the previous check starts with this text (as printed "ui -> core:")
 //   Checks print PASS / FAIL; the exit code is 1 if any failed. Lines starting with # are comments.
+// Tags (docs/ui-features.md): the names a UI gives the objects that matter (lv_obj_set_name_static).
+//   machine shot 10 / machine steam 10   the fake machine starts the recorded shot / steam (speed 1 or 10), the
+//                           screen is left as it is (the panel buttons first go back to Ready)
+//   tags                    print every tagged object: shown / covered / hidden, position, text
+//   tap_tag action.flush    tap the tagged object (the shown one if the tag is on several)
+//   hold_tag action.flush 800
+//   expect_visible screen.review [ms]   check: shown (visible, nothing opaque over its centre), waiting up to ms
+//   expect_hidden warn.pressure [ms]    check: not shown, waiting up to ms (default for both: 1500)
+//   expect_text value.state Heating|Warming [ms]   check: its text (or its first label's) contains one of these
+//                                                  (case-insensitive), waiting up to ms
+//   A tag the UI does not have prints MISSING <tag> and ends the script: the feature is missing (exit code 3 when no
+//   check failed), not failed. Every tag seen during the run is printed at the end (TAG <name>) for the report.
+// ---- tags ------------------------------------------------------------------------------------------------------
+static std::set<std::string> g_tags_seen;
+static bool g_missing = false;
+static void tag_walk(lv_obj_t *o, std::vector<lv_obj_t *> &out) {   // draw order: parent, then children in order
+  out.push_back(o);
+  const uint32_t n = lv_obj_get_child_count(o);
+  for (uint32_t i = 0; i < n; i++) tag_walk(lv_obj_get_child(o, (int32_t)i), out);
+}
+static std::vector<lv_obj_t *> tag_all(void) {
+  std::vector<lv_obj_t *> v;
+  tag_walk(lv_display_get_screen_active(g_dev_disp), v);
+  tag_walk(lv_display_get_layer_top(g_dev_disp), v);
+  tag_walk(lv_display_get_layer_sys(g_dev_disp), v);
+  return v;
+}
+static void tag_scan(void) {
+  for (lv_obj_t *o : tag_all()) { const char *n = lv_obj_get_name(o); if (n) g_tags_seen.insert(n); }
+}
+static bool tag_visible(lv_obj_t *o) {
+  if (!lv_obj_is_visible(o)) return false;                  // hidden itself or by a parent, or off the screen
+  for (lv_obj_t *p = o; p; p = lv_obj_get_parent(p)) if (lv_obj_get_style_opa(p, LV_PART_MAIN) <= LV_OPA_MIN) return false;
+  return true;
+}
+static bool is_inside(lv_obj_t *o, lv_obj_t *anc) { for (; o; o = lv_obj_get_parent(o)) if (o == anc) return true; return false; }
+// covered: an opaque object drawn after it (not its own child) lies over its centre
+static bool tag_covered(lv_obj_t *o, const std::vector<lv_obj_t *> &all) {
+  lv_area_t a;
+  lv_obj_get_coords(o, &a);
+  const lv_point_t c = {(a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2};
+  bool after = false;
+  for (lv_obj_t *q : all) {
+    if (q == o) { after = true; continue; }
+    if (!after || is_inside(q, o) || !tag_visible(q)) continue;
+    if (lv_obj_get_style_bg_opa(q, LV_PART_MAIN) < LV_OPA_COVER) continue;
+    lv_area_t b;
+    lv_obj_get_coords(q, &b);
+    if (c.x >= b.x1 && c.x <= b.x2 && c.y >= b.y1 && c.y <= b.y2) return true;
+  }
+  return false;
+}
+// the objects with this tag; *shown = the first one shown (NULL if none)
+static int tag_find(const char *tag, lv_obj_t **shown, lv_obj_t **any) {
+  const std::vector<lv_obj_t *> all = tag_all();
+  int n = 0;
+  *shown = *any = NULL;
+  for (lv_obj_t *o : all) {
+    const char *nm = lv_obj_get_name(o);
+    if (!nm || strcmp(nm, tag)) continue;
+    n++;
+    if (!*any) *any = o;
+    if (!*shown && tag_visible(o) && !tag_covered(o, all)) *shown = o;
+  }
+  return n;
+}
+static const char *tag_text(lv_obj_t *o) {
+  if (lv_obj_check_type(o, &lv_label_class)) return lv_label_get_text(o);
+  const uint32_t n = lv_obj_get_child_count(o);
+  for (uint32_t i = 0; i < n; i++) { const char *t = tag_text(lv_obj_get_child(o, (int32_t)i)); if (t) return t; }
+  return NULL;
+}
+static bool text_has(const char *text, const char *alts) {   // "a|b": contains a or b, ignoring case
+  if (!text) return false;
+  char buf[200];
+  snprintf(buf, sizeof buf, "%s", alts);
+  for (char *t = strtok(buf, "|"); t; t = strtok(NULL, "|"))
+    if (*t && strcasestr(text, t)) return true;
+  return false;
+}
+static void tag_missing(const char *tag) { printf("MISSING %s\n", tag); g_missing = true; }
+// a check that may wait: re-tested every loop pass until it holds or its time is up (the script waits meanwhile)
+static struct { int kind; char tag[64]; char arg[200]; uint32_t until; } g_pend = {0, "", "", 0};   // kind 0 = none
+enum { PEND_VISIBLE = 1, PEND_HIDDEN, PEND_TEXT };
+static bool pend_holds(void) {
+  lv_obj_t *sh, *any;
+  tag_find(g_pend.tag, &sh, &any);
+  if (g_pend.kind == PEND_VISIBLE) return sh != NULL;
+  if (g_pend.kind == PEND_HIDDEN) return sh == NULL;
+  return sh && text_has(tag_text(sh), g_pend.arg);
+}
+static void pend_start(int kind, const char *tag, const char *arg, int ms, uint32_t now) {
+  lv_obj_t *sh, *any;
+  if (!tag_find(tag, &sh, &any)) { tag_missing(tag); return; }
+  g_pend.kind = kind;
+  snprintf(g_pend.tag, sizeof g_pend.tag, "%s", tag);
+  snprintf(g_pend.arg, sizeof g_pend.arg, "%s", arg ? arg : "");
+  g_pend.until = now + (uint32_t)(ms > 0 ? ms : 1500);
+}
+static const char *const PEND_NAME[] = {"", "expect_visible", "expect_hidden", "expect_text"};
+static void pend_step(uint32_t now) {   // called every loop pass while a check waits
+  if (!g_pend.kind) return;
+  const bool ok = pend_holds();
+  if (!ok && now < g_pend.until) return;
+  char what[320];
+  snprintf(what, sizeof what, "%s %s%s%s", PEND_NAME[g_pend.kind], g_pend.tag, g_pend.arg[0] ? " " : "", g_pend.arg);
+  if (!ok && g_pend.kind == PEND_TEXT) {
+    lv_obj_t *sh, *any;
+    tag_find(g_pend.tag, &sh, &any);
+    const char *t = sh ? tag_text(sh) : NULL;
+    snprintf(what + strlen(what), sizeof what - strlen(what), " (%s: \"%s\")", sh ? "text" : "not shown", t ? t : "");
+  }
+  check(ok, what);
+  g_pend.kind = 0;
+}
+static void tags_print(void) {
+  const std::vector<lv_obj_t *> all = tag_all();
+  for (lv_obj_t *o : all) {
+    const char *nm = lv_obj_get_name(o);
+    if (!nm) continue;
+    lv_area_t a;
+    lv_obj_get_coords(o, &a);
+    const char *t = tag_text(o);
+    printf("tag %-28s %-7s %4d %4d %4d x %-4d %s%s%s\n", nm,
+           !tag_visible(o) ? "hidden" : tag_covered(o, all) ? "covered" : "shown", (int)a.x1, (int)a.y1,
+           (int)lv_area_get_width(&a), (int)lv_area_get_height(&a), t ? "\"" : "", t ? t : "", t ? "\"" : "");
+  }
+}
+
 static char g_cmd_buf[512];
 static char g_savewin[400] = "";
 static int g_click_up = 0, g_click_x, g_click_y;   // release a "click" a few passes later         // write the whole window (BMP) after the next frame
@@ -934,12 +1064,49 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
   } else if (!strncmp(l, "redraw", 6)) {
     lv_obj_invalidate(lv_screen_active());
     lv_obj_invalidate(lv_layer_top());
+  } else if (!strncmp(l, "machine shot", 12)) {    // the fake machine only: the screen is left as it is
+    if (sscanf(l, "machine shot %d", &a) != 1) a = 1;
+    machine_up(); steam_stop(); release_cancel(); g_heating = false;
+    g_speed = a > 0 ? a : 1;
+    start_shot();
+  } else if (!strncmp(l, "machine steam", 13)) {
+    if (sscanf(l, "machine steam %d", &a) != 1) a = 1;
+    machine_up(); stop_shot(); release_cancel(); g_heating = false;
+    steam_set(true, a > 0 ? a : 1);
+  } else if (!strcmp(l, "tags")) {
+    tags_print();
+  } else if (sscanf(l, "tap_tag %63s", f) == 1 || sscanf(l, "hold_tag %63s %d", f, &c) >= 1) {
+    const bool hold = !strncmp(l, "hold_tag", 8);
+    if (!hold) c = 120;
+    else if (sscanf(l, "hold_tag %63s %d", f, &c) < 2) c = 800;
+    lv_obj_t *sh, *any;
+    if (!tag_find(f, &sh, &any)) tag_missing(f);
+    else if (!sh) check(false, (std::string(hold ? "hold_tag " : "tap_tag ") + f + ": not shown").c_str());
+    else {
+      lv_area_t r;
+      lv_obj_get_coords(sh, &r);
+      g_tx = g_tx2 = (r.x1 + r.x2) / 2; g_ty = g_ty2 = (r.y1 + r.y2) / 2; g_tap_ms = c; g_tap_phase = 1;
+    }
+  } else if (sscanf(l, "expect_visible %63s %d", f, &a) >= 1) {
+    pend_start(PEND_VISIBLE, f, NULL, sscanf(l, "expect_visible %63s %d", f, &a) == 2 ? a : 0, now);
+  } else if (sscanf(l, "expect_hidden %63s %d", f, &a) >= 1) {
+    pend_start(PEND_HIDDEN, f, NULL, sscanf(l, "expect_hidden %63s %d", f, &a) == 2 ? a : 0, now);
+  } else if (!strncmp(l, "expect_text ", 12)) {   // expect_text <tag> <a|b|c> [ms]
+    char tag[64], alts[200];
+    int ms = 0;
+    const int k = sscanf(l, "expect_text %63s %199[^\n]", tag, alts);
+    if (k == 2) {
+      char *sp = strrchr(alts, ' ');                 // a trailing number is the time to wait
+      if (sp && sp[1] && strspn(sp + 1, "0123456789") == strlen(sp + 1)) { ms = atoi(sp + 1); *sp = 0; }
+      pend_start(PEND_TEXT, tag, alts, ms, now);
+    }
   } else if (!strcmp(l, "expect_no_cmd")) {
     expect_no_cmd();
   } else if (!strncmp(l, "expect_cmd ", 11)) {
     expect_cmd(l + 11);
   } else if (!strncmp(l, "quit", 4)) return false;
   fflush(stdout);
+  if (g_missing) return false;                      // a missing tag ends the script: the feature is not there
   return true;
 }
 // tap/drag by time (LVGL reads touch every 30 ms): ~100 ms pressed (moving for a drag), then ~60 ms released
@@ -1151,7 +1318,9 @@ int main(int argc, char **argv) {
       SDL_PushEvent(&ev);
       g_click_up = 0;
     }
+    { static uint32_t scan_t = 0; if (now - scan_t >= 500) { scan_t = now; tag_scan(); } }
     if (g_tap_phase) tap_step();
+    else if (g_pend.kind) pend_step(now);
     else if (now >= g_cmd_wait) {
       char c;
       while (read(0, &c, 1) == 1) {
@@ -1194,7 +1363,9 @@ int main(int argc, char **argv) {
     }
   }
   SDL_Quit();
-  if (g_checks) printf("%d checks, %d failed\n", g_checks, g_fails);
-  return g_fails ? 1 : 0;
+  tag_scan();
+  for (const std::string &t : g_tags_seen) printf("TAG %s\n", t.c_str());
+  if (g_checks || g_missing) printf("%d checks, %d failed%s\n", g_checks, g_fails, g_missing ? ", a tag missing" : "");
+  return g_fails ? 1 : g_missing ? 3 : 0;
 }
 #endif  // !EMU_WEB

@@ -1,0 +1,18 @@
+# V4 the review can be closed, and closes by itself.
+# checks: V4
+wait 500
+machine shot 10
+expect_visible screen.review 20000
+tap_tag action.close
+expect_visible screen.ready 2000
+machine shot 10
+expect_visible screen.review 20000
+button +20 s
+wait 500
+button +20 s
+wait 500
+button +20 s
+wait 500
+button +20 s
+expect_visible screen.ready 5000
+quit

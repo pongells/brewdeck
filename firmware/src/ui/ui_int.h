@@ -95,6 +95,15 @@ void fmt_when(uint32_t ts, char *b, size_t n);
 void fmt_day(uint32_t ts, char *b, size_t n);
 int today_key(void);
 lv_obj_t *pill_row(lv_obj_t *p);
+// tags for the shared UI scenarios (docs/ui-features.md, tests/ui): names on the objects that matter, no effect on
+// the look. tag_marker: an invisible 1 x 1 child that shows while what it stands for does (a warning that is only a
+// colour on an object that is always there); tag_markers_show switches the markers of an object.
+static inline void tag(lv_obj_t *o, const char *t) {   // t: a string that lives on (a literal); NULL removes the tag
+  if (t) lv_obj_set_name_static(o, t);
+  else lv_obj_set_name(o, NULL);
+}
+lv_obj_t *tag_marker(lv_obj_t *p, const char *t);
+void tag_markers_show(lv_obj_t *p, bool on);
 
 // ---- screens/ready.cpp: Ready, its keypad, the flush button ---------------------------------------------------------
 extern int g_weight10;

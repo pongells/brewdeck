@@ -78,6 +78,10 @@ void wifi_refresh(void) {
     const bool cur = k == 0 && g_wifi_ssid[0];
     const bd_wifi_net *n = g_wl_idx[k] >= 0 ? &g_nets[g_wl_idx[k]] : NULL;
     set_text(g_wl_name[k], cur ? g_wifi_ssid : n->ssid);
+    char tg[48];
+    snprintf(tg, sizeof tg, "row.wifi.%s", cur ? g_wifi_ssid : n->ssid);
+    const char *was = lv_obj_get_name(g_wl_row[k]);
+    if (!was || strcmp(was, tg)) lv_obj_set_name(g_wl_row[k], tg);   // a copy: the tag follows the network
     set_bars(k, cur ? g_wifi_rssi : n->rssi, cur);
     if (cur) snprintf(b, sizeof b, "%d dBm  \xC2\xB7  channel %d  \xC2\xB7  %s", g_wifi_rssi, g_wifi_ch, g_off_sip);
     set_text(g_wl_sub[k], cur ? b : "");
@@ -96,6 +100,9 @@ static void pw_refresh(void) {
   set_text(g_pw_field_l, g_kb_addr ? "Address" : "Password");
   set_hidden(g_pw_eye, g_kb_addr);
   set_text(g_pw_join_l, g_kb_addr ? "Use" : "Join");
+  tag(g_menu_page[MP_PASSWORD], g_kb_addr ? "screen.machine_address" : "screen.password");   // one page, two uses
+  tag(g_pw_txt, g_kb_addr ? "input.address" : "input.password");
+  tag(g_pw_join, g_kb_addr ? "action.use" : "action.join");
   if (g_pw_show || g_kb_addr) snprintf(b, sizeof b, "%s", g_pw);
   else { size_t i = 0; for (; i < n && i < sizeof b - 1; i++) b[i] = '*'; b[i] = 0; }
   set_text(g_pw_txt, b);
@@ -272,6 +279,7 @@ void build_wifi(lv_obj_t *m) {
   lv_obj_align(g_wl_note, LV_ALIGN_TOP_RIGHT, -164, 42);
 
   lv_obj_t *pg = g_menu_page[MP_WIFI] = box(m, 24, 96, 752, 360, COL_BG, 0);
+  tag(pg, "screen.wifi");
   lv_obj_t *c = flex(pg, LV_FLEX_FLOW_COLUMN, 0);
   hairline(c, LV_BORDER_SIDE_TOP);
   for (int k = 0; k < NET_ROWS; k++) {

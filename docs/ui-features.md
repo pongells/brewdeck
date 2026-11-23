@@ -1,7 +1,8 @@
 # UI features and checks
 
 **Draft.** Partly built: `tests/ui/run.sh` runs the scenarios and prints a UI's status table (see
-[development.md](development.md)); so far only X1 has a scenario, and no tags exist yet.
+[development.md](development.md)). Scenarios exist for B1, B4, B7, M1, M3, N1, O1, O3, O4, O5, U1, V4, X1 and X3;
+Brewdeck's own UI has the tags below.
 
 This is the list of what a UI on Brewdeck's core is expected to do, and how each item is checked. Every UI
 (Brewdeck's own, Ledger, yours) is themed completely its own way, so nothing here says how a screen looks. It says what
@@ -178,11 +179,14 @@ going offline, a notice, a command the machine ignores) and checks two things th
   name (`lv_obj_set_name_static`; needs `LV_USE_OBJ_NAME` in `lv_conf.h`), found with `lv_obj_find_by_name`. A UI
   that draws without LVGL is not covered for now; if one appears, a small hook (`bd_test_find(tag)`: area, visible, text) can answer the same questions, and the core would answer it from LVGL names for the others.
 
-Emulator commands for the checks: `expect_cmd <text>` and `expect_no_cmd` exist (the emulator logs every command
-the UI asks for; runner: `tests/ui/run.sh`, see [development.md](development.md)). Proposed: `tap_tag <tag>`,
-`hold_tag <tag> <ms>`, `type <tag> <text>`, `expect_screen <tag> [within ms]`, `expect_visible` / `expect_hidden
-<tag>`, `expect_text <tag> <pattern>`, `expect_backlight <op> <pct>`, `fast <factor>` (time fast-forward), `shot`
-(screenshot for the contact sheet).
+Emulator commands for the checks (list in [development.md](development.md)): `tap_tag <tag>`, `hold_tag <tag>
+<ms>`, `expect_visible` / `expect_hidden <tag> [ms]`, `expect_text <tag> <a|b> [ms]` (contains one of them, ignoring
+case), `expect_cmd <text>`, `expect_no_cmd`, `tags`, and `machine shot` / `machine steam` (the fake machine starts
+one without touching the screen). Proposed: `type <tag> <text>`, `expect_backlight <op> <pct>`, `fast <factor>`
+(time fast-forward), `shot` (screenshot for the contact sheet).
+
+When a tag is on several objects (the state on Ready, brewing and steam), the checks use the one that is shown.
+Shown means visible (not hidden, on the screen, not fully transparent) with no opaque object drawn over its centre.
 
 A missing tag is reported as **missing feature**, not as a failure, so the run fills in the UI's status table.
 Required features that are missing are listed first. The screenshots of every scenario go on one contact sheet per UI.
@@ -191,16 +195,21 @@ Required features that are missing are listed first. The screenshots of every sc
 
 | Kind | Tags |
 |---|---|
-| Screens | `screen.ready`, `screen.brewing`, `screen.review`, `screen.steam`, `screen.offline`, `screen.profiles`, `screen.keypad`, `screen.history`, `screen.notices`, `screen.wifi`, `screen.machine_address`, `screen.scale`, `screen.display`, `screen.about`, `screen.idle` |
+| Screens | `screen.ready`, `screen.brewing`, `screen.review`, `screen.steam`, `screen.offline`, `screen.profiles`, `screen.keypad`, `screen.history`, `screen.notices`, `screen.menu`, `screen.wifi`, `screen.wifi_details`, `screen.password`, `screen.machine_address`, `screen.scale`, `screen.display`, `screen.about`, `screen.idle` |
 | Values (a label, or an object whose first label child holds the text) | `value.state`, `value.boiler_temp`, `value.profile`, `value.pressure`, `value.scale`, `value.water`, `value.brew_temp`, `value.stop_weight`, `value.weight`, `value.shot_time`, `value.offline_reason` |
 | Warnings (checked visible / hidden) | `warn.pressure`, `warn.no_scale`, `warn.refill`, `warn.release` |
 | Information | `info.unofficial`, `info.notice`, `info.update`, `info.refusal`, `info.wifi_error` |
-| Actions | `action.temp_up`, `action.temp_down`, `action.weight_up`, `action.weight_down`, `action.reset`, `action.restore`, `action.profiles`, `action.flush`, `action.close`, `action.back`, `action.join`, `action.forget`, `action.use`, `action.retry`, `action.wifi_settings`, `action.machine_address` |
+| Actions | `action.temp_up`, `action.temp_down`, `action.weight_up`, `action.weight_down`, `action.done` (a keypad or editor), `action.reset`, `action.restore`, `action.profiles`, `action.menu` (the menu or settings, from Ready), `action.notices`, `action.flush`, `action.close`, `action.back`, `action.join`, `action.forget`, `action.use`, `action.retry`, `action.wifi_settings`, `action.machine_address` |
 | Rows and inputs | `row.profile.<id>`, `row.wifi.<name>`, `input.password`, `input.address` |
 
 A screen counts as shown when its tagged object is visible and nothing opaque covers it. A UI that puts several
 features on one object can give it one tag and the others through a hidden child, as long as it stays visible
-together with what it stands for.
+together with what it stands for (Brewdeck: the Ready footer's warnings are colours on pills that are always there,
+so each pill has an invisible 1 x 1 child tagged `warn.*` that shows while the pill is orange).
+
+A feature checked by **Tag** is done when its tag appeared in any scenario; a tag on something built only when it
+first opens (Brewdeck's restore panel) needs a scenario that opens it. A scenario that looks for a tag the UI does
+not have stops, and its features count as **missing**, not failed.
 
 ## Leaving features out
 

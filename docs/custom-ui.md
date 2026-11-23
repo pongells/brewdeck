@@ -138,6 +138,14 @@ Live values are meaningful only while `link == BD_LINK_ONLINE`.
 - **On the screen:** a debug build (`UI=myui ./build.sh ui-debug`) takes screenshots, records the screen and
   accepts remote touches ([debug web server](development.md#debug-web-server)); it has no password, so use it only on
   a network you trust.
+- **Shared checks:** `tests/ui/run.sh <your UI folder>` runs the same scenarios against every UI and prints your
+  UI's status against the [feature list](ui-features.md): what is done, what failed, what is missing. They find your
+  objects by **tags**, LVGL object names from the list's tag table (`lv_obj_set_name_static(obj, "screen.ready")`;
+  `LV_USE_OBJ_NAME` is on in `lv_conf.h`). Tags change nothing on the screen. Name your screens, the values and
+  warnings, and the buttons the scenarios press; a tag you leave out makes its feature count as missing, never as
+  failed. Features you leave out on purpose go in `ui-features.txt` next to your code
+  ([format and rules](ui-features.md#leaving-features-out)). The tag set is part of the API contract: tags are only
+  added within 1.x, never renamed.
 
 ## License
 

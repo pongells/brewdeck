@@ -267,7 +267,7 @@ static void snap_build(void) {
   lv_obj_set_style_pad_top(row, 8, 0);
   rs_button(row, "Cancel", false, [](lv_event_t *) { snap_close(); });
   rs_button(row, "Keep current", false, on_rs_keep);
-  rs_button(row, "Restore original", true, on_rs_restore);
+  tag(rs_button(row, "Restore original", true, on_rs_restore), "action.restore");
   lv_obj_set_hidden(g_rs_back, true);
 }
 static void on_pick_hold(lv_event_t *e) {           // a long press on an edited row: its snapshot
@@ -348,6 +348,9 @@ static void add_row(lv_obj_t *list, const bd_profile *p) {
   lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
   lv_obj_add_event_cb(row, on_pick_row, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)p->id);   // not after a hold
   lv_obj_add_event_cb(row, on_pick_hold, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)p->id);
+  char tg[24];
+  snprintf(tg, sizeof tg, "row.profile.%d", p->id);
+  lv_obj_set_name(row, tg);                        // a copy (the rows are rebuilt)
   box(row, 12, PK_RH - 1, PK_W, 1, COL_LINE, 0);             // row divider
 
   // name (+ Community), shortened with "..." when it does not fit its column
@@ -402,6 +405,7 @@ static void add_row(lv_obj_t *list, const bd_profile *p) {
     lv_obj_align(bt, LV_ALIGN_LEFT_MID, PK_ACT_X - 12, 0);
     lv_obj_center(label(bt, "Restore", F_TEXT_B, COL_TEXT));
     lv_obj_add_event_cb(bt, on_pick_hold, LV_EVENT_CLICKED, (void *)(intptr_t)p->id);
+    tag(bt, "action.restore");                    // opens the panel with the originals
   } else if (sel) {
     lv_obj_t *ck = flex(row, LV_FLEX_FLOW_ROW, 0);
     lv_obj_align(ck, LV_ALIGN_RIGHT_MID, -12, 0);
@@ -476,6 +480,7 @@ void picker_rebuild(void) {
 
 void build_picker(lv_obj_t *scr) {
   g_pick = box(scr, 0, 0, 800, 480, COL_BG, 0);
+  tag(g_pick, "screen.profiles");
   lv_obj_set_clickable(g_pick, true);               // nothing below can be used
   lv_obj_set_hidden(g_pick, true);
   lv_obj_set_pos(label(g_pick, "Profiles", F_TITLE, COL_TEXT), 24, 32);
@@ -487,6 +492,7 @@ void build_picker(lv_obj_t *scr) {
   lv_obj_center(cw);
   icon_close(cw, COL_TEXT);
   lv_obj_add_event_cb(cl, on_pick_close, LV_EVENT_CLICKED, NULL);
+  tag(cl, "action.close");
   // column names over the list (they stay while it scrolls; hidden while there are no profiles)
   g_pick_hdr = box(g_pick, 0, PK_HDR, 800, PK_HDR_H, COL_BG, 0);
   lv_obj_set_style_bg_opa(g_pick_hdr, LV_OPA_TRANSP, 0);

@@ -29,6 +29,11 @@ behind), `quit`. Lines starting with `#` are comments. Every command the UI asks
 `ui -> core: ...` (and written to the file in `EMU_CMDLOG`); two checks look at them: `expect_no_cmd` (no command
 since the previous check; reads of stored shots do not count) and `expect_cmd <text>` (a command starting with that
 text, e.g. `expect_cmd select id=7`). Checks print PASS / FAIL, and the emulator exits with 1 if one failed.
+Tags (the names a UI gives its objects, [ui-features.md](ui-features.md#how-the-checks-work)): `tags` lists them
+(shown / covered / hidden, position, text), `tap_tag <tag>`, `hold_tag <tag> <ms>`, `expect_visible <tag> [ms]`,
+`expect_hidden <tag> [ms]`, `expect_text <tag> <a|b> [ms]` (waiting up to ms, default 1.5 s). A tag the UI does not
+have prints `MISSING <tag>` and ends the script (exit code 3). `machine shot [10]` / `machine steam [10]` start the
+recorded shot / steam on the fake machine without touching the screen (the panel buttons go back to Ready first).
 
 **Shared UI scenarios.** `tests/ui/run.sh [ui]` runs every script in `tests/ui/scenarios` against a UI (a folder
 under `firmware/src`, default Brewdeck's `ui`, or a path to a UI folder) without a window, then prints the UI's
@@ -37,7 +42,7 @@ checked yet / by hand, with Required features that are missing or failing listed
 from `ui-features.txt` in its folder (format and rules: [Leaving features out](ui-features.md#leaving-features-out))
 and writes `status.md`, the logs and the UI's commands to `tests/ui/out/<emulator>/`. Each scenario names what it
 checks in a `# checks: X1` line, and is skipped when all of those are omitted or missing. `SCENARIO=x1` runs only
-the scenarios whose file name starts with `x1`. So far: X1, no command without a user action (~2 min).
+the scenarios whose file name starts with `x1`. A full run takes ~4 min.
 
 ## Building the firmware
 

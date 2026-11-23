@@ -174,6 +174,7 @@ void ui_set_hist(int state, const bd_shot *s, const bd_profile_shape *sh, const 
 }
 void build_hist(lv_obj_t *m) {
   lv_obj_t *pg = g_menu_page[MP_HISTORY] = box(m, 24, 96, 752, 384, COL_BG, 0);
+  tag(pg, "screen.history");
   g_hl_list = box(pg, 0, 0, 752, 384, COL_BG, 0);
   lv_obj_set_flex_flow(g_hl_list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_clickable(g_hl_list, true);

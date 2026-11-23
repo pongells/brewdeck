@@ -279,6 +279,7 @@ void build_menu(lv_obj_t *scr) {
   g_menu_title = label(g_menu, "Menu", F_TITLE, COL_TEXT);
   lv_obj_set_pos(g_menu_title, 24, 32);
   g_menu_back = box(g_menu, 24, 24, 52, 52, COL_CARD, RAD_CTRL);
+  tag(g_menu_back, "action.back");
   make_button(g_menu_back, COL_CARD_PR);
   static const lv_point_t lt[] = {{12, 4}, {7, 10}, {12, 16}};
   lv_obj_t *bw = icon_box(g_menu_back, 20, 20);
@@ -294,6 +295,7 @@ void build_menu(lv_obj_t *scr) {
 
   // main list: one full-width column, a blue line icon per row; page index per row, -1 = no page
   g_menu_main = box(g_menu, 24, 96, 752, 360, COL_BG, 0);   // lists start at 96
+  tag(g_menu_main, "screen.menu");
   // R[] also has the web-UI-only rows (0, 3), not shown; its indexes are g_mrow_val's
   static const struct { const char *name; int page; bool grey; } R[7] = {
     {"Edit profile", -1, true}, {"Scale", MP_SCALE, false}, {"Display", MP_DISPLAY, false},
@@ -311,6 +313,7 @@ void build_menu(lv_obj_t *scr) {
     lv_obj_align(ic, LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_align(lv_obj_get_child(r, 0), LV_ALIGN_LEFT_MID, 40, 0);   // the name, after the icon
     if (R[i].page >= 0) lv_obj_add_event_cb(r, on_menu_row, LV_EVENT_CLICKED, (void *)(intptr_t)R[i].page);
+    if (R[i].page == MP_WIFI) tag(r, "action.wifi_settings");
   }
   lv_obj_align(label(g_menu_main, "Profiles and maintenance are in the machine's web UI.", F_TEXT, COL_MUTED),
                LV_ALIGN_BOTTOM_LEFT, 0, -4);
@@ -326,6 +329,8 @@ void build_menu(lv_obj_t *scr) {
   for (int k = 0; k < 5; k++) {
     if (k == MP_WIFI) continue;
     g_menu_page[k] = box(g_menu, 24, 96, 752, 360, COL_BG, 0);
+    static const char *const PAGE_TAG[5] = {"screen.display", "screen.scale", NULL, "screen.about", "screen.wifi_details"};
+    tag(g_menu_page[k], PAGE_TAG[k]);
     lv_obj_t *c = flex(g_menu_page[k], LV_FLEX_FLOW_COLUMN, 0);
     hairline(c, LV_BORDER_SIDE_TOP);
     if (k == MP_DISPLAY) {                        // Display: two steppers
@@ -362,8 +367,9 @@ void build_menu(lv_obj_t *scr) {
       hairline(r, LV_BORDER_SIDE_BOTTOM);
       lv_obj_align(logo(r, 32), LV_ALIGN_LEFT_MID, -3, 0);   // 32 px: at 28 the 2 px wisps nearly touch
       lv_obj_align(label(r, "Brewdeck", F_TEXT, COL_TEXT), LV_ALIGN_LEFT_MID, 36, 0);
-      lv_obj_align(label(r, "Unofficial Wi-Fi screen for Gaggiuino machines", F_TEXT, COL_MUTED), LV_ALIGN_RIGHT_MID,
-                   0, 0);
+      lv_obj_t *un = label(r, "Unofficial Wi-Fi screen for Gaggiuino machines", F_TEXT, COL_MUTED);
+      lv_obj_align(un, LV_ALIGN_RIGHT_MID, 0, 0);
+      tag(un, "info.unofficial");
     }
     for (int i = 0; i < 7 && INFO[k][i]; i++) {
       // Wi-Fi details: room for Forget below; About: the Brewdeck row + 7 rows of 44 px in the 360 px page
@@ -371,6 +377,7 @@ void build_menu(lv_obj_t *scr) {
       hairline(r, LV_BORDER_SIDE_BOTTOM);
       lv_obj_align(label(r, INFO[k][i], F_TEXT, COL_MUTED), LV_ALIGN_LEFT_MID, 0, 0);
       g_info[k][i] = label(r, "", F_TEXT, COL_TEXT);
+      if (k == MP_ABOUT && i == 6) tag(g_info[k][i], "info.update");   // the machine's update notice, kept
       lv_obj_align(g_info[k][i], LV_ALIGN_RIGHT_MID, 0, 0);
       if (k == MP_WIFI_DETAILS && i == 4) {         // Machine row: change the machine's address
         lv_obj_align(g_info[k][i], LV_ALIGN_RIGHT_MID, -28, 0);
@@ -379,12 +386,14 @@ void build_menu(lv_obj_t *scr) {
         icon_chevron_right(ch, COL_MUTED);
         make_button(r, COL_CARD);
         lv_obj_add_event_cb(r, on_addr_row, LV_EVENT_CLICKED, NULL);
+        tag(r, "action.machine_address");
       }
     }
     if (k == MP_WIFI_DETAILS) {                     // Forget this network (like a phone), 2-tap confirm
       g_fg_btn = box(g_menu_page[MP_WIFI_DETAILS], 0, 360 - 56, 260, 56, COL_CARD, RAD_CTRL);
       make_button(g_fg_btn, COL_CARD_PR);
       lv_obj_add_event_cb(g_fg_btn, on_forget, LV_EVENT_CLICKED, NULL);
+      tag(g_fg_btn, "action.forget");
       g_fg_lbl = label(g_fg_btn, "Forget this network", F_TEXT_B, COL_TEXT);
       lv_obj_center(g_fg_lbl);
     }

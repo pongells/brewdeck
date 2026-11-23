@@ -1,0 +1,11 @@
+# N1 the pressure-release warning ("water is coming"), on every screen.
+# checks: N1
+wait 500
+button Pressure release
+expect_visible warn.release 2500
+wait 7000
+tap_tag action.profiles
+wait 800
+button Pressure release
+expect_visible warn.release 2500
+quit

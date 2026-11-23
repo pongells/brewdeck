@@ -430,6 +430,7 @@ void foot_pill(lv_obj_t *p, bool warn, int32_t pl, int32_t pr) {
   if (!warn) pl = pr = 0;
   if (lv_obj_get_style_pad_left(p, LV_PART_MAIN) != pl) lv_obj_set_style_pad_left(p, pl, 0);
   if (lv_obj_get_style_pad_right(p, LV_PART_MAIN) != pr) lv_obj_set_style_pad_right(p, pr, 0);
+  tag_markers_show(p, warn);
 }
 
 // a -/value/+ group is one control: one card behind three transparent parts that darken while pressed
@@ -440,7 +441,7 @@ void stepper_part(lv_obj_t *o) {
 }
 
 // a - or + button of a stepper (the card behind it: stepper_card); held, it repeats
-static void stepper_btn(lv_obj_t *scr, int x, bool plus, lv_event_cb_t cb) {
+static void stepper_btn(lv_obj_t *scr, int x, bool plus, lv_event_cb_t cb, const char *tg) {
   lv_obj_t *b = box(scr, x, 304, 64, 64, COL_CARD, RAD_CTRL);
   make_button(b, COL_CARD_PR);
   stepper_part(b);
@@ -450,6 +451,7 @@ static void stepper_btn(lv_obj_t *scr, int x, bool plus, lv_event_cb_t cb) {
   else icon_minus(ic, COL_TEXT);
   lv_obj_add_event_cb(b, cb, LV_EVENT_SHORT_CLICKED, NULL);
   lv_obj_add_event_cb(b, cb, LV_EVENT_LONG_PRESSED_REPEAT, NULL);
+  tag(b, tg);
 }
 
 // ---- Ready: building it ---------------------------------------------------------------------------------------------
@@ -461,6 +463,7 @@ static void ready_header(lv_obj_t *scr) {
 
   lv_obj_t *pill = flex(hl, LV_FLEX_FLOW_ROW, 8);
   g_pill = pill;
+  tag(pill, "value.state");
   lv_obj_set_height(pill, 40);
   lv_obj_set_style_pad_left(pill, 16, 0);
   lv_obj_set_style_pad_right(pill, 16, 0);
@@ -476,6 +479,7 @@ static void ready_header(lv_obj_t *scr) {
   lv_obj_t *menu = box(scr, 724, 24, 52, 52, COL_CARD, RAD_CTRL);
   make_button(menu, COL_CARD_PR);
   g_menu_btn = menu;
+  tag(menu, "action.menu");
   lv_obj_center(line_icon(menu, IC_SETTINGS, 24, COL_TEXT));
 
   lv_point_t tsz;
@@ -484,6 +488,7 @@ static void ready_header(lv_obj_t *scr) {
   lv_obj_t *prof = box(scr, px, 24, pw, 52, COL_CARD, RAD_CTRL);
   make_button(prof, COL_CARD_PR);
   lv_obj_add_event_cb(prof, on_pick_open, LV_EVENT_CLICKED, NULL);
+  tag(prof, "action.profiles");
   lv_obj_align(line_icon(prof, IC_PROFILES, 24, COL_BLUE), LV_ALIGN_LEFT_MID, 14, 0);
   lv_obj_align(label(prof, "Profiles", F_TEXT_B, COL_TEXT), LV_ALIGN_LEFT_MID, 14 + 24 + 10, 0);
 
@@ -494,6 +499,7 @@ static void ready_header(lv_obj_t *scr) {
   ntc_build_btn(scr, px - 8 - 52);
   lv_obj_t *pl = label(hl, "", F_ROW_B, COL_TEXT);
   g_prof_lbl = pl;
+  tag(pl, "value.profile");
   lv_obj_set_flex_grow(pl, 1);
   one_line(pl, 0);
 }
@@ -510,6 +516,7 @@ static void ready_temperature(lv_obj_t *scr) {
   // no dot before the number: brewing / steam have them because they show several values side by side
   lv_obj_t *temp = label(trow, "90.1", F_HERO, COL_TEXT);
   g_temp_lbl = temp;
+  tag(temp, "value.boiler_temp");
   lv_obj_set_style_text_letter_space(temp, -6, 0);
   lv_obj_t *deg = label(trow, "\xC2\xB0", F_VALUE, COL_MUTED);
   lv_obj_set_style_pad_top(deg, 2, 0);
@@ -521,8 +528,8 @@ static void ready_brew_temp(lv_obj_t *scr) {
   lv_obj_t *tt = g_tt_lbl = label(scr, "Brew temp", F_TEXT, COL_MUTED);
   lv_obj_set_pos(tt, 24, 275);
   stepper_card(scr, 24, 328);
-  stepper_btn(scr, 24, false, on_t_minus);
-  stepper_btn(scr, 288, true, on_t_plus);
+  stepper_btn(scr, 24, false, on_t_minus, "action.temp_down");
+  stepper_btn(scr, 288, true, on_t_plus, "action.temp_up");
   lv_obj_t *tvb = box(scr, 96, 304, 184, 64, COL_BG, RAD_CTRL);   // value (tap to type), like the weight's
   lv_obj_set_style_bg_opa(tvb, LV_OPA_TRANSP, 0);
   make_button(tvb, COL_CARD_PR);
@@ -531,6 +538,7 @@ static void ready_brew_temp(lv_obj_t *scr) {
   lv_obj_set_flex_align(tval, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_START);
   lv_obj_center(tval);
   g_tset_lbl = label(tval, "90", F_VALUE, COL_TEXT);
+  tag(g_tset_lbl, "value.brew_temp");
   lv_obj_set_style_pad_bottom(label(tval, "\xC2\xB0" "C", F_ROW, COL_MUTED), base_pad(F_VALUE, F_ROW), 0);
   lv_obj_add_event_cb(tvb, on_open_temp_editor, LV_EVENT_CLICKED, NULL);
 }
@@ -541,8 +549,8 @@ static void ready_stop_weight(lv_obj_t *scr) {
   lv_obj_set_pos(tw, 433, 275);   // weight at the bottom, preview above
 
   stepper_card(scr, 433, 343);
-  stepper_btn(scr, 433, false, on_minus);
-  stepper_btn(scr, 712, true, on_plus);
+  stepper_btn(scr, 433, false, on_minus, "action.weight_down");
+  stepper_btn(scr, 712, true, on_plus, "action.weight_up");
 
   // value (tap to type)
   lv_obj_t *val = box(scr, 505, 304, 199, 64, COL_BG, RAD_CTRL);
@@ -553,6 +561,7 @@ static void ready_stop_weight(lv_obj_t *scr) {
   lv_obj_set_flex_align(vrow, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_START);
   lv_obj_center(vrow);
   g_value_lbl = label(vrow, "21.0", F_VALUE, COL_TEXT);
+  tag(g_value_lbl, "value.stop_weight");
   lv_obj_t *unit = label(vrow, "g", F_ROW, COL_MUTED);
   g_value_unit = unit;
   lv_obj_set_style_pad_bottom(unit, base_pad(F_VALUE, F_ROW), 0);
@@ -596,6 +605,8 @@ static void footer_water(lv_obj_t *fl) {
   g_tank_lbl = label(tank, "Refill", F_TEXT, COL_WARN_TX);
   lv_obj_t *pct = label(tank, "18%", F_TEXT_B, COL_WARN_TX);
   g_tank_pct = pct;
+  tag(pct, "value.water");
+  tag_marker(tank, "warn.refill");
 }
 
 static void footer_scale(lv_obj_t *fl) {
@@ -624,6 +635,8 @@ static void footer_scale(lv_obj_t *fl) {
   for (int i = 0; i < 4; i++) lv_obj_set_style_line_rounded(g_sc_ic[i], true, 0);
   for (int i = 1; i < 4; i++) lv_obj_set_hidden(g_sc_ic[i], true);
   g_scale_pill = sc;
+  tag(sc, "value.scale");
+  tag_marker(sc, "warn.no_scale");
   lv_obj_move_to_index(sc, 0);                    // scale first, then water
   g_scale_name = label(sc, "No scale", F_TEXT, COL_OUTLINE);
   g_scale_lbl = label(sc, "0.0 g", F_TEXT_B, COL_TEXT);
@@ -650,6 +663,8 @@ static void footer_pressure(lv_obj_t *fl) {
   for (int i = 0; i < 2; i++) lv_obj_set_style_line_rounded(g_pr_ic[i], true, 0);
   g_pr_name = label(pp, "Pressure", F_TEXT, COL_OUTLINE);
   g_pr_lbl = label(pp, "- bar", F_TEXT_B, COL_OUTLINE);
+  tag(g_pr_lbl, "value.pressure");
+  tag_marker(pp, "warn.pressure");
   lv_obj_move_to_index(pp, 0);                  // pressure first, then scale, water
 }
 
@@ -680,6 +695,7 @@ static void footer_flush(lv_obj_t *scr) {
   lv_obj_set_style_clip_corner(fb, true, 0);
   make_button(fb, COL_CARD_PR);
   g_fl_btn = fb;
+  tag(fb, "action.flush");
   g_fl_fill = box(fb, -12, 0, 0, 48, COL_BLUE, 0);   // x -12: from the button's edge, not its padded content
   lv_obj_set_style_bg_opa(g_fl_fill, 56, 0);       // the blue at 22 %
   lv_obj_set_ignore_layout(g_fl_fill, true);
@@ -704,6 +720,7 @@ void build_ready(lv_obj_t *scr) {
   // one full-screen container, so a screen that covers Ready can hide it: LVGL redraws a changed value even under an
   // opaque layer, and each such redraw also draws the chart on top
   g_ready = box(scr, 0, 0, 800, 480, COL_BG, 0);
+  tag(g_ready, "screen.ready");
   lv_obj_set_style_bg_opa(g_ready, LV_OPA_TRANSP, 0);
   ready_header(g_ready);
   ready_temperature(g_ready);
@@ -723,6 +740,7 @@ void build_ready(lv_obj_t *scr) {
 // ---- building the keypad --------------------------------------------------------------------------------------------
 void build_editor(lv_obj_t *scr) {
   g_editor = box(scr, 0, 0, 800, 480, COL_BG, 0);
+  tag(g_editor, "screen.keypad");
   lv_obj_set_hidden(g_editor, true);
   lv_obj_set_clickable(g_editor, true);          // swallow touches meant for the screen below
 
@@ -739,6 +757,7 @@ void build_editor(lv_obj_t *scr) {
   icon_close(cancel, COL_TEXT);
   label(cancel, "Cancel", F_TEXT_B, COL_TEXT);
   lv_obj_add_event_cb(cancel, on_cancel, LV_EVENT_CLICKED, NULL);
+  tag(cancel, "action.close");
 
   lv_obj_t *pn = label(g_editor, "", F_TEXT, COL_MUTED);
   g_ed_prof_lbl = pn;
@@ -773,6 +792,7 @@ void build_editor(lv_obj_t *scr) {
   make_button(g_reset_btn, COL_CARD_PR);
   g_reset_lbl = label(g_reset_btn, "Reset to 21.0 g", F_TEXT_B, COL_TEXT);
   lv_obj_add_event_cb(g_reset_btn, on_reset, LV_EVENT_CLICKED, NULL);
+  tag(g_reset_btn, "action.reset");
   lv_obj_set_hidden(g_reset_btn, true);
 
   lv_obj_t *done = box(g_editor, 24, 384, 328, 72, COL_GOLD, RAD_CTRL);
@@ -780,6 +800,7 @@ void build_editor(lv_obj_t *scr) {
   lv_obj_t *dl = label(done, "Done", F_ROW_B, COL_BG);
   lv_obj_center(dl);
   lv_obj_add_event_cb(done, on_done, LV_EVENT_CLICKED, NULL);
+  tag(done, "action.done");
 
   // keypad 3 x 4
   static const char keys[12] = {'1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'b'};

@@ -1,0 +1,12 @@
+# M1 the steam screen while steaming (boiler temperature, pressure); M3 after steam, back to Ready showing it is still
+# too hot to brew.
+# checks: M1, M3
+wait 500
+machine steam 10
+expect_visible screen.steam 3000
+expect_text value.boiler_temp 0|1|2|3|4|5|6|7|8|9
+expect_text value.pressure 0|1|2|3|4|5|6|7|8|9
+# the recorded session: steam off at 3:20, ~20 s at 10x
+expect_visible screen.ready 40000
+expect_text value.state cool 2000
+quit

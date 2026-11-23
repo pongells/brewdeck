@@ -172,6 +172,9 @@ void st_update(const bd_machine *d, bool on) {
       g_st_n = 0;                                   // a new steam session: chart and clock from now
       g_st_from = 0;
       br_steam_started();                           // the last shot's screen gives way
+      menu_close();                                 // and what was open: the menu, the profiles and the keypad are
+      picker_close();                               // drawn above steam (so they can be opened during it), so open
+      editor_close();                               // ones would cover it
       g_st_last = 0;
       g_st_t0 = stamp_nz(lv_tick_get());
     }
@@ -243,6 +246,7 @@ void st_update(const bd_machine *d, bool on) {
 
 void build_steam(lv_obj_t *scr) {
   g_st = box(scr, 0, 0, 800, 480, COL_BG, 0);
+  tag(g_st, "screen.steam");
   lv_obj_set_clickable(g_st, true);     // nothing behind it can be used
   // header: state pill + water, steam clock on the right (like the shot clock)
   lv_obj_t *hl = flex(g_st, LV_FLEX_FLOW_ROW, 14);
@@ -250,6 +254,7 @@ void build_steam(lv_obj_t *scr) {
   lv_obj_set_height(hl, 52);
   lv_obj_set_flex_align(hl, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_t *pill = pill_row(hl);
+  tag(pill, "value.state");
   lv_obj_set_style_pad_left(pill, 16, 0);
   lv_obj_set_style_pad_right(pill, 16, 0);
   lv_obj_set_style_bg_color(pill, COL_BLUE_BG, 0);
@@ -258,6 +263,7 @@ void build_steam(lv_obj_t *scr) {
   // water (the level adds nothing here): only an orange "Refill N%" pill below 20 %, like the Ready footer's rule
   // (a pill only while something needs attention); hidden otherwise
   lv_obj_t *wt = g_st_wt = pill_row(hl);
+  tag(wt, "warn.refill");
   lv_obj_set_style_pad_left(wt, 10, 0);
   lv_obj_set_style_pad_right(wt, 12, 0);
   lv_obj_set_style_bg_color(wt, COL_WARN_BG, 0);
@@ -274,6 +280,8 @@ void build_steam(lv_obj_t *scr) {
   lv_obj_set_height(vr, 52);
   g_st_temp = strip_value(vr, COL_RED, "\xC2\xB0" "C");
   g_st_p = strip_value(vr, COL_PRESS, "bar");
+  tag(g_st_temp, "value.boiler_temp");
+  tag(g_st_p, "value.pressure");
   lv_obj_set_width(lv_obj_get_parent(g_st_temp), ST_CW / 4);   // the brewing screen's columns
   lv_obj_set_width(lv_obj_get_parent(g_st_p), ST_CW / 4);
   g_st_setl = label(lv_obj_get_parent(g_st_temp), "", F_ROW, COL_FAINT);   // "/ 155": the set point

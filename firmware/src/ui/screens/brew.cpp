@@ -562,6 +562,7 @@ void build_brew(lv_obj_t *scr) {
     g_br = NULL; g_rv_prev = NULL; g_rv_shape = NULL;
   }
   g_brew = box(scr, 0, 0, 800, 480, COL_BG, 0);
+  tag(g_brew, "screen.brewing");
   lv_obj_set_clickable(g_brew, true);
   lv_obj_add_event_cb(g_brew, on_brew_tap, LV_EVENT_CLICKED, NULL);
   // header: pill + profile name, shot clock on the right
@@ -569,12 +570,14 @@ void build_brew(lv_obj_t *scr) {
   lv_obj_set_flex_align(hl, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_pos(hl, 24, 30);
   g_br_pill = pill_row(hl);
+  tag(g_br_pill, "value.state");
   lv_obj_set_style_pad_hor(g_br_pill, 16, 0);
   lv_obj_set_style_bg_color(g_br_pill, COL_BREW_BG, 0);
   g_br_dot = box(g_br_pill, 0, 0, 10, 10, COL_GOLD, 5);
   g_br_pill_lbl = label(g_br_pill, "Brewing", F_TEXT_B, COL_BREW_TX);
   g_br_prof = label(hl, "", F_TEXT, COL_MUTED);
   g_br_clock = label(g_brew, "0:00", F_VALUE, COL_TEXT);
+  tag(g_br_clock, "value.shot_time");
   lv_obj_align(g_br_clock, LV_ALIGN_TOP_RIGHT, -24, 22);
   // values: one row under the full-width chart, left-aligned: weight (white), pressure, flow, temperature; each a dot
   // in its colour, the number and its unit
@@ -584,8 +587,11 @@ void build_brew(lv_obj_t *scr) {
   lv_obj_set_height(vr, 52);
   g_br_w = strip_value(vr, COL_TEXT, "g");
   g_br_p = strip_value(vr, COL_PRESS, "bar");
+  tag(g_br_w, "value.weight");
+  tag(g_br_p, "value.pressure");
   g_br_f = strip_value(vr, COL_FLOW, "ml/s");
   g_br_temp = strip_value(vr, COL_RED, "\xC2\xB0" "C");
+  tag(g_br_temp, "value.boiler_temp");
   lv_obj_t *cols[4] = {g_br_w, g_br_p, g_br_f, g_br_temp};
   for (int i = 0; i < 4; i++) lv_obj_set_width(lv_obj_get_parent(cols[i]), BR_W / 4);   // four equal columns
   // the stop weight after the weight: "1.3 / 21.0 g"
@@ -602,6 +608,7 @@ void build_brew(lv_obj_t *scr) {
 
   // shot review
   g_rv = box(scr, 0, 0, 800, 480, COL_BG, 0);
+  tag(g_rv, "screen.review");
   // header: Done pill (a dot like the Ready pill: status pills have a dot, never an icon), "21.8 g in 7.3 s";
   // Close with its countdown on the right
   lv_obj_t *rh = flex(g_rv, LV_FLEX_FLOW_ROW, 16);
@@ -609,6 +616,7 @@ void build_brew(lv_obj_t *scr) {
   lv_obj_set_pos(rh, 24, 24);
   lv_obj_set_height(rh, 56);
   lv_obj_t *rp = pill_row(rh);
+  tag(rp, "value.state");
   lv_obj_set_style_pad_hor(rp, 16, 0);
   lv_obj_set_style_bg_color(rp, COL_PILL_BG, 0);
   box(rp, 0, 0, 10, 10, COL_GREEN, 5);
@@ -630,6 +638,7 @@ void build_brew(lv_obj_t *scr) {
   lv_obj_align(cl, LV_ALIGN_TOP_RIGHT, -24, 26);
   lv_obj_set_clickable(cl, true);
   lv_obj_add_event_cb(cl, on_rv_close, LV_EVENT_CLICKED, NULL);
+  tag(cl, "action.close");
   label(cl, "Close", F_TEXT_B, COL_TEXT);
   g_rv_close_t = label(cl, "1:00", F_TEXT, COL_MUTED);
   // chart (drag to scrub)

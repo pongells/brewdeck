@@ -47,6 +47,8 @@ static void off_buttons(int a0, const char *t0, int a1, const char *t1) {
     g_off_btn_act[i] = a[i];
     set_hidden(g_off_btn[i], a[i] == OFF_ACT_NONE);
     if (a[i] != OFF_ACT_NONE) set_text(g_off_btn_l[i], t[i]);
+    static const char *const TAG[4] = {NULL, "action.wifi_settings", "action.retry", "action.machine_address"};
+    tag(g_off_btn[i], TAG[a[i]]);                  // the tag follows the button's action
   }
 }
 
@@ -257,6 +259,7 @@ void on_off_timer(lv_timer_t *t) {
 // baselines match the design), buttons 328, details line 430.
 void build_offline(lv_obj_t *scr) {
   g_off = box(scr, 0, 0, 800, 480, COL_BG, 0);
+  tag(g_off, "screen.offline");
   lv_obj_set_clickable(g_off, true);    // swallow taps: only the buttons react
   for (int i = 0; i < 2; i++) {
     lv_image_dsc_t &d = g_cup_img[i];
@@ -276,6 +279,7 @@ void build_offline(lv_obj_t *scr) {
   g_off_badge_l = label(g_off_badge_dot, "?", F_TEXT_B, COL_BG);
   lv_obj_center(g_off_badge_l);
   g_off_title = label(g_off, "Joining Wi-Fi", F_TITLE, COL_TEXT);
+  tag(g_off_title, "value.offline_reason");
   lv_obj_set_width(g_off_title, 800);
   lv_obj_set_style_text_align(g_off_title, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_pos(g_off_title, 0, 211);        // F_TITLE baseline at 239

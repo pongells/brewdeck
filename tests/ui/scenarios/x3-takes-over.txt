@@ -1,0 +1,12 @@
+# X3 a shot or steam takes over whatever is open: the menu, the profile list, a review.
+# checks: X3
+wait 500
+tap_tag action.menu
+wait 800
+machine shot 10
+expect_visible screen.brewing 3000
+# the shot ends; whatever shows its result is open now: steam takes over
+wait 12000
+machine steam 10
+expect_visible screen.steam 3000
+quit

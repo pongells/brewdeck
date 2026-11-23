@@ -1,0 +1,8 @@
+# U1 the Wi-Fi settings are reachable from Ready (the machine address: from the offline page, O3).
+# checks: U1
+wait 500
+tap_tag action.menu
+wait 800
+tap_tag action.wifi_settings
+expect_visible screen.wifi 2000
+quit

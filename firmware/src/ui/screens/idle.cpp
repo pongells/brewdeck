@@ -196,6 +196,7 @@ void ui_splash(void) {
   lv_obj_set_style_text_letter_space(name, -1, 0);
   lv_obj_align(name, LV_ALIGN_TOP_MID, 0, 230);
   lv_obj_t *sub = label(g_splash, "Unofficial Wi-Fi screen for Gaggiuino machines", F_TEXT, COL_MUTED);
+  tag(sub, "info.unofficial");
   lv_obj_align(sub, LV_ALIGN_TOP_MID, 0, 304);
   char b[72], mon[4] = "";
   int day = 0, year = 0;
@@ -211,6 +212,7 @@ void ui_splash(void) {
 
 void build_idle(lv_obj_t *scr) {
   g_idle = box(scr, 0, 0, 800, 480, lv_color_black(), 0);
+  tag(g_idle, "screen.idle");
   lv_obj_set_clickable(g_idle, true);
   lv_obj_add_event_cb(g_idle, on_idle_touch, LV_EVENT_PRESSED, NULL);
   lv_obj_t *col = g_idle_col = flex(g_idle, LV_FLEX_FLOW_COLUMN, 14);

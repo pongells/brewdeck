@@ -1,0 +1,20 @@
+# B1 the brewing screen opens when a shot starts; B4 weight and shot time while brewing; B7 the result is shown at the
+# end, then the screen goes back to Ready by itself (Brewdeck: the review closes after 60 s untouched).
+# checks: B1, B4, B7
+wait 500
+machine shot 10
+expect_visible screen.brewing 3000
+expect_text value.shot_time 0|1|2|3|4|5|6|7|8|9
+expect_text value.weight 0|1|2|3|4|5|6|7|8|9
+# the recorded shot ends ~4 s later at 10x
+expect_text value.state done 15000
+# untouched: back to Ready (time skipped forward)
+button +20 s
+wait 500
+button +20 s
+wait 500
+button +20 s
+wait 500
+button +20 s
+expect_visible screen.ready 5000
+quit
