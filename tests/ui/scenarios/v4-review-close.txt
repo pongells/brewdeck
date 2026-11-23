@@ -4,6 +4,11 @@ wait 500
 wait_for screen.ready 10000
 machine shot 10
 expect_visible screen.review 20000
+wait 1500
+shot V1: the review
+drag 200 250 520 250
+wait 600
+shot V3: the review, scrubbed
 tap_tag action.close
 expect_visible screen.ready 2000
 machine shot 10

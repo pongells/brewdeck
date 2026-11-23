@@ -4,20 +4,25 @@ wait 500
 wait_for screen.ready 10000
 tap_tag action.menu
 expect_visible screen.menu 2000
+shot X6: menu
 back_to_ready
 tap_tag action.profiles
 expect_visible screen.profiles 2000
+shot profiles
 back_to_ready
 tap_tag value.brew_temp
 wait 800
+shot X6: brew temperature editor
 back_to_ready
 tap_tag value.stop_weight
 wait 800
+shot X6: stop weight editor
 back_to_ready
 tap_tag action.menu
 wait 800
 tap_tag action.wifi_settings
 expect_visible row.wifi.Home Wi-Fi 2 4000
+shot Wi-Fi list
 back_to_ready
 tap_tag action.menu
 wait 800
@@ -25,6 +30,7 @@ tap_tag action.wifi_settings
 expect_visible row.wifi.Home Wi-Fi 2 4000
 tap_tag row.wifi.Home Wi-Fi 2
 expect_visible screen.password 2000
+shot X6: password page
 back_to_ready
 tap_tag action.menu
 wait 800
@@ -32,5 +38,6 @@ tap_tag action.wifi_settings
 expect_visible row.wifi.Home Wi-Fi 4000
 tap_tag row.wifi.Home Wi-Fi
 wait 800
+shot network details
 back_to_ready
 quit

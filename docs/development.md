@@ -54,7 +54,8 @@ under `firmware/src`, default Brewdeck's `ui`, or a path to a UI folder) without
 status table: per feature of [ui-features.md](ui-features.md) done / partial / FAILED / missing / omitted / not
 checked yet / by hand, with Required features that are missing or failing listed first. It reads the UI's exceptions
 from `ui-features.txt` in its folder (format and rules: [Leaving features out](ui-features.md#leaving-features-out))
-and writes `status.md`, the logs and the UI's commands to `tests/ui/out/<emulator>/`. Each scenario names what it
+and writes `status.md`, `sheet.html` (the screenshots each scenario takes with `shot <caption>`, plus one at every
+failed check, for the checks done by looking), the logs and the UI's commands to `tests/ui/out/<emulator>/`. Each scenario names what it
 checks in a `# checks: X1` line, and is skipped when all of those are omitted or missing. `SCENARIO=x1` runs only
 the scenarios whose file name starts with `x1`. A full run takes ~4 min.
 

@@ -185,7 +185,8 @@ case), `expect_cmd <text>`, `expect_no_cmd`, `tags`, `machine shot` / `machine s
 one without touching the screen), `machine link` / `readiness` / `temp` / `profile` (the fake machine unreachable,
 reporting a readiness or temperature, or picking a profile itself), `tap_under <tag>` (a tap where a covered object is), `type <tag> <text>` / `clear <tag>` (key events to an input),
 `expect_backlight <op> <pct>` and `fast <factor>` (the UI's clock runs faster, for the dim and screen-off times).
-Proposed: `shot` (screenshot for the contact sheet).
+`shot <caption>` saves the screen for the UI's contact sheet (`sheet.html` next to `status.md`), and every failed
+check saves one too.
 
 **Inputs.** The `input.*` objects take LVGL key events (`LV_EVENT_KEY`: a character, or `LV_KEY_BACKSPACE`), as
 from a hardware keyboard, so the tests type the same way into any UI whatever its on-screen keyboard looks like.

@@ -13,10 +13,13 @@ wait 3000
 # the machine gone
 button Machine on/off
 expect_visible screen.offline 7000
+wait 2000
+shot offline: looking
 button +20 s
 wait 1500
 expect_visible action.machine_address
 expect_visible action.wifi_settings
+shot offline: machine not found
 button Machine on/off
 expect_hidden screen.offline 3000
 expect_visible screen.ready
@@ -28,6 +31,7 @@ button +20 s
 wait 1500
 expect_visible action.retry
 expect_visible action.wifi_settings
+shot offline: no Wi-Fi
 button Wi-Fi on/off
 expect_hidden screen.offline 8000
 quit

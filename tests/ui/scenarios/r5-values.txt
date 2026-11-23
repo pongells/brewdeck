@@ -2,6 +2,8 @@
 # checks: R5, R6
 wait 500
 wait_for screen.ready 10000
+wait 1500
+shot R7 X6: Ready
 expect_text value.boiler_temp 90 2000
 machine temp 85.4
 expect_text value.boiler_temp 85 2000

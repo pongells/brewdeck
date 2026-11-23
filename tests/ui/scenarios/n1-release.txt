@@ -4,9 +4,13 @@ wait 500
 wait_for screen.ready 10000
 button Pressure release
 expect_visible warn.release 2500
+wait 600
+shot pressure release on Ready
 wait 7000
 tap_tag action.profiles
 wait 800
 button Pressure release
 expect_visible warn.release 2500
+wait 600
+shot pressure release over the profiles
 quit

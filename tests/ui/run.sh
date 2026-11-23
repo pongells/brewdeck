@@ -5,6 +5,7 @@
 # ui-features.txt. Output (status.md, emulator logs, the UI's commands) in tests/ui/out/<emulator>/.
 # Usage: tests/ui/run.sh [ui]    ui: a folder under firmware/src (default: ui, Brewdeck's own) or a path to a UI folder
 #        SCENARIO=x1 tests/ui/run.sh    only the scenarios whose file name starts with x1
+#        UI_OUT=<folder>                where the results go (a UI's own repo: its checks/ folder)
 set -euo pipefail
 UI="${1:-ui}"; UI="${UI%/}"
 [[ "$UI" == */* ]] && UI="$(cd "$UI" && pwd)"   # a path: absolute, the build runs from elsewhere
@@ -13,4 +14,4 @@ cd "$ROOT"
 UD="$UI"; [[ "$UI" == */* ]] || UD="$ROOT/firmware/src/$UI"
 BIN="$(UI="$UI" sim/build-emu.sh | sed -n 's|^built ||p')"
 [[ -x "$BIN" ]] || { echo "emulator build failed"; exit 1; }
-exec python3 tests/ui/report.py --emu "$BIN" --ui "$UD" --out "tests/ui/out/$(basename "$BIN")" --only "${SCENARIO:-}"
+exec python3 tests/ui/report.py --emu "$BIN" --ui "$UD" --out "${UI_OUT:-tests/ui/out/$(basename "$BIN")}" --only "${SCENARIO:-}"

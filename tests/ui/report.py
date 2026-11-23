@@ -8,7 +8,7 @@ Called by tests/ui/run.sh after it built the emulator for the UI. Reads:
 A scenario is skipped when every feature it checks is omitted or missing. Writes <out>/status.md and the logs.
 Exit 1 when a scenario failed or the exceptions file breaks the rules.
 """
-import argparse, os, re, subprocess, sys
+import argparse, html, os, re, shutil, struct, subprocess, sys, zlib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STATUSES = ('omitted', 'partial', 'missing')
@@ -72,9 +72,70 @@ def read_scenarios(folder, only):
     return out, errors
 
 
+def png(src, dst, w=800, h=480):
+    """The emulator's RGB565 frame as a PNG (standard library only)."""
+    px = struct.unpack('<%dH' % (w * h), open(src, 'rb').read())
+    rgb = bytearray()
+    for y in range(h):
+        rgb.append(0)                                       # filter: none
+        for v in px[y * w:(y + 1) * w]:
+            rgb += bytes((((v >> 11) & 31) * 255 // 31, ((v >> 5) & 63) * 255 // 63, (v & 31) * 255 // 31))
+    chunk = lambda t, d: struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
+    open(dst, 'wb').write(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0))
+                          + chunk(b'IDAT', zlib.compress(bytes(rgb), 6)) + chunk(b'IEND', b''))
+
+
+def read_shots(folder):
+    """shot lines of one scenario: [(png path, caption)], the raw frames converted."""
+    shots, idx = [], os.path.join(folder, 'shots.txt')
+    if not os.path.exists(idx):
+        return shots
+    for line in open(idx, encoding='utf-8', errors='replace'):
+        n, _, cap = line.rstrip('\n').partition(' ')
+        raw = os.path.join(folder, n + '.raw')
+        if os.path.exists(raw):
+            png(raw, os.path.join(folder, n + '.png'))
+            os.remove(raw)
+        shots.append((os.path.join(folder, n + '.png'), cap))
+    return shots
+
+
+def write_sheet(path, ui_name, summary, entries, looks):
+    """sheet.html: first the features checked by looking with their shots, then every scenario's shots."""
+    out = ['<!doctype html><meta charset="utf-8"><title>%s: contact sheet</title>' % html.escape(ui_name),
+           '<style>body{background:#111;color:#ddd;font:14px system-ui,sans-serif;margin:24px}'
+           'h1{font-size:20px}h2{font-size:16px;margin:28px 0 8px}.fail{color:#f77}.ok{color:#7c7}.skip{color:#888}'
+           '.row{display:flex;flex-wrap:wrap;gap:12px}figure{margin:0;width:400px}img{width:400px;display:block;'
+           'border:1px solid #333}figcaption{margin-top:4px;color:#aaa}figcaption.fail{color:#f77}</style>',
+           '<h1>%s</h1><p>%s</p>' % (html.escape(ui_name), html.escape(summary))]
+    fig = lambda p, cap: '<figure><img src="%s" loading="lazy" alt=""><figcaption%s>%s</figcaption></figure>' % (
+        html.escape(os.path.relpath(p, os.path.dirname(path))), ' class="fail"' if cap.startswith('FAIL') else '',
+        html.escape(cap))
+    if looks:
+        out.append('<h1>Check by looking</h1>')
+        for fid, name, how, shots in looks:
+            out.append('<h2>%s %s</h2><p>%s</p>' % (fid, html.escape(name), html.escape(re.sub(r'`', '', how))))
+            out.append('<div class="row">%s</div>' % ''.join(fig(p, c) for p, c in shots) if shots else
+                       '<p class="skip">No screenshot shows it (timing, motion or touch): on the panel.</p>')
+        out.append('<h1>Scenarios</h1>')
+    for name, state, cls, shots in entries:
+        out.append('<h2>%s <span class="%s">%s</span></h2>' % (html.escape(name), cls, html.escape(state)))
+        if shots:
+            out.append('<div class="row">')
+            for p, cap in shots:
+                rel = os.path.relpath(p, os.path.dirname(path))
+                out.append('<figure><img src="%s" loading="lazy" alt=""><figcaption%s>%s</figcaption></figure>'
+                           % (html.escape(rel), ' class="fail"' if cap.startswith('FAIL') else '', html.escape(cap)))
+            out.append('</div>')
+    open(path, 'w', encoding='utf-8').write('\n'.join(out) + '\n')
+
+
 def run_scenario(emu, path, out, name):
     log, cmds = os.path.join(out, name + '.log'), os.path.join(out, name + '.cmds')
-    env = dict(os.environ, SDL_VIDEODRIVER='dummy', EMU_CMDLOG=cmds)
+    shots = os.path.join(out, 'shots', name)
+    shutil.rmtree(shots, ignore_errors=True)
+    os.makedirs(shots)
+    env = dict(os.environ, SDL_VIDEODRIVER='dummy', EMU_CMDLOG=cmds, EMU_SHOTS=shots)
     try:
         with open(path, 'rb') as fin, open(log, 'wb') as fout:
             rc = subprocess.run([emu], stdin=fin, stdout=fout, stderr=subprocess.STDOUT, env=env, timeout=300).returncode
@@ -88,7 +149,8 @@ def run_scenario(emu, path, out, name):
     ok = rc == 0 and passed and not failed
     # a tag the UI does not have ends the scenario: the feature is missing, not failed (emulator exit code 3)
     absent = rc == 3 and not failed and bool(missing)
-    return dict(ok=bool(ok), absent=absent, rc=rc, passed=passed, failed=failed, missing=missing, tags=tags, log=log)
+    return dict(ok=bool(ok), absent=absent, rc=rc, passed=passed, failed=failed, missing=missing, tags=tags, log=log,
+                shots=read_shots(shots))
 
 
 def main():
@@ -113,20 +175,26 @@ def main():
     seen = set()                      # every tag seen in any scenario
     ran = False
     any_fail = False
-    for name, path, ids in scenarios:
+    sheet = []                        # (scenario, state, css class, shots) for sheet.html
+    shutil.rmtree(os.path.join(a.out, 'shots'), ignore_errors=True)
+    for k, (name, path, ids) in enumerate(scenarios, 1):
+        at = '[%d/%d] ' % (k, len(scenarios))   # progress
         if ids and all(exc.get(i, ('',))[0] in ('omitted', 'missing') for i in ids):
-            print('skip  %s (%s left out)' % (name, ', '.join(ids)))
+            print(at + 'skip  %s (%s left out)' % (name, ', '.join(ids)))
+            sheet.append((name, 'skipped: %s left out' % ', '.join(ids), 'skip', []))
             continue
         r = run_scenario(a.emu, path, a.out, name)
         ran = True
+        sheet.append((name, 'ok' if r['ok'] else 'missing: no tag ' + ', '.join(r['missing']) if r['absent']
+                      else 'FAILED', 'ok' if r['ok'] else 'skip' if r['absent'] else 'fail', r['shots']))
         seen |= r['tags']
         any_fail |= not r['ok'] and not r['absent']
         if r['ok']:
-            print('ok    %s (%d checks)' % (name, len(r['passed'])))
+            print(at + 'ok    %s (%d checks)' % (name, len(r['passed'])))
         elif r['absent']:
-            print('miss  %s (no tag %s)' % (name, ', '.join(r['missing'])))
+            print(at + 'miss  %s (no tag %s)' % (name, ', '.join(r['missing'])))
         else:
-            print('FAIL  %s (exit %s, log %s)' % (name, r['rc'], os.path.relpath(r['log'], ROOT)))
+            print(at + 'FAIL  %s (exit %s, log %s)' % (name, r['rc'], os.path.relpath(r['log'], ROOT)))
             for f in r['failed']:
                 print('      ' + f)
         for i in ids:
@@ -202,7 +270,18 @@ def main():
             md += ([''] if md[-1] else []) + ['## ' + section, '', '| ID | Feature | Level | Status | Note |', '|---|---|---|---|---|']
         md.append('| %s | %s | %s | %s | %s |' % (r['id'], r['name'], r['level'], r['status'], r['note']))
     open(os.path.join(a.out, 'status.md'), 'w', encoding='utf-8').write('\n'.join(md) + '\n')
-    print('\n%s written' % os.path.relpath(os.path.join(a.out, 'status.md'), ROOT))
+    # the features checked by looking, each with the shots that name it ("shot R7 X6: Ready")
+    tagged = {}
+    for _, _, _, shots in sheet:
+        for p, cap in shots:
+            ids, sep, _ = cap.partition(':')
+            if sep and all(i in levels for i in ids.split()):
+                for i in ids.split():
+                    tagged.setdefault(i, []).append((p, cap))
+    looks = [(r['id'], r['name'], r['checked'].strip(), tagged.get(r['id'], [])) for r in rows
+             if r['status'] == 'by hand' or 'its look: by hand' in r['note']]
+    write_sheet(os.path.join(a.out, 'sheet.html'), ui_name, 'Status: ' + summary, sheet, looks)
+    print('\n%s and sheet.html (screenshots) written' % os.path.relpath(os.path.join(a.out, 'status.md'), ROOT))
 
     if warnings:
         print('\nWarnings:')

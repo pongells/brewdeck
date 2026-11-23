@@ -139,7 +139,9 @@ Live values are meaningful only while `link == BD_LINK_ONLINE`.
   accepts remote touches ([debug web server](development.md#debug-web-server)); it has no password, so use it only on
   a network you trust.
 - **Shared checks:** `tests/ui/run.sh <your UI folder>` runs the same scenarios against every UI and prints your
-  UI's status against the [feature list](ui-features.md): what is done, what failed, what is missing. They find your
+  UI's status against the [feature list](ui-features.md): what is done, what failed, what is missing; it writes
+  `status.md` and `sheet.html` (screenshots). In a repo made from the template, `./checks.sh` does it against the
+  Brewdeck in `BREWDECK_REF` and writes `checks/`; the template's CI runs it on every push. They find your
   objects by **tags**, LVGL object names from the list's tag table (`lv_obj_set_name_static(obj, "screen.ready")`;
   `LV_USE_OBJ_NAME` is on in `lv_conf.h`). Tags change nothing on the screen. Name your screens, the values and
   warnings, and the buttons the scenarios press; a tag you leave out makes its feature count as missing, never as

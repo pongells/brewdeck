@@ -1,10 +1,10 @@
 # I5 the first touch on a dimmed or dark screen only wakes it: a tap where the flush button is sends nothing
-# (time runs 60x while waiting: fast 60).
+# (time runs 600x while waiting: fast 600).
 # checks: I5
 wait 500
 wait_for screen.ready 10000
 expect_no_cmd
-fast 60
+fast 600
 wait 660000
 expect_backlight < 100 100
 fast 1
@@ -12,7 +12,7 @@ tap_under action.flush
 wait 800
 expect_no_cmd
 expect_backlight = 100 1000
-fast 60
+fast 600
 wait 1900000
 expect_backlight = 0 100
 fast 1

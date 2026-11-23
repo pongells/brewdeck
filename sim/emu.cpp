@@ -697,10 +697,26 @@ static bd_result logged(bd_result r, bool read, const char *fmt, ...) {
   cmd_log(read, res_name(r), "%s", b);
   return r;
 }
+// shot <caption>: the screen as it is now, for the contact sheet (tests/ui/report.py): <EMU_SHOTS>/NN.raw (RGB565)
+// and a line "NN <caption>" in <EMU_SHOTS>/shots.txt; nothing without EMU_SHOTS
+static void shot_save(const char *caption) {
+  static int n = 0;
+  const char *dir = getenv("EMU_SHOTS");
+  if (!dir || !dir[0]) return;
+  char p[512];
+  snprintf(p, sizeof p, "%s/%02d.raw", dir, ++n);
+  FILE *o = fopen(p, "wb");
+  if (!o) return;
+  fwrite(g_fb, 2, W * H, o);
+  fclose(o);
+  snprintf(p, sizeof p, "%s/shots.txt", dir);
+  if ((o = fopen(p, "a"))) { fprintf(o, "%02d %s\n", n, caption); fclose(o); }
+}
 static void check(bool ok, const char *what) {
   g_checks++;
   if (!ok) g_fails++;
   printf("%s %s\n", ok ? "PASS" : "FAIL", what);
+  if (!ok) shot_save((std::string("FAIL ") + what).c_str());   // what the screen showed when it failed
 }
 // expect_no_cmd: no command since the previous check (reads of stored shots do not count)
 static void expect_no_cmd(void) {
@@ -1194,6 +1210,8 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
     steam_set(true, a > 0 ? a : 1);
   } else if (!strncmp(l, "machine ignore ", 15)) {   // on: the machine ignores the UI's commands (like EMU_IGNORE=1)
     g_ignore = !strncmp(l + 15, "on", 2);
+  } else if (!strcmp(l, "shot") || !strncmp(l, "shot ", 5)) {   // shot <caption>: for the contact sheet
+    shot_save(l[4] ? l + 5 : "");
   } else if (!strcmp(l, "mem_mark")) {
     g_mem_mark = mem_used();
   } else if (sscanf(l, "expect_mem_growth %d", &a) == 1) {   // KB of heap in use more than at mem_mark

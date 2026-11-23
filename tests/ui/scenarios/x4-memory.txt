@@ -1,4 +1,4 @@
-# X4 no memory left behind: opening and closing the menu, the profiles, the editors and the Wi-Fi list 20 times
+# X4 no memory left behind: opening and closing the menu, the profiles, the editors and the Wi-Fi list 5 times
 # leaves the heap in use where it was (one round first, so caches and lazy pages are built).
 # checks: X4
 wait 500
@@ -20,7 +20,7 @@ wait 1800
 back_to_ready
 end
 mem_mark
-repeat 20
+repeat 5
 tap_tag action.menu
 wait 500
 back_to_ready

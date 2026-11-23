@@ -7,8 +7,11 @@ machine shot 10
 expect_visible screen.brewing 3000
 expect_text value.shot_time 0|1|2|3|4|5|6|7|8|9
 expect_text value.weight 0|1|2|3|4|5|6|7|8|9
+wait 1500
+shot B2 B3 B5: brewing (played at 10x)
 # the recorded shot ends ~4 s later at 10x
 expect_text value.state done 15000
+shot the shot is done
 # untouched: back to Ready (time skipped forward)
 button +20 s
 wait 500

@@ -4,7 +4,7 @@
 
 # warm-up from a cold boiler
 button Heat on/off
-wait 15000
+wait 8000
 button Heat on/off
 wait 2000
 
@@ -38,11 +38,11 @@ wait 1500
 
 # a shot (played at 10x) and its review
 button Shot > review
-wait 15000
+wait 11000
 
 # a steam session (played at 10x)
-button Steam, fast
-wait 26000
+machine steam 30
+wait 10000
 
 # the machine switched off and back on, then the Wi-Fi gone and back (+20 s skips the screen's timeouts)
 button Machine on/off

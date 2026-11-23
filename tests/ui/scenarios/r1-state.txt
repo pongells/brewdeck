@@ -5,12 +5,15 @@ wait_for screen.ready 10000
 expect_text value.state Ready 3000
 machine readiness 4
 expect_text value.state Standby 3000
+shot state: Standby
 machine readiness 0
 expect_text value.state Waiting 3000
 machine readiness 7
 expect_text value.state Maintenance 3000
+shot state: Maintenance
 machine readiness 1
 expect_text value.state Warming 3000
 machine readiness 2
 expect_text value.state Heating 3000
+shot state: Heating
 quit

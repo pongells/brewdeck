@@ -10,6 +10,8 @@ expect_visible row.wifi.Home Wi-Fi 2 4000
 tap_tag row.wifi.Home Wi-Fi 2
 expect_visible screen.password 2000
 type input.password Coffee-42
+wait 500
+shot password typed
 wait 300
 tap_tag action.join
 wait 500
