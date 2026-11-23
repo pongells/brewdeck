@@ -19,7 +19,8 @@ typedef struct {
 enum { PV_P_TARGET = 0, PV_P_LIMIT, PV_F_TARGET, PV_F_LIMIT, PV_SERIES };
 // Fills out[PV_SERIES] for a w x h box. Returns the estimated shot length in seconds (0 = empty).
 float preview_build(const bd_profile_shape *s, int w, int h, PvSeries out[PV_SERIES]);
-float preview_phase_secs(const bd_phase *p);   // estimated phase length (exposed for tests)
+float preview_phase_secs(const bd_phase *p, float *water);   // one phase's estimated length; water: ml pumped so far (in / out)
+void  preview_phase_lengths(const bd_profile_shape *sh, float out[BD_MAX_PHASES], float rates[BD_MAX_PHASES]);   // every phase's length, in order; rates (g/s, may be NULL)
 // The profile's planned rest after a shot stopped (the shot review's "Target" view): from phase `ph`,
 // `spent` s into it, as shot points (t from t0_10 in 0.1 s; tp/tf x10, the rest 0) with the preview's estimated
 // phase lengths and ramp rules. tp0/tf0 = the targets at the stop (start of a phase without a start value).

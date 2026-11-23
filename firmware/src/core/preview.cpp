@@ -14,8 +14,17 @@ static float fmin2(float a, float b) { return a < b ? a : b; }
 static float fmax2(float a, float b) { return a > b ? a : b; }
 static float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
-float preview_phase_secs(const bd_phase *p) {
+// Filling the basket: pressure builds only once the headspace is full and the puck soaked. Recorded shots: LMD
+// Single at 3 ml/s passed 1.2 bar after 33-36 ml (11-12 s); Leva 9, a pressure phase pumping ~9 ml/s, passed 1.5 bar
+// after ~20 ml (a fast fill soaks less): the volume is taken between those two, by the pump flow.
+static float fill_ml(float flow) { return clampf(33.0f - (flow - 3.0f) * 13.0f / 6.0f, 20.0f, 33.0f); }
+// Pump flow while filling: the flow target; a pressure phase pumps at its flow limit, or fast (~9 ml/s) without one.
+static float fill_flow(const bd_phase *p) {
+  return p->type == BD_PHASE_FLOW ? fmax2(p->end, 0.3f) : (p->limit > 0 ? p->limit : 9.0f);
+}
+float preview_phase_secs(const bd_phase *p, float *water) {
   const float ramp = p->ramp_ms / 1000.0f;
+  const float ff = fill_flow(p), left = fill_ml(ff) - *water;   // water still needed before pressure builds
   float c = 1e9f;
   if (p->stop_ms) c = fmin2(c, p->stop_ms / 1000.0f);
   if (p->stop_water > 0) {
@@ -25,11 +34,35 @@ float preview_phase_secs(const bd_phase *p) {
                                     : (p->limit > 0 ? 0.7f * fmin2(p->limit, 2.0f) : 1.5f);
     c = fmin2(c, p->stop_water / f);
   }
-  if (p->stop_p_above > 0) c = fmin2(c, fmax2(ramp, 3.0f + 0.5f * p->stop_p_above));   // puck fill / pressure build
+  // still filling: until it is full; else the pressure build, fast once full (Leva 9: 1.5 -> 3 bar in 1.4-1.7 s), or
+  // the phase's own pressure ramp if longer
+  if (p->stop_p_above > 0)
+    c = fmin2(c, left > 0 ? left / ff
+                          : fmax2(1.0f + 0.2f * p->stop_p_above, p->type == BD_PHASE_PRESSURE ? ramp : 0.0f));
   if (p->stop_p_below > 0) c = fmin2(c, 3.0f);                                          // pressure decay
-  if (p->stop_weight > 0) c = fmin2(c, p->stop_weight / 1.5f);                          // ~1.5 g/s in the cup
+  const float rate = preview_plan_rate(p);          // nothing reaches the cup while it fills or soaks
+  if (p->stop_weight > 0 && rate > 0 && left <= 0) c = fmin2(c, p->stop_weight / rate);
   if (c > 1e8f) c = fmax2(ramp, 8.0f);              // no stop condition: runs until the global stop
-  return clampf(c, 1.0f, 30.0f);
+  c = clampf(c, 1.0f, 30.0f);
+  *water += (left > 0 ? ff : 1.5f) * c;             // only the fill counts; after it, roughly
+  return c;
+}
+// A phase with no stop condition of its own runs until the shot's stop weight: its length is the weight still missing
+// at its rate (the weight in the cup estimated phase by phase, none while the basket fills). LMD Single's last phase:
+// recorded 13 s and 19.6 s (1.1 / 0.86 g/s).
+void preview_phase_lengths(const bd_profile_shape *sh, float out[BD_MAX_PHASES], float rates[BD_MAX_PHASES]) {
+  float water = 0, grams = 0;
+  for (int i = 0; i < sh->n && i < BD_MAX_PHASES; i++) {
+    const bd_phase *p = &sh->ph[i];
+    const bool filling = water < fill_ml(fill_flow(p));
+    out[i] = preview_phase_secs(p, &water);
+    const float rate = filling ? 0 : preview_plan_rate(p);
+    if (rates) rates[i] = rate;
+    const bool open_ended = !p->stop_ms && p->stop_water <= 0 && p->stop_p_above <= 0 && p->stop_p_below <= 0 &&
+                            p->stop_weight <= 0;
+    if (open_ended && sh->stop_weight > grams && rate > 0) out[i] = clampf((sh->stop_weight - grams) / rate, 1.0f, 60.0f);
+    grams += rate * out[i];
+  }
 }
 
 static float ease(uint8_t curve, float u);
@@ -50,6 +83,9 @@ int preview_plan(const bd_profile_shape *sh, int ph, float spent, int t0_10, int
   float w = w0;
   const float wstop = sh->stop_weight;
   if (wstop > 0 && w0 >= wstop) return 0;            // the shot already reached the stop weight
+  float dur[BD_MAX_PHASES];
+  float rates[BD_MAX_PHASES];
+  preview_phase_lengths(sh, dur, rates);
   float t = 0;                                       // seconds after the stop
   float prev[2] = {tp0 / 10.0f, tf0 / 10.0f};        // last target per quantity (0 pressure, 1 flow)
   auto add = [&](float ts, float p, float f) {
@@ -65,7 +101,7 @@ int preview_plan(const bd_profile_shape *sh, int ph, float spent, int t0_10, int
   add(0, prev[0], prev[1]);
   for (int i = ph; i < sh->n; i++) {
     const bd_phase *p = &sh->ph[i];
-    const float d = preview_phase_secs(p), from = i == ph ? fmin2(spent, d) : 0;
+    const float d = dur[i], from = i == ph ? fmin2(spent, d) : 0;
     if (d - from <= 0.05f) continue;
     const int q = p->type == BD_PHASE_PRESSURE ? 0 : 1;
     const float ramp = p->ramp_ms / 1000.0f, te = fmin2(ramp, d);
@@ -76,7 +112,7 @@ int preview_plan(const bd_profile_shape *sh, int ph, float spent, int t0_10, int
     const float other = p->limit > 0 ? p->limit : 0;
     int steps = (int)((d - from) / 0.5f);
     if (steps < 1) steps = 1;
-    const float rate = preview_plan_rate(p);
+    const float rate = rates[i];                     // as the lengths use it (none while the basket fills)
     float tend = d;                                  // the stop weight is reached inside this phase: stop there
     const bool last = wstop > 0 && rate > 0 && w + rate * (d - from) >= wstop;
     if (last) {
@@ -160,7 +196,8 @@ float preview_build(const bd_profile_shape *sh, int w, int h, PvSeries out[PV_SE
   memset(out, 0, sizeof(PvSeries) * PV_SERIES);
   if (!sh || sh->n == 0) return 0;
   float dur[BD_MAX_PHASES], total = 0;
-  for (int i = 0; i < sh->n; i++) total += dur[i] = preview_phase_secs(&sh->ph[i]);
+  preview_phase_lengths(sh, dur, NULL);
+  for (int i = 0; i < sh->n; i++) total += dur[i];
   const float x0 = 3, xw = (float)(w - 7);
   const float ybase = (float)(h - 3), yk = (float)(h - 8) / 10.0f;
   Track tr[PV_SERIES];
