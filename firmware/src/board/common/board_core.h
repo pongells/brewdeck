@@ -13,6 +13,8 @@ void board_fake_touch(int x, int y, int ms);   // debug server: a remote press a
 const uint16_t *board_screen_rows(int y, int n);
 // debug server (GET /flash): the flash read mode ("QIO", "DIO", ...) and the flash controller's register
 const char *board_flash_mode(uint32_t *ctrl);
+// debug server (GET /heap): how flushed pictures reach the panel (e.g. "rotated by the PPA")
+const char *board_display_mode(void);
 void board_backlight_hz(uint32_t hz);   // debug server (GET /bl): the backlight PWM frequency
 // debug server (GET /i2c): every address that answers on the touch controller's I2C bus, one line each, into out;
 // returns the length. Call on the UI task (touch reads share the bus).

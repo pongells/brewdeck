@@ -36,6 +36,8 @@ const uint16_t *board_screen_rows(int y, int n) {
   return fb && y >= 0 && n > 0 && y + n <= SCREEN_H ? fb + (size_t)y * SCREEN_W : NULL;
 }
 
+const char *board_display_mode(void) { return "copied by the CPU (landscape panel, no rotation)"; }
+
 const char *board_flash_mode(uint32_t *ctrl) {
   const uint32_t c = REG_READ(SPI_MEM_CTRL_REG(0));
   if (ctrl) *ctrl = c;
