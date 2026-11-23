@@ -31,8 +31,14 @@ since the previous check; reads of stored shots do not count) and `expect_cmd <t
 text, e.g. `expect_cmd select id=7`). Checks print PASS / FAIL, and the emulator exits with 1 if one failed.
 Tags (the names a UI gives its objects, [ui-features.md](ui-features.md#how-the-checks-work)): `tags` lists them
 (shown / covered / hidden, position, text), `tap_tag <tag>`, `hold_tag <tag> <ms>`, `expect_visible <tag> [ms]`,
-`expect_hidden <tag> [ms]`, `expect_text <tag> <a|b> [ms]` (waiting up to ms, default 1.5 s), `wait_for <tag> [ms]` (waits until shown; not a check, and goes on at once when the UI has no such tag). A tag the UI does not
-have prints `MISSING <tag>` and ends the script (exit code 3). `machine shot [10]` / `machine steam [10]` start the
+`expect_hidden <tag> [ms]`, `expect_text <tag> <a|b> [ms]` (waiting up to ms, default 1.5 s), `wait_for <tag> [ms]` (waits until shown; not a check, and goes on at once when the UI has no such tag). A tag may hold spaces
+(`row.wifi.Home Wi-Fi 2`); one that ends in a number needs the time given. `type <tag> <text>` sends each character
+to the shown input as an LVGL key event (`LV_EVENT_KEY`, as a hardware keyboard would), `clear <tag>` sends
+`LV_KEY_BACKSPACE` 80 times. `expect_backlight <op> <pct> [ms]` checks the last level the UI set (`<`, `<=`, `=`,
+`>=`, `>`). `fast <n>` runs the UI's clock n times faster (not the fake machine's recordings; 1x during a tap), and
+waits and check times count in screen time: after `fast 60`, `wait 600000` is 10 minutes on the screen and 10 s
+here. A tag the UI does not have (still absent when a check's time is up) prints `MISSING <tag>` and ends the
+script (exit code 3). `machine shot [10]` / `machine steam [10]` start the
 recorded shot / steam on the fake machine without touching the screen (the panel buttons go back to Ready first).
 
 **Shared UI scenarios.** `tests/ui/run.sh [ui]` runs every script in `tests/ui/scenarios` against a UI (a folder

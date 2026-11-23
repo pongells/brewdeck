@@ -21,6 +21,7 @@ static uint32_t SDL_GetTicks(void) { return (uint32_t)emscripten_get_now(); }
 #include <unistd.h>
 #include <fcntl.h>
 #include <strings.h>
+#include <ctype.h>
 #include "ui.h"
 #include "parse.h"
 #include "pb.h"
@@ -593,6 +594,8 @@ static void a_wifipw(void) { a_ready(); g_nowifi = g_wifi_auth = true; }
 static void a_addr(void) { go_home(); ui_test_menu(6); }
 static void a_history(void) { go_home(); ui_test_menu(7); }
 static uint32_t g_vnow = 1;                 // the UI's clock (bd_ui_tick), runs faster with the fast steam
+static int g_fast = 1;                      // script "fast N": the UI's clock N times faster (not during a tap)
+static bool g_tapping = false;              // a scripted tap / hold is pressing: the clock runs at 1x meanwhile
 static void t_skip(void) { g_vnow += 20000; }   // jump 20 s (timeouts) without waiting
 static void t_scale(void) { g_m.scales_present = !g_m.scales_present; }
 static void t_scale_type(void) {   // Bluetooth -> wired -> predictive -> Bluetooth
@@ -773,7 +776,10 @@ bd_result bd_load_stored_shot(uint32_t id) {
   return BD_OK;
 }
 void bd_wifi_scan(void) { cmd_log(false, NULL, "wifi_scan"); on_wifi_scan(); }
-void bd_wifi_join(const char *ssid, const char *pass) { cmd_log(false, NULL, "wifi_join ssid=\"%s\"", ssid); on_wifi_join(ssid, pass); }
+void bd_wifi_join(const char *ssid, const char *pass) {   // the length only: a password is never printed
+  cmd_log(false, NULL, "wifi_join ssid=\"%s\" pass_len=%zu", ssid, strlen(pass));
+  on_wifi_join(ssid, pass);
+}
 void bd_wifi_forget(void) { cmd_log(false, NULL, "wifi_forget"); on_forget(); }
 void bd_wifi_retry(void) { cmd_log(false, NULL, "wifi_retry"); on_retry(); }
 void bd_set_machine_address(const char *host) { cmd_log(false, NULL, "machine_address host=\"%s\"", host); on_mhost(host); }
@@ -915,6 +921,11 @@ static bool run_named(const char *name) {
 //   expect_hidden warn.pressure [ms]    check: not shown, waiting up to ms (default for both: 1500)
 //   expect_text value.state Heating|Warming [ms]   check: its text (or its first label's) contains one of these
 //                                                  (case-insensitive), waiting up to ms
+//   type input.password secret123   send each character to the shown tagged input as an LVGL key event
+//                           (LV_EVENT_KEY, as from a hardware keyboard); clear input.address sends LV_KEY_BACKSPACE x 80
+//   expect_backlight < 100 [ms]   check: the last backlight level the UI set (< <= = >= >, percent), waiting up to ms
+//   fast 60                 the UI's clock runs 60x (the fake machine does not): waits and check times are screen
+//                           time, so "wait 600000" is 10 min on the screen, 10 s here; fast 1 back. Taps run at 1x.
 //   A tag the UI does not have prints MISSING <tag> and ends the script: the feature is missing (exit code 3 when no
 //   check failed), not failed. Every tag seen during the run is printed at the end (TAG <name>) for the report.
 // ---- tags ------------------------------------------------------------------------------------------------------
@@ -988,28 +999,37 @@ static bool text_has(const char *text, const char *alts) {   // "a|b": contains 
 static void tag_missing(const char *tag) { printf("MISSING %s\n", tag); g_missing = true; }
 // a check that may wait: re-tested every loop pass until it holds or its time is up (the script waits meanwhile)
 static struct { int kind; char tag[64]; char arg[200]; uint32_t until; } g_pend = {0, "", "", 0};   // kind 0 = none
-enum { PEND_VISIBLE = 1, PEND_HIDDEN, PEND_TEXT, PEND_WAIT };
+enum { PEND_VISIBLE = 1, PEND_HIDDEN, PEND_TEXT, PEND_WAIT, PEND_BACKLIGHT };
+static bool bl_holds(const char *op, int pct) {
+  const int b = g_backlight;
+  return !strcmp(op, "<") ? b < pct : !strcmp(op, "<=") ? b <= pct : !strcmp(op, ">") ? b > pct
+       : !strcmp(op, ">=") ? b >= pct : b == pct;
+}
 static bool pend_holds(void) {
+  if (g_pend.kind == PEND_BACKLIGHT) return bl_holds(g_pend.tag, atoi(g_pend.arg));
   lv_obj_t *sh, *any;
   tag_find(g_pend.tag, &sh, &any);
   if (g_pend.kind == PEND_VISIBLE || g_pend.kind == PEND_WAIT) return sh != NULL;
   if (g_pend.kind == PEND_HIDDEN) return sh == NULL;
   return sh && text_has(tag_text(sh), g_pend.arg);
 }
+// a tag not there yet may come (a list filled after a scan): it is missing only if still absent when the time is up
 static void pend_start(int kind, const char *tag, const char *arg, int ms, uint32_t now) {
-  lv_obj_t *sh, *any;
-  if (!tag_find(tag, &sh, &any)) { tag_missing(tag); return; }
   g_pend.kind = kind;
   snprintf(g_pend.tag, sizeof g_pend.tag, "%s", tag);
   snprintf(g_pend.arg, sizeof g_pend.arg, "%s", arg ? arg : "");
-  g_pend.until = now + (uint32_t)(ms > 0 ? ms : 1500);
+  g_pend.until = now + (uint32_t)(ms > 0 ? ms : 1500) / (uint32_t)g_fast;   // screen time
 }
-static const char *const PEND_NAME[] = {"", "expect_visible", "expect_hidden", "expect_text", "wait_for"};
+static const char *const PEND_NAME[] = {"", "expect_visible", "expect_hidden", "expect_text", "wait_for", "expect_backlight"};
 static void pend_step(uint32_t now) {   // called every loop pass while a check waits
   if (!g_pend.kind) return;
   const bool ok = pend_holds();
   if (!ok && now < g_pend.until) return;
   if (g_pend.kind == PEND_WAIT) { g_pend.kind = 0; return; }   // only a wait: not a check
+  if (g_pend.kind != PEND_BACKLIGHT) {
+    lv_obj_t *sh, *any;
+    if (!tag_find(g_pend.tag, &sh, &any)) { tag_missing(g_pend.tag); g_pend.kind = 0; return; }
+  }
   char what[320];
   snprintf(what, sizeof what, "%s %s%s%s", PEND_NAME[g_pend.kind], g_pend.tag, g_pend.arg[0] ? " " : "", g_pend.arg);
   if (!ok && g_pend.kind == PEND_TEXT) {
@@ -1018,6 +1038,8 @@ static void pend_step(uint32_t now) {   // called every loop pass while a check 
     const char *t = sh ? tag_text(sh) : NULL;
     snprintf(what + strlen(what), sizeof what - strlen(what), " (%s: \"%s\")", sh ? "text" : "not shown", t ? t : "");
   }
+  if (!ok && g_pend.kind == PEND_BACKLIGHT)
+    snprintf(what + strlen(what), sizeof what - strlen(what), " (backlight %d %%)", g_backlight);
   check(ok, what);
   g_pend.kind = 0;
 }
@@ -1035,6 +1057,17 @@ static void tags_print(void) {
   }
 }
 
+// "<tag> [ms]" after a command word: the tag may hold spaces (row.wifi.<name>), a trailing number is the time (so a
+// tag that ends in a number needs the time given)
+static int tag_ms(const char *rest, char *tag, int def) {
+  snprintf(tag, 64, "%s", rest);
+  size_t n = strlen(tag);
+  while (n && isspace((unsigned char)tag[n - 1])) tag[--n] = 0;
+  char *sp = strrchr(tag, ' ');
+  if (sp && sp[1] && strspn(sp + 1, "0123456789") == strlen(sp + 1)) { const int ms = atoi(sp + 1); *sp = 0; return ms; }
+  return def;
+}
+
 static char g_cmd_buf[512];
 static char g_savewin[400] = "";
 static int g_click_up = 0, g_click_x, g_click_y;   // release a "click" a few passes later         // write the whole window (BMP) after the next frame
@@ -1049,7 +1082,7 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
   else if (sscanf(l, "hold %d %d %d", &a, &b, &c) == 3) { g_tx = g_tx2 = a; g_ty = g_ty2 = b; g_tap_ms = c; g_tap_phase = 1; }
   else if (sscanf(l, "tap %d %d", &a, &b) == 2) { g_tx = g_tx2 = a; g_ty = g_ty2 = b; g_tap_ms = 120; g_tap_phase = 1; }
   else if (sscanf(l, "drag %d %d %d %d", &a, &b, &c, &d) == 4) { g_tx = a; g_ty = b; g_tx2 = c; g_ty2 = d; g_tap_ms = 120; g_tap_phase = 1; }
-  else if (sscanf(l, "wait %d", &a) == 1) g_cmd_wait = now + a;
+  else if (sscanf(l, "wait %d", &a) == 1) g_cmd_wait = now + (uint32_t)a / (uint32_t)g_fast;   // screen time
   else if (sscanf(l, "click %d %d", &a, &b) == 2) {   // real mouse events in window coordinates (tests the routing)
     SDL_Event ev;
     memset(&ev, 0, sizeof ev);
@@ -1078,10 +1111,13 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
     steam_set(true, a > 0 ? a : 1);
   } else if (!strcmp(l, "tags")) {
     tags_print();
-  } else if (sscanf(l, "tap_tag %63s", f) == 1 || sscanf(l, "hold_tag %63s %d", f, &c) >= 1) {
-    const bool hold = !strncmp(l, "hold_tag", 8);
-    if (!hold) c = 120;
-    else if (sscanf(l, "hold_tag %63s %d", f, &c) < 2) c = 800;
+  } else if (!strncmp(l, "tap_tag ", 8) || !strncmp(l, "hold_tag ", 9)) {
+    const bool hold = l[0] == 'h';
+    c = hold ? tag_ms(l + 9, f, 800) : 120;
+    if (!hold) {                                    // no time: the whole rest is the tag ("row.wifi.Home Wi-Fi 2")
+      snprintf(f, 64, "%s", l + 8);
+      for (size_t n = strlen(f); n && isspace((unsigned char)f[n - 1]);) f[--n] = 0;
+    }
     lv_obj_t *sh, *any;
     if (!tag_find(f, &sh, &any)) tag_missing(f);
     else if (!sh) check(false, (std::string(hold ? "hold_tag " : "tap_tag ") + f + ": not shown").c_str());
@@ -1090,13 +1126,16 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
       lv_obj_get_coords(sh, &r);
       g_tx = g_tx2 = (r.x1 + r.x2) / 2; g_ty = g_ty2 = (r.y1 + r.y2) / 2; g_tap_ms = c; g_tap_phase = 1;
     }
-  } else if (sscanf(l, "wait_for %63s %d", f, &a) >= 1) {   // not a check; a UI without the tag goes on at once
+  } else if (!strncmp(l, "wait_for ", 9)) {   // not a check; a UI without the tag goes on at once
+    a = tag_ms(l + 9, f, 0);
     lv_obj_t *sh, *any;
-    if (tag_find(f, &sh, &any)) pend_start(PEND_WAIT, f, NULL, sscanf(l, "wait_for %63s %d", f, &a) == 2 ? a : 0, now);
-  } else if (sscanf(l, "expect_visible %63s %d", f, &a) >= 1) {
-    pend_start(PEND_VISIBLE, f, NULL, sscanf(l, "expect_visible %63s %d", f, &a) == 2 ? a : 0, now);
-  } else if (sscanf(l, "expect_hidden %63s %d", f, &a) >= 1) {
-    pend_start(PEND_HIDDEN, f, NULL, sscanf(l, "expect_hidden %63s %d", f, &a) == 2 ? a : 0, now);
+    if (tag_find(f, &sh, &any)) pend_start(PEND_WAIT, f, NULL, a, now);
+  } else if (!strncmp(l, "expect_visible ", 15)) {
+    a = tag_ms(l + 15, f, 0);
+    pend_start(PEND_VISIBLE, f, NULL, a, now);
+  } else if (!strncmp(l, "expect_hidden ", 14)) {
+    a = tag_ms(l + 14, f, 0);
+    pend_start(PEND_HIDDEN, f, NULL, a, now);
   } else if (!strncmp(l, "expect_text ", 12)) {   // expect_text <tag> <a|b|c> [ms]
     char tag[64], alts[200];
     int ms = 0;
@@ -1106,6 +1145,31 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
       if (sp && sp[1] && strspn(sp + 1, "0123456789") == strlen(sp + 1)) { ms = atoi(sp + 1); *sp = 0; }
       pend_start(PEND_TEXT, tag, alts, ms, now);
     }
+  } else if (sscanf(l, "type %63s %n", f, &a) == 1 || sscanf(l, "clear %63s", f) == 1) {
+    const bool clear = !strncmp(l, "clear", 5);
+    lv_obj_t *sh, *any;
+    if (!tag_find(f, &sh, &any)) tag_missing(f);
+    else if (!sh) check(false, (std::string(clear ? "clear " : "type ") + f + ": not shown").c_str());
+    else if (clear) for (int i = 0; i < 80; i++) { uint32_t k = LV_KEY_BACKSPACE; lv_obj_send_event(sh, LV_EVENT_KEY, &k); }
+    else {
+      const char *t = strchr(l + 5, ' ');           // the text: after the tag and one space, as it is
+      for (const unsigned char *u = (const unsigned char *)(t ? t + 1 : ""); *u;) {   // UTF-8 -> code points
+        uint32_t cp = *u++;
+        if (cp >= 0xC0) {
+          const int more = cp >= 0xF0 ? 3 : cp >= 0xE0 ? 2 : 1;
+          cp &= 0x3F >> more;
+          for (int i = 0; i < more && (*u & 0xC0) == 0x80; i++) cp = cp << 6 | (*u++ & 0x3F);
+        }
+        lv_obj_send_event(sh, LV_EVENT_KEY, &cp);
+      }
+    }
+  } else if (sscanf(l, "expect_backlight %2[<>=] %d %d", f, &b, &c) >= 2) {
+    g_pend.kind = PEND_BACKLIGHT;
+    snprintf(g_pend.tag, sizeof g_pend.tag, "%s", f);
+    snprintf(g_pend.arg, sizeof g_pend.arg, "%d", b);
+    g_pend.until = now + (uint32_t)(sscanf(l, "expect_backlight %2[<>=] %d %d", f, &b, &c) == 3 ? c : 1500) / (uint32_t)g_fast;
+  } else if (sscanf(l, "fast %d", &a) == 1) {
+    g_fast = a > 0 ? a : 1;
   } else if (!strcmp(l, "expect_no_cmd")) {
     expect_no_cmd();
   } else if (!strncmp(l, "expect_cmd ", 11)) {
@@ -1180,7 +1244,8 @@ static uint32_t last_live = 0, last_tick = 0, last_info = 0;
 static void emu_step(uint32_t now) {
   if (!last_tick) last_tick = now;
   const int sp = g_st.on && g_st.speed > 1 ? g_st.speed : 1;   // fast steam: the screen's clock runs 10x too
-  g_vnow += (now - last_tick) * sp;                          // the UI's clock (fast steam: 10x)
+  const int ff = sp * (g_tapping ? 1 : g_fast);              // how fast the UI's clock runs
+  g_vnow += (now - last_tick) * ff;                          // the UI's clock (fast steam: 10x; script: fast N)
   last_tick = now;
 
   shot_step(now);
@@ -1206,7 +1271,7 @@ static void emu_step(uint32_t now) {
     }
   }
   static bool first_live = true;                           // the first pass reports at once: the screen starts online,
-  if (first_live || now - last_live >= 150 / (uint32_t)sp) {   // not on "Joining Wi-Fi"; then as often as in its time
+  if (first_live || now - last_live >= 150 / (uint32_t)ff) {   // not on "Joining Wi-Fi"; then as often as in its time
     first_live = false;
     last_live = now;
     g_link = g_nowifi || g_no_cfg ? BD_LINK_CONNECTING : g_offline || !host_ok() ? BD_LINK_NO_MACHINE : BD_LINK_ONLINE;
@@ -1216,7 +1281,7 @@ static void emu_step(uint32_t now) {
     d.readiness = g_m.steam_active ? 5 : g_m.warmup_remaining > 0 ? 1 : d.temperature < d.target - 3.0f ? 2 : 3;
     cs_take_live(&d, g_link);
   }
-  if (now - last_info >= 1000) {
+  if (now - last_info >= 1000 / (uint32_t)ff) {
     last_info = now;
     time_t t = time(NULL);
     struct tm *lt = localtime(&t);
@@ -1325,8 +1390,9 @@ int main(int argc, char **argv) {
       g_click_up = 0;
     }
     { static uint32_t scan_t = 0; if (now - scan_t >= 500) { scan_t = now; tag_scan(); } }
+    g_tapping = g_tap_phase != 0;
     if (g_tap_phase) tap_step();
-    else if (g_pend.kind) pend_step(now);
+    else if (g_pend.kind) { pend_step(now); if (g_missing) run = false; }   // a missing tag ends the script
     else if (now >= g_cmd_wait) {
       char c;
       while (read(0, &c, 1) == 1) {

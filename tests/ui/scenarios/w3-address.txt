@@ -1,0 +1,19 @@
+# W3 set the machine's address (here from the offline page): the core gets the address typed.
+# checks: W3
+wait 500
+wait_for screen.ready 10000
+button Machine on/off
+expect_visible screen.offline 7000
+button +20 s
+wait 1500
+tap_tag action.machine_address
+expect_visible screen.machine_address 2000
+clear input.address
+type input.address gaggiuino.local
+wait 300
+tap_tag action.use
+wait 500
+expect_cmd machine_address host="gaggiuino.local"
+button Machine on/off
+expect_visible screen.ready 8000
+quit

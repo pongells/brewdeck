@@ -181,9 +181,14 @@ going offline, a notice, a command the machine ignores) and checks two things th
 
 Emulator commands for the checks (list in [development.md](development.md)): `tap_tag <tag>`, `hold_tag <tag>
 <ms>`, `expect_visible` / `expect_hidden <tag> [ms]`, `expect_text <tag> <a|b> [ms]` (contains one of them, ignoring
-case), `expect_cmd <text>`, `expect_no_cmd`, `tags`, and `machine shot` / `machine steam` (the fake machine starts
-one without touching the screen). Proposed: `type <tag> <text>`, `expect_backlight <op> <pct>`, `fast <factor>`
-(time fast-forward), `shot` (screenshot for the contact sheet).
+case), `expect_cmd <text>`, `expect_no_cmd`, `tags`, `machine shot` / `machine steam` (the fake machine starts
+one without touching the screen), `type <tag> <text>` / `clear <tag>` (key events to an input),
+`expect_backlight <op> <pct>` and `fast <factor>` (the UI's clock runs faster, for the dim and screen-off times).
+Proposed: `shot` (screenshot for the contact sheet).
+
+**Inputs.** The `input.*` objects take LVGL key events (`LV_EVENT_KEY`: a character, or `LV_KEY_BACKSPACE`), as
+from a hardware keyboard, so the tests type the same way into any UI whatever its on-screen keyboard looks like.
+The on-screen keyboard itself is checked by hand.
 
 When a tag is on several objects (the state on Ready, brewing and steam), the checks use the one that is shown.
 Shown means visible (not hidden, on the screen, not fully transparent) with no opaque object drawn over its centre.
@@ -240,8 +245,3 @@ V1    missing   planned
 
 **The report.** A run prints the UI's status table from the results and the file together (done / partial / missing
 / omitted per ID, with the notes) and writes it as `status.md`, so a UI needs no hand-kept feature table.
-
-## Open questions
-
-- Whether time fast-forward in the emulator is reliable enough for the 10 / 30 min standby tests, or those run with
-  shorter settings.

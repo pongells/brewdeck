@@ -1,0 +1,30 @@
+# I4 wakes from screen off: on a shot, on a pressure release, and when the machine comes back after the offline
+# screen turned it off (time runs 60x while waiting: fast 60).
+# checks: I4
+wait 500
+wait_for screen.ready 10000
+fast 60
+wait 1860000
+expect_backlight = 0 100
+fast 1
+machine shot 10
+expect_visible screen.brewing 3000
+expect_backlight > 0 1000
+wait 8000
+fast 60
+wait 1860000
+expect_backlight = 0 100
+fast 1
+button Pressure release
+expect_visible warn.release 2000
+expect_backlight > 0 100
+wait 12000
+fast 60
+button Machine on/off
+wait 1860000
+expect_backlight = 0 100
+fast 1
+button Machine on/off
+expect_visible screen.ready 8000
+expect_backlight > 0 100
+quit

@@ -143,7 +143,8 @@ Live values are meaningful only while `link == BD_LINK_ONLINE`.
   objects by **tags**, LVGL object names from the list's tag table (`lv_obj_set_name_static(obj, "screen.ready")`;
   `LV_USE_OBJ_NAME` is on in `lv_conf.h`). Tags change nothing on the screen. Name your screens, the values and
   warnings, and the buttons the scenarios press; a tag you leave out makes its feature count as missing, never as
-  failed. Features you leave out on purpose go in `ui-features.txt` next to your code
+  failed. Inputs (`input.password`, `input.address`) also need to take LVGL key events (`LV_EVENT_KEY`: a
+  character or `LV_KEY_BACKSPACE`), which is how the scenarios type. Features you leave out on purpose go in `ui-features.txt` next to your code
   ([format and rules](ui-features.md#leaving-features-out)). The tag set is part of the API contract: tags are only
   added within 1.x, never renamed.
 

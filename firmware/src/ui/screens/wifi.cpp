@@ -251,6 +251,17 @@ static void on_kb_key(lv_event_t *e) {
   pw_refresh();
 }
 
+// a key event on the field (a hardware keyboard, or the shared UI tests' "type"): a character or backspace
+static void on_pw_key(lv_event_t *e) {
+  const uint32_t k = lv_event_get_key(e);
+  size_t n = strlen(g_pw);
+  if (g_wj_state == BD_JOIN_BUSY && !g_kb_addr) return;
+  if (g_wj_state == BD_JOIN_FAILED) g_wj_state = BD_JOIN_IDLE;
+  if (k == LV_KEY_BACKSPACE) { if (n) g_pw[n - 1] = 0; }
+  else if (k >= 0x20 && k < 0x7F && n + 1 < sizeof g_pw) { g_pw[n] = (char)k; g_pw[n + 1] = 0; }
+  pw_refresh();
+}
+
 static lv_obj_t *kb_key(lv_obj_t *row, int w, int k) {
   lv_obj_t *b = box(row, 0, 0, w, 50, COL_CARD, RAD_CTRL);
   make_button(b, COL_CARD_PR);
@@ -324,6 +335,7 @@ void build_wifi(lv_obj_t *m) {
   lv_obj_t *fr = flex(f, LV_FLEX_FLOW_ROW, 2);
   lv_obj_align(fr, LV_ALIGN_LEFT_MID, 116, 0);
   g_pw_txt = label(fr, "", F_ROW, COL_TEXT);
+  lv_obj_add_event_cb(g_pw_txt, on_pw_key, LV_EVENT_KEY, NULL);
   g_pw_cur = box(fr, 0, 0, 2, 24, COL_GOLD, 0);
   g_pw_eye = box(f, 696, 8, 40, 40, COL_WELL, 10);
   make_button(g_pw_eye, COL_CARD);

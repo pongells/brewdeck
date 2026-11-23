@@ -1,0 +1,14 @@
+# I1 dims after 10 min untouched; I3 the screen turns off after 30 min untouched (time runs 60x: fast 60).
+# checks: I1, I3
+wait 500
+wait_for screen.ready 10000
+expect_backlight > 0 100
+fast 60
+wait 540000
+expect_backlight = 100 100
+wait 120000
+expect_backlight < 100 100
+expect_backlight > 0 100
+wait 1260000
+expect_backlight = 0 100
+quit
