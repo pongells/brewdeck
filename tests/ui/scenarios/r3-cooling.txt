@@ -1,0 +1,10 @@
+# R3 cooling: the boiler 6 C above the brew temperature (as after steam): Ready is not shown until it is back.
+# checks: R3
+wait 500
+wait_for screen.ready 10000
+machine temp 97
+expect_no_text value.state Ready 3000
+shot R3: cooling
+machine temp auto
+expect_text value.state Ready 15000
+quit

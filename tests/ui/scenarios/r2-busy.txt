@@ -1,0 +1,25 @@
+# R2 busy states: hot water, flush, descale, a shot and steam each show a state other than the idle ones.
+# checks: R2
+wait 500
+wait_for screen.ready 10000
+expect_text value.state Ready 3000
+machine hotwater on
+expect_no_text value.state Ready|Heating|Cooling|Warming|Standby 3000
+shot R2: hot water
+machine hotwater off
+machine mode FLUSH
+expect_no_text value.state Ready|Heating|Cooling|Warming|Standby 3000
+machine mode DESCALE
+expect_no_text value.state Ready|Heating|Cooling|Warming|Standby 3000
+shot R2: descale
+machine mode HOME
+expect_text value.state Ready 5000
+machine shot 10
+expect_visible screen.brewing 3000
+expect_no_text value.state Ready|Heating|Cooling|Warming|Standby 1000
+wait 8000
+back_to_ready
+machine steam 30
+expect_visible screen.steam 3000
+expect_no_text value.state Ready|Heating|Cooling|Warming|Standby 1000
+quit

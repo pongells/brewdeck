@@ -1,0 +1,11 @@
+# T4 a profile without a stop weight (set to none elsewhere): Ready shows no number for it.
+# checks: T4
+wait 500
+wait_for screen.ready 10000
+expect_text value.stop_weight 21 3000
+machine stopweight 0
+expect_no_text value.stop_weight 0|1|2|3|4|5|6|7|8|9 3000
+shot T4: no stop weight
+machine stopweight 21
+expect_text value.stop_weight 21 3000
+quit

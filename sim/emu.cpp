@@ -728,6 +728,24 @@ static void expect_no_cmd(void) {
   check(got.empty(), got.empty() ? "expect_no_cmd" : ("expect_no_cmd: got " + got).c_str());
 }
 // expect_cmd <text>: a command since the previous check starts with the text (e.g. "select id=7")
+// expect_cmds 2 brew_temp profile=7 deg=96: 1 to 2 commands of that kind (its first word) since the previous check,
+// the last one starting with the whole text (a burst of taps sends the final value, not one command per tap)
+static void expect_cmds(int max, const char *text) {
+  const char *sp = strchr(text, ' ');
+  const size_t kind = sp ? (size_t)(sp - text) : strlen(text);
+  int n = 0;
+  std::string last;
+  for (size_t i = g_cmd_from; i < g_cmds.size(); i++)
+    if (!g_cmds[i].line.compare(0, kind, text, kind) && (g_cmds[i].line.size() == kind || g_cmds[i].line[kind] == ' ')) {
+      n++;
+      last = g_cmds[i].line;
+    }
+  g_cmd_from = g_cmds.size();
+  const bool ok = n >= 1 && n <= max && !last.compare(0, strlen(text), text);
+  char what[400];
+  snprintf(what, sizeof what, "expect_cmds %d %s (%d sent%s%s)", max, text, n, n ? ", last: " : "", last.c_str());
+  check(ok, what);
+}
 static void expect_cmd(const char *text) {
   bool found = false;
   for (size_t i = g_cmd_from; i < g_cmds.size() && !found; i++) found = !g_cmds[i].line.compare(0, strlen(text), text);
@@ -1047,7 +1065,7 @@ static bool text_has(const char *text, const char *alts) {   // "a|b": contains 
 static void tag_missing(const char *tag) { printf("MISSING %s\n", tag); g_missing = true; }
 // a check that may wait: re-tested every loop pass until it holds or its time is up (the script waits meanwhile)
 static struct { int kind; char tag[64]; char arg[200]; uint32_t until; } g_pend = {0, "", "", 0};   // kind 0 = none
-enum { PEND_VISIBLE = 1, PEND_HIDDEN, PEND_TEXT, PEND_WAIT, PEND_BACKLIGHT, PEND_HOME };
+enum { PEND_VISIBLE = 1, PEND_HIDDEN, PEND_TEXT, PEND_WAIT, PEND_BACKLIGHT, PEND_HOME, PEND_NOTEXT };
 static void home_tap(uint32_t now);   // back_to_ready: one more tap on Back / Close (below)
 static bool bl_holds(const char *op, int pct) {
   const int b = g_backlight;
@@ -1060,7 +1078,8 @@ static bool pend_holds(void) {
   tag_find(g_pend.tag, &sh, &any);
   if (g_pend.kind == PEND_VISIBLE || g_pend.kind == PEND_WAIT || g_pend.kind == PEND_HOME) return sh != NULL;
   if (g_pend.kind == PEND_HIDDEN) return sh == NULL;
-  return sh && text_has(tag_alltext(sh).c_str(), g_pend.arg);
+  const bool has = sh && text_has(tag_alltext(sh).c_str(), g_pend.arg);
+  return sh && (g_pend.kind == PEND_NOTEXT ? !has : has);
 }
 // a tag not there yet may come (a list filled after a scan): it is missing only if still absent when the time is up
 static void pend_start(int kind, const char *tag, const char *arg, int ms, uint32_t now) {
@@ -1069,7 +1088,7 @@ static void pend_start(int kind, const char *tag, const char *arg, int ms, uint3
   snprintf(g_pend.arg, sizeof g_pend.arg, "%s", arg ? arg : "");
   g_pend.until = now + (uint32_t)(ms > 0 ? ms : 1500) / (uint32_t)g_fast;   // screen time
 }
-static const char *const PEND_NAME[] = {"", "expect_visible", "expect_hidden", "expect_text", "wait_for", "expect_backlight", "back_to_ready"};
+static const char *const PEND_NAME[] = {"", "expect_visible", "expect_hidden", "expect_text", "wait_for", "expect_backlight", "back_to_ready", "expect_no_text"};
 static void pend_step(uint32_t now) {   // called every loop pass while a check waits
   if (!g_pend.kind) return;
   const bool ok = pend_holds();
@@ -1083,7 +1102,7 @@ static void pend_step(uint32_t now) {   // called every loop pass while a check 
   }
   char what[320];
   snprintf(what, sizeof what, "%s %s%s%s", PEND_NAME[g_pend.kind], g_pend.tag, g_pend.arg[0] ? " " : "", g_pend.arg);
-  if (!ok && g_pend.kind == PEND_TEXT) {
+  if (!ok && (g_pend.kind == PEND_TEXT || g_pend.kind == PEND_NOTEXT)) {
     lv_obj_t *sh, *any;
     tag_find(g_pend.tag, &sh, &any);
     const std::string ts = sh ? tag_alltext(sh) : std::string(); const char *t = sh ? ts.c_str() : NULL;
@@ -1274,6 +1293,14 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
     pend_start(PEND_HOME, "screen.ready", NULL, 12000, now);
   } else if (!strncmp(l, "machine link ", 13)) {   // off: unreachable, but it goes on with its shot / steam
     g_offline = !strncmp(l + 13, "off", 3);
+  } else if (!strncmp(l, "machine mode ", 13)) {   // machine mode FLUSH / DESCALE / HOME: the mode it reports
+    snprintf(g_m.mode, sizeof g_m.mode, "%s", l + 13);
+  } else if (!strncmp(l, "machine hotwater ", 17)) {   // on / off: hot water running
+    g_m.hot_water_active = !strncmp(l + 17, "on", 2);
+  } else if (!strncmp(l, "machine stopweight ", 19)) {   // the active profile's stop weight changed elsewhere (0: none)
+    on_weight(profile_name(g_active_id), (int)(atof(l + 19) * 10 + 0.5));
+  } else if (sscanf(l, "expect_cmds %d %n", &a, &b) == 1) {
+    expect_cmds(a, l + b);
   } else if (sscanf(l, "machine readiness %d", &a) == 1) {   // -1: back to the state's own
     g_force_rd = a;
   } else if (!strncmp(l, "machine temp ", 13)) {   // "auto": back to the simulated boiler
@@ -1316,14 +1343,15 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
   } else if (!strncmp(l, "expect_hidden ", 14)) {
     a = tag_ms(l + 14, f, 0);
     pend_start(PEND_HIDDEN, f, NULL, a, now);
-  } else if (!strncmp(l, "expect_text ", 12)) {   // expect_text <tag> <a|b|c> [ms]
+  } else if (!strncmp(l, "expect_text ", 12) || !strncmp(l, "expect_no_text ", 15)) {   // <tag> <a|b|c> [ms]
     char tag[64], alts[200];
     int ms = 0;
-    const int k = sscanf(l, "expect_text %63s %199[^\n]", tag, alts);
+    const bool no = l[7] == 'n';                  // expect_no_text: contains none of them
+    const int k = sscanf(l + (no ? 15 : 12), "%63s %199[^\n]", tag, alts);
     if (k == 2) {
       char *sp = strrchr(alts, ' ');                 // a trailing number is the time to wait
       if (sp && sp[1] && strspn(sp + 1, "0123456789") == strlen(sp + 1)) { ms = atoi(sp + 1); *sp = 0; }
-      pend_start(PEND_TEXT, tag, alts, ms, now);
+      pend_start(no ? PEND_NOTEXT : PEND_TEXT, tag, alts, ms, now);
     }
   } else if (sscanf(l, "type %63s %n", f, &a) == 1 || sscanf(l, "clear %63s", f) == 1) {
     const bool clear = !strncmp(l, "clear", 5);

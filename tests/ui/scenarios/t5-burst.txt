@@ -1,0 +1,15 @@
+# T5 a burst of taps sends one value: 5 taps on + within ~1 s, at most 2 commands, the last one with 96 C.
+# checks: T5
+wait 500
+wait_for screen.ready 10000
+expect_text value.brew_temp 91 3000
+if_hidden action.temp_up : tap_tag value.brew_temp
+wait 600
+repeat 5
+tap_tag action.temp_up
+end
+wait 300
+if_shown action.done : tap_tag action.done
+wait 3500
+expect_cmds 2 brew_temp profile=7 deg=96
+quit

@@ -1,0 +1,10 @@
+# M2 low water while steaming: the refill warning on the steam screen.
+# checks: M2
+wait 500
+wait_for screen.ready 10000
+button Water
+machine steam 10
+expect_visible screen.steam 3000
+expect_visible warn.refill 3000
+shot M2: steam, low water
+quit

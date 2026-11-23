@@ -1,0 +1,23 @@
+# R9 pressure left while idle (1.4 bar): warned, gone 2 s after it drops; R10 no scale and low water: warned
+# exactly while they hold.
+# checks: R9, R10
+wait 500
+wait_for screen.ready 10000
+expect_hidden warn.pressure 1000
+button Pressure left
+expect_visible warn.pressure 3000
+shot R9 R10: pressure left
+button Pressure left
+expect_hidden warn.pressure 5000
+expect_hidden warn.no_scale 100
+button Scale on/off
+expect_visible warn.no_scale 3000
+button Scale on/off
+expect_hidden warn.no_scale 3000
+expect_hidden warn.refill 100
+button Water
+expect_visible warn.refill 3000
+shot R10: low water
+button Water
+expect_hidden warn.refill 3000
+quit

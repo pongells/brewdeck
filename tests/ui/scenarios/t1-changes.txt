@@ -1,0 +1,37 @@
+# T1 / T2 change the brew temperature and the stop weight: the core receives the new value, saved, within 3 s of
+# the last tap (a UI without - / + on Ready opens its editor from the value first).
+# checks: T1, T2
+wait 500
+wait_for screen.ready 10000
+expect_text value.brew_temp 91 3000
+if_hidden action.temp_up : tap_tag value.brew_temp
+wait 600
+tap_tag action.temp_up
+wait 300
+if_shown action.done : tap_tag action.done
+wait 3500
+expect_cmds 1 brew_temp profile=7 deg=92 save=1
+expect_text value.brew_temp 92 1000
+if_hidden action.temp_down : tap_tag value.brew_temp
+wait 600
+tap_tag action.temp_down
+wait 300
+if_shown action.done : tap_tag action.done
+wait 3500
+expect_cmds 1 brew_temp profile=7 deg=91 save=1
+if_hidden action.weight_up : tap_tag value.stop_weight
+wait 600
+tap_tag action.weight_up
+wait 300
+if_shown action.done : tap_tag action.done
+wait 3500
+expect_cmds 1 stop_weight profile=7 grams=2
+expect_no_text value.stop_weight 21.0 1000
+if_hidden action.weight_down : tap_tag value.stop_weight
+wait 600
+tap_tag action.weight_down
+wait 300
+if_shown action.done : tap_tag action.done
+wait 3500
+expect_cmds 1 stop_weight profile=7 grams=21.0 save=1
+quit

@@ -234,7 +234,8 @@ V1    missing   planned
 ```
 
 - **omitted**: left out on purpose; the note says why. Its scenarios are skipped.
-- **partial**: there, but less than the feature describes; the note says what is missing. Its scenarios still run.
+- **partial**: there, but less than the feature describes; the note says what is missing. Its scenarios still run;
+  one that fails is reported in the note and the feature stays partial, without failing the run.
 - **missing**: not there yet, but meant to be. Its scenarios are skipped.
 - A feature not in the file is checked normally: its tests pass or fail, its tag is there or not.
 

@@ -1,0 +1,23 @@
+# R4 Ready hold: after a heat-up the machine's readiness flips READY / HEATING every 10 s (seen on a cold start); the
+# screen shows Ready only after 30 s of steady READY (the UI's clock at 10x: fast 10).
+# checks: R4
+wait 500
+wait_for screen.ready 10000
+fast 10
+machine readiness 2
+wait 15000
+expect_text value.state Heating 100
+repeat 3
+machine readiness 3
+wait 10000
+expect_no_text value.state Ready 100
+machine readiness 2
+wait 10000
+end
+machine readiness 3
+wait 20000
+expect_no_text value.state Ready 100
+expect_text value.state Ready 15000
+fast 1
+machine readiness -1
+quit

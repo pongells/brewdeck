@@ -49,7 +49,10 @@ commands (as `EMU_IGNORE=1`). `back_to_ready [taps]` (a check) taps the shown Ba
 different ways). `repeat <n>` ... `end` runs the lines between n times. `mem_mark` / `expect_mem_growth <KB>` check
 the heap in use. `expect_order <tag> <tag> ...` checks that they are shown top to bottom in that order;
 `expect_touch_targets <px>` that every shown object a tap acts on (clickable, with an event handler) is at least px
-square, its extra click area included. `expect_text` looks at all the shown labels under the tagged object.
+square, its extra click area included. `expect_text` looks at all the shown labels under the tagged object; `expect_no_text <tag> <a|b> [ms]` checks it
+holds none of them. `expect_cmds <n> <command ...>`: 1 to n commands of that kind since the previous check, the
+last one starting with that text (a burst of taps). Fake machine: `machine mode <MODE>` (FLUSH, DESCALE, HOME),
+`machine hotwater on|off`, `machine stopweight <g>` (the active profile changed elsewhere; 0 = none).
 
 **Shared UI scenarios.** `tests/ui/run.sh [ui]` runs every script in `tests/ui/scenarios` against a UI (a folder
 under `firmware/src`, default Brewdeck's `ui`, or a path to a UI folder) without a window, then prints the UI's

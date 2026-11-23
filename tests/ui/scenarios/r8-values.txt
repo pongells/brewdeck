@@ -1,0 +1,17 @@
+# R8 pressure, scale and water on Ready follow the machine.
+# checks: R8
+wait 500
+wait_for screen.ready 10000
+expect_text value.water 100 3000
+expect_text value.scale 0.0 3000
+button Pressure left
+expect_text value.pressure 1.4 3000
+button Water
+expect_text value.water 12 3000
+button Scale on/off
+expect_no_text value.scale 0.0 3000
+button Scale on/off
+button Water
+button Pressure left
+expect_text value.water 100 3000
+quit

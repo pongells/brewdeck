@@ -188,13 +188,16 @@ def main():
         sheet.append((name, 'ok' if r['ok'] else 'missing: no tag ' + ', '.join(r['missing']) if r['absent']
                       else 'FAILED', 'ok' if r['ok'] else 'skip' if r['absent'] else 'fail', r['shots']))
         seen |= r['tags']
-        any_fail |= not r['ok'] and not r['absent']
+        # a failure in features the UI marks partial is expected: reported, not a failed run
+        expected = bool(ids) and all(exc.get(i, ('',))[0] == 'partial' for i in ids)
+        any_fail |= not r['ok'] and not r['absent'] and not expected
         if r['ok']:
             print(at + 'ok    %s (%d checks)' % (name, len(r['passed'])))
         elif r['absent']:
             print(at + 'miss  %s (no tag %s)' % (name, ', '.join(r['missing'])))
         else:
-            print(at + 'FAIL  %s (exit %s, log %s)' % (name, r['rc'], os.path.relpath(r['log'], ROOT)))
+            print(at + ('fail  %s (expected: %s partial; log %s)' % (name, ', '.join(ids), os.path.relpath(r['log'], ROOT))
+                        if expected else 'FAIL  %s (exit %s, log %s)' % (name, r['rc'], os.path.relpath(r['log'], ROOT))))
             for f in r['failed']:
                 print('      ' + f)
         for i in ids:
@@ -212,7 +215,7 @@ def main():
             if any(t in seen for t in ftags):
                 warnings.append('%s is marked %s, but its tag %s is there' % (f['id'], st, ' / '.join(ftags)))
         elif res and not all(ok for _, ok, _ in res):
-            status = 'FAILED'
+            status = 'partial' if st == 'partial' else 'FAILED'   # partial: the UI says it does only part of it
             note = (note + '; ' if note else '') + 'failed: ' + ', '.join(n for n, ok, _ in res if not ok)
         elif absent:
             status = 'partial' if st == 'partial' else 'missing'
