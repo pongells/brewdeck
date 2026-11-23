@@ -1,0 +1,32 @@
+# O2 the offline page never covers the Wi-Fi pages, a running shot, or the shot's result or review.
+# checks: O2
+wait 500
+wait_for screen.ready 10000
+tap_tag action.menu
+wait 800
+tap_tag action.wifi_settings
+expect_visible screen.wifi 2000
+button Machine on/off
+wait 7000
+expect_visible screen.wifi 100
+expect_hidden screen.offline 100
+button Machine on/off
+wait 2000
+# a running shot (the machine unreachable, not off: it goes on brewing)
+machine shot
+expect_visible screen.brewing 3000
+machine link off
+wait 7000
+expect_visible screen.brewing 100
+expect_hidden screen.offline 100
+machine link on
+wait 2000
+# after the shot: its result or review
+machine shot 10
+expect_visible screen.brewing 3000
+wait 9000
+machine link off
+wait 7000
+expect_hidden screen.offline 100
+machine link on
+quit

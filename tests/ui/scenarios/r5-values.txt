@@ -1,0 +1,16 @@
+# R5 the boiler temperature follows the machine; R6 the active profile's name, also after a pick made elsewhere.
+# checks: R5, R6
+wait 500
+wait_for screen.ready 10000
+expect_text value.boiler_temp 90 2000
+machine temp 85.4
+expect_text value.boiler_temp 85 2000
+machine temp 92.6
+expect_text value.boiler_temp 92|93 2000
+machine temp auto
+expect_text value.profile LMD Single 2000
+expect_no_cmd
+machine profile 8
+expect_text value.profile Leva 9 3000
+expect_no_cmd
+quit

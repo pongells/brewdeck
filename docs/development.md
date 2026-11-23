@@ -39,7 +39,11 @@ to the shown input as an LVGL key event (`LV_EVENT_KEY`, as a hardware keyboard 
 waits and check times count in screen time: after `fast 60`, `wait 600000` is 10 minutes on the screen and 10 s
 here. A tag the UI does not have (still absent when a check's time is up) prints `MISSING <tag>` and ends the
 script (exit code 3). `machine shot [10]` / `machine steam [10]` start the
-recorded shot / steam on the fake machine without touching the screen (the panel buttons go back to Ready first).
+recorded shot / steam on the fake machine without touching the screen (the panel buttons go back to Ready first);
+`machine link off|on` makes it unreachable while it goes on (the panel's "Machine on/off" switches it off, stopping a
+shot or steam); `machine readiness <n>` reports that readiness (-1: its own again); `machine temp <c>|auto` holds
+the boiler temperature; `machine profile <id>` picks a profile as the web UI would. `tap_under <tag>` taps where the
+tag is even when something covers it (the idle clock, screen off).
 
 **Shared UI scenarios.** `tests/ui/run.sh [ui]` runs every script in `tests/ui/scenarios` against a UI (a folder
 under `firmware/src`, default Brewdeck's `ui`, or a path to a UI folder) without a window, then prints the UI's

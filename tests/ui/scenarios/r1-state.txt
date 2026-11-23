@@ -1,0 +1,16 @@
+# R1 the machine's state from its readiness: a different text for each, and not Ready while it reports Heating.
+# checks: R1
+wait 500
+wait_for screen.ready 10000
+expect_text value.state Ready 3000
+machine readiness 4
+expect_text value.state Standby 3000
+machine readiness 0
+expect_text value.state Waiting 3000
+machine readiness 7
+expect_text value.state Maintenance 3000
+machine readiness 1
+expect_text value.state Warming 3000
+machine readiness 2
+expect_text value.state Heating 3000
+quit

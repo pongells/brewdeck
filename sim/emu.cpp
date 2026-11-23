@@ -594,6 +594,8 @@ static void a_wifipw(void) { a_ready(); g_nowifi = g_wifi_auth = true; }
 static void a_addr(void) { go_home(); ui_test_menu(6); }
 static void a_history(void) { go_home(); ui_test_menu(7); }
 static uint32_t g_vnow = 1;                 // the UI's clock (bd_ui_tick), runs faster with the fast steam
+static int g_force_rd = -1;                 // script "machine readiness N": the readiness reported (-1: from the state)
+static float g_hold_temp = 0;               // script "machine temp C": the boiler held there (0: as simulated)
 static int g_fast = 1;                      // script "fast N": the UI's clock N times faster (not during a tap)
 static bool g_tapping = false;              // a scripted tap / hold is pressing: the clock runs at 1x meanwhile
 static void t_skip(void) { g_vnow += 20000; }   // jump 20 s (timeouts) without waiting
@@ -912,6 +914,11 @@ static bool run_named(const char *name) {
 // Tags (docs/ui-features.md): the names a UI gives the objects that matter (lv_obj_set_name_static).
 //   machine shot 10 / machine steam 10   the fake machine starts the recorded shot / steam (speed 1 or 10), the
 //                           screen is left as it is (the panel buttons first go back to Ready)
+//   machine link off / on   the machine unreachable (Wi-Fi drop) while it goes on brewing / steaming; the panel's
+//                           "Machine on/off" switches it off (its shot / steam stop)
+//   machine readiness 4     the fake machine reports this readiness (-1: its own again); machine temp 85.5 holds the
+//                           boiler there (auto: simulated again); machine profile 8 picks a profile as the web UI would
+//   tap_under action.flush  tap where the tag is even if something covers it (the idle clock, screen off)
 //   tags                    print every tagged object: shown / covered / hidden, position, text
 //   wait_for screen.ready 10000   wait until shown (at most ms): not a check, and a UI without the tag goes on at
 //                           once (the start of a scenario: a UI's own start screen may cover Ready for a while)
@@ -977,6 +984,7 @@ static int tag_find(const char *tag, lv_obj_t **shown, lv_obj_t **any) {
     const char *nm = lv_obj_get_name(o);
     if (!nm || strcmp(nm, tag)) continue;
     n++;
+    g_tags_seen.insert(nm);                         // a short-lived tag (an error line) counts as seen between scans
     if (!*any) *any = o;
     if (!*shown && tag_visible(o) && !tag_covered(o, all)) *shown = o;
   }
@@ -1028,7 +1036,9 @@ static void pend_step(uint32_t now) {   // called every loop pass while a check 
   if (g_pend.kind == PEND_WAIT) { g_pend.kind = 0; return; }   // only a wait: not a check
   if (g_pend.kind != PEND_BACKLIGHT) {
     lv_obj_t *sh, *any;
-    if (!tag_find(g_pend.tag, &sh, &any)) { tag_missing(g_pend.tag); g_pend.kind = 0; return; }
+    if (!tag_find(g_pend.tag, &sh, &any) && !g_tags_seen.count(g_pend.tag)) {   // never there (one removed since: hidden)
+      tag_missing(g_pend.tag); g_pend.kind = 0; return;
+    }
   }
   char what[320];
   snprintf(what, sizeof what, "%s %s%s%s", PEND_NAME[g_pend.kind], g_pend.tag, g_pend.arg[0] ? " " : "", g_pend.arg);
@@ -1055,6 +1065,31 @@ static void tags_print(void) {
            !tag_visible(o) ? "hidden" : tag_covered(o, all) ? "covered" : "shown", (int)a.x1, (int)a.y1,
            (int)lv_area_get_width(&a), (int)lv_area_get_height(&a), t ? "\"" : "", t ? t : "", t ? "\"" : "");
   }
+}
+
+// a point of o that a tap reaches (LVGL's own hit test, top layers first): the centre if it can, else the middle of the
+// first band that is not under something clickable (a row half under a button bar); false if none
+static bool tap_point(lv_obj_t *o, int *x, int *y) {
+  lv_area_t r;
+  lv_obj_get_coords(o, &r);
+  if (r.x1 < 0) r.x1 = 0;
+  if (r.y1 < 0) r.y1 = 0;
+  if (r.x2 > W - 1) r.x2 = W - 1;
+  if (r.y2 > H - 1) r.y2 = H - 1;
+  const int cx = (r.x1 + r.x2) / 2, cy = (r.y1 + r.y2) / 2;
+  const int ys[] = {cy, r.y1 + (r.y2 - r.y1) / 4, r.y1 + 3, r.y1 + (r.y2 - r.y1) * 3 / 4, r.y2 - 3};
+  const int xs[] = {cx, r.x1 + (r.x2 - r.x1) / 4, r.x1 + (r.x2 - r.x1) * 3 / 4};
+  lv_obj_t *const roots[] = {lv_display_get_layer_sys(g_dev_disp), lv_display_get_layer_top(g_dev_disp),
+                             lv_display_get_screen_active(g_dev_disp)};
+  for (int yy : ys)
+    for (int xx : xs) {
+      lv_point_t p = {xx, yy};
+      lv_obj_t *hit = NULL;
+      for (lv_obj_t *root : roots) if ((hit = lv_indev_search_obj(root, &p)) != NULL) break;
+      for (lv_obj_t *h = hit; h; h = lv_obj_get_parent(h))
+        if (h == o) { *x = xx; *y = yy; return true; }
+    }
+  return false;
 }
 
 // "<tag> [ms]" after a command word: the tag may hold spaces (row.wifi.<name>), a trailing number is the time (so a
@@ -1109,6 +1144,26 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
     if (sscanf(l, "machine steam %d", &a) != 1) a = 1;
     machine_up(); stop_shot(); release_cancel(); g_heating = false;
     steam_set(true, a > 0 ? a : 1);
+  } else if (!strncmp(l, "machine link ", 13)) {   // off: unreachable, but it goes on with its shot / steam
+    g_offline = !strncmp(l + 13, "off", 3);
+  } else if (sscanf(l, "machine readiness %d", &a) == 1) {   // -1: back to the state's own
+    g_force_rd = a;
+  } else if (!strncmp(l, "machine temp ", 13)) {   // "auto": back to the simulated boiler
+    g_hold_temp = strstr(l, "auto") ? 0 : (float)atof(l + 13);
+  } else if (sscanf(l, "machine profile %d", &a) == 1) {   // picked elsewhere (the web UI): no command from the UI
+    on_select(a);
+  } else if (!strncmp(l, "tap_under ", 10)) {      // tap where the tag is, even if something covers it (I5)
+    tag_ms(l + 10, f, 0);
+    lv_obj_t *o = NULL;
+    for (lv_obj_t *x : tag_all()) { const char *nm = lv_obj_get_name(x); if (nm && !strcmp(nm, f) && tag_visible(x)) { o = x; break; } }
+    lv_obj_t *sh, *any;
+    if (!tag_find(f, &sh, &any)) tag_missing(f);
+    else {
+      if (!o) o = any;
+      lv_area_t r;
+      lv_obj_get_coords(o, &r);
+      g_tx = g_tx2 = (r.x1 + r.x2) / 2; g_ty = g_ty2 = (r.y1 + r.y2) / 2; g_tap_ms = 120; g_tap_phase = 1;
+    }
   } else if (!strcmp(l, "tags")) {
     tags_print();
   } else if (!strncmp(l, "tap_tag ", 8) || !strncmp(l, "hold_tag ", 9)) {
@@ -1121,11 +1176,8 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
     lv_obj_t *sh, *any;
     if (!tag_find(f, &sh, &any)) tag_missing(f);
     else if (!sh) check(false, (std::string(hold ? "hold_tag " : "tap_tag ") + f + ": not shown").c_str());
-    else {
-      lv_area_t r;
-      lv_obj_get_coords(sh, &r);
-      g_tx = g_tx2 = (r.x1 + r.x2) / 2; g_ty = g_ty2 = (r.y1 + r.y2) / 2; g_tap_ms = c; g_tap_phase = 1;
-    }
+    else if (!tap_point(sh, &g_tx, &g_ty)) check(false, (std::string(hold ? "hold_tag " : "tap_tag ") + f + ": covered by something a tap reaches first").c_str());
+    else { g_tx2 = g_tx; g_ty2 = g_ty; g_tap_ms = c; g_tap_phase = 1; }
   } else if (!strncmp(l, "wait_for ", 9)) {   // not a check; a UI without the tag goes on at once
     a = tag_ms(l + 9, f, 0);
     lv_obj_t *sh, *any;
@@ -1279,6 +1331,8 @@ static void emu_step(uint32_t now) {
     if (!g_shot_on && !g_heating) d.temperature = g_m.temperature + 0.1f * sinf(now / 4000.0f);
     // the machine's readiness (dashboardReadinessState, names of its web UI): a guess of when it switches
     d.readiness = g_m.steam_active ? 5 : g_m.warmup_remaining > 0 ? 1 : d.temperature < d.target - 3.0f ? 2 : 3;
+    if (g_force_rd >= 0) d.readiness = g_force_rd;
+    if (g_hold_temp > 0) d.temperature = g_hold_temp;
     cs_take_live(&d, g_link);
   }
   if (now - last_info >= 1000 / (uint32_t)ff) {

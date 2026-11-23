@@ -86,6 +86,9 @@ void bd_ui_init(void) {
   g_profile = text(scr, &lv_font_montserrat_20, TEXT, 24, 250, 360);
   lv_label_set_long_mode(g_profile, LV_LABEL_LONG_MODE_DOTS);
   lv_obj_set_height(g_profile, lv_font_get_line_height(&lv_font_montserrat_20));
+  // tags: names the shared UI tests find objects by (docs/ui-features.md); they change nothing on the screen
+  lv_obj_set_name_static(g_temp, "value.boiler_temp");
+  lv_obj_set_name_static(g_profile, "value.profile");
   g_shot = text(scr, &lv_font_montserrat_14, ACCENT, 24, 290, 360);
   g_answer = text(scr, &lv_font_montserrat_14, MUTED, 24, 330, 360);
   lv_label_set_text(text(scr, &lv_font_montserrat_14, MUTED, 416, 20, 360), "Profiles (tap to select)");

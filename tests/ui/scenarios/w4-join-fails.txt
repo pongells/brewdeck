@@ -1,0 +1,25 @@
+# W4 a refused password is shown, and the user can try again (the fake machine's Wi-Fi refuses "wrong...").
+# checks: W4
+wait 500
+wait_for screen.ready 10000
+tap_tag action.menu
+wait 800
+tap_tag action.wifi_settings
+expect_visible row.wifi.Home Wi-Fi 2 4000
+tap_tag row.wifi.Home Wi-Fi 2
+expect_visible input.password 2000
+type input.password wrongpass1
+wait 300
+tap_tag action.join
+wait 500
+expect_cmd wifi_join ssid="Home Wi-Fi 2" pass_len=10
+expect_visible info.wifi_error 5000
+expect_visible input.password 1000
+clear input.password
+type input.password Coffee-42
+wait 300
+tap_tag action.join
+wait 500
+expect_cmd wifi_join ssid="Home Wi-Fi 2" pass_len=9
+expect_hidden info.wifi_error 5000
+quit

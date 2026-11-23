@@ -119,6 +119,7 @@ static void pw_refresh(void) {
                       g_wj_state == BD_JOIN_FAILED ? "Could not join. Wrong password? Check it and try again." :
                       "Saved on this screen. The machine has its own Wi-Fi setting.");
   if (!g_kb_addr) lv_obj_set_style_text_color(g_pw_hint, g_wj_state == BD_JOIN_FAILED ? COL_WARN : COL_MUTED, 0);
+  tag(g_pw_hint, !g_kb_addr && g_wj_state == BD_JOIN_FAILED ? "info.wifi_error" : NULL);
   // key labels for the layer / shift state
   for (int r = 0, k = 0; r < 3; r++) {
     const char *row = KL[g_layer][r];

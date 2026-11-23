@@ -151,7 +151,7 @@ it leaves a feature out on purpose: [Leaving features out](#leaving-features-out
 | ID | Feature | Level | Check | Checked |
 |---|---|---|---|---|
 | O1 | After 5 s offline: what the screen is doing; after 20 s: what is wrong | Required | Test | `screen.offline` within 6 s; after 20 s `value.offline_reason` differs for not found / Wi-Fi failed / no Wi-Fi set up |
-| O2 | Never covers a running shot, steam, the review or the Wi-Fi pages | Required | Test | offline during each: that screen stays |
+| O2 | Never covers a running shot, the shot's result or review, or the Wi-Fi pages (steam may be covered: its values are stale after 5 s) | Required | Test | offline during each: that screen stays |
 | O3 | A way out for each case: Wi-Fi settings, machine address, try again | Required | Test | not found: `action.machine_address` and `action.wifi_settings`; Wi-Fi failed: `action.retry` and `action.wifi_settings`; no Wi-Fi: `action.wifi_settings`; each leads to its screen |
 | O4 | A short drop (under 5 s) goes unnoticed | Expected | Test | 3 s offline: `screen.offline` never shows |
 | O5 | Back to Ready as soon as the machine answers | Required | Test | machine back: `screen.ready` within 2 s |
@@ -182,7 +182,8 @@ going offline, a notice, a command the machine ignores) and checks two things th
 Emulator commands for the checks (list in [development.md](development.md)): `tap_tag <tag>`, `hold_tag <tag>
 <ms>`, `expect_visible` / `expect_hidden <tag> [ms]`, `expect_text <tag> <a|b> [ms]` (contains one of them, ignoring
 case), `expect_cmd <text>`, `expect_no_cmd`, `tags`, `machine shot` / `machine steam` (the fake machine starts
-one without touching the screen), `type <tag> <text>` / `clear <tag>` (key events to an input),
+one without touching the screen), `machine link` / `readiness` / `temp` / `profile` (the fake machine unreachable,
+reporting a readiness or temperature, or picking a profile itself), `tap_under <tag>` (a tap where a covered object is), `type <tag> <text>` / `clear <tag>` (key events to an input),
 `expect_backlight <op> <pct>` and `fast <factor>` (the UI's clock runs faster, for the dim and screen-off times).
 Proposed: `shot` (screenshot for the contact sheet).
 
