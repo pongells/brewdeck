@@ -1,0 +1,8 @@
+# S2 the machine is off when the screen starts: once the start screen is gone, the screen says what it is doing.
+# checks: S2
+machine link off
+expect_visible screen.offline 12000
+expect_text value.offline_reason Looking|Joining|machine|Wi-Fi 100
+machine link on
+expect_visible screen.ready 8000
+quit

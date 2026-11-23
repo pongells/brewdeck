@@ -43,7 +43,11 @@ recorded shot / steam on the fake machine without touching the screen (the panel
 `machine link off|on` makes it unreachable while it goes on (the panel's "Machine on/off" switches it off, stopping a
 shot or steam); `machine readiness <n>` reports that readiness (-1: its own again); `machine temp <c>|auto` holds
 the boiler temperature; `machine profile <id>` picks a profile as the web UI would. `tap_under <tag>` taps where the
-tag is even when something covers it (the idle clock, screen off).
+tag is even when something covers it (the idle clock, screen off). `machine ignore on|off`: the machine ignores
+commands (as `EMU_IGNORE=1`). `back_to_ready [taps]` (a check) taps the shown Back, else Close, until Ready shows.
+`if_shown <tag> : <command>` / `if_hidden <tag> : <command>` run a command only then (UIs reach a control in
+different ways). `repeat <n>` ... `end` runs the lines between n times. `mem_mark` / `expect_mem_growth <KB>` check
+the heap in use.
 
 **Shared UI scenarios.** `tests/ui/run.sh [ui]` runs every script in `tests/ui/scenarios` against a UI (a folder
 under `firmware/src`, default Brewdeck's `ui`, or a path to a UI folder) without a window, then prints the UI's

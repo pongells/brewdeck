@@ -1,0 +1,40 @@
+# X4 no memory left behind: opening and closing the menu, the profiles, the editors and the Wi-Fi list 20 times
+# leaves the heap in use where it was (one round first, so caches and lazy pages are built).
+# checks: X4
+wait 500
+wait_for screen.ready 10000
+repeat 2
+tap_tag action.menu
+wait 500
+back_to_ready
+tap_tag action.profiles
+wait 500
+back_to_ready
+tap_tag value.brew_temp
+wait 500
+back_to_ready
+tap_tag action.menu
+wait 500
+tap_tag action.wifi_settings
+wait 1800
+back_to_ready
+end
+mem_mark
+repeat 20
+tap_tag action.menu
+wait 500
+back_to_ready
+tap_tag action.profiles
+wait 500
+back_to_ready
+tap_tag value.brew_temp
+wait 500
+back_to_ready
+tap_tag action.menu
+wait 500
+tap_tag action.wifi_settings
+wait 1800
+back_to_ready
+end
+expect_mem_growth 64
+quit

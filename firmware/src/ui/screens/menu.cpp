@@ -287,6 +287,7 @@ void build_menu(lv_obj_t *scr) {
   line(bw, lt, 3, 2, COL_TEXT);
   lv_obj_add_event_cb(g_menu_back, on_menu_back, LV_EVENT_CLICKED, NULL);
   lv_obj_t *cl = box(g_menu, 724, 24, 52, 52, COL_CARD, RAD_CTRL);
+  tag(cl, "action.close");
   make_button(cl, COL_CARD_PR);
   lv_obj_t *cw = flex(cl, LV_FLEX_FLOW_ROW, 0);
   lv_obj_center(cw);

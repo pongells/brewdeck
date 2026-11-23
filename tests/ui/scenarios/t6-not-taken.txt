@@ -1,0 +1,17 @@
+# T6 a change the machine does not take goes back to the machine's value (91 C, the active profile's).
+# checks: T6
+wait 500
+wait_for screen.ready 10000
+expect_text value.brew_temp 91 3000
+machine ignore on
+# Brewdeck has - / + on Ready; a UI without them opens its editor from the value first
+if_hidden action.temp_up : tap_tag value.brew_temp
+wait 600
+tap_tag action.temp_up
+wait 300
+if_shown action.done : tap_tag action.done
+wait 1500
+expect_cmd brew_temp
+expect_visible screen.ready 2000
+expect_text value.brew_temp 91 9000
+quit

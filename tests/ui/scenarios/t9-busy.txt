@@ -1,0 +1,25 @@
+# T9 a change asked for while the machine is busy is never silently sent: during a shot and during steam the controls
+# are out of reach, and a tap where they are sends nothing.
+# checks: T9
+wait 500
+wait_for screen.ready 10000
+expect_no_cmd
+machine shot
+expect_visible screen.brewing 3000
+expect_hidden action.temp_up 100
+expect_hidden action.profiles 100
+tap_under action.temp_up
+wait 400
+tap_under action.profiles
+wait 800
+expect_no_cmd
+machine steam 10
+expect_visible screen.steam 3000
+expect_hidden action.temp_up 100
+expect_hidden action.profiles 100
+tap_under action.temp_up
+wait 400
+tap_under action.profiles
+wait 800
+expect_no_cmd
+quit

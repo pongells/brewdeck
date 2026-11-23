@@ -43,6 +43,15 @@ EMU_WEAK void ui_test_home(void) {}
 EMU_WEAK void ui_test_wifi_password(const char *) {}
 EMU_WEAK void ui_test_menu(int) {}
 #include <map>
+#include <deque>
+#include <string>
+#if !defined(EMU_WEB) && defined(__APPLE__)
+#include <malloc/malloc.h>
+static size_t mem_used(void) { malloc_statistics_t st; malloc_zone_statistics(NULL, &st); return st.size_in_use; }
+#elif !defined(EMU_WEB)
+#include <malloc.h>
+static size_t mem_used(void) { return mallinfo2().uordblks; }
+#endif
 #include <set>
 #include <string>
 
@@ -102,6 +111,7 @@ static int g_active_id = 7;                 // LMD Single: the recorded shot's p
 static float g_temps[64];                 // per profile id: active brew temperature (0 = profile's own)
 static float g_weights[64];               // per profile id: active target weight (0 = profile's own)
 static int g_backlight = 100;
+static bool g_ignore = getenv("EMU_IGNORE") != NULL;   // the machine ignores commands (script: machine ignore on)
 
 static char *read_file(const char *name, size_t *len) {
   char p[512];
@@ -723,7 +733,7 @@ bd_result bd_select_profile(int id, bool save) {
   const char *name;
   const bd_result r = logged(cs_cmd_select(id, &name), false, "select id=%d save=%d", id, save);
   if (r != BD_OK) return r;
-  if (getenv("EMU_IGNORE")) { printf("machine: ignores the pick (EMU_IGNORE)\n"); return BD_OK; }
+  if (g_ignore) { printf("machine: ignores the pick (EMU_IGNORE)\n"); return BD_OK; }
   on_select(id);
   if (save) printf("machine <- save as boot profile once active: \"%s\" (c_save_act_prof)\n", name);
   return BD_OK;
@@ -734,7 +744,7 @@ bd_result bd_set_stop_weight(int profile_id, float grams, bool save) {
   const bd_result r = logged(cs_cmd_weight(profile_id, grams, &w10, &name), false, "stop_weight profile=%d grams=%.1f save=%d",
                              profile_id, grams, save);
   if (r != BD_OK) return r;
-  if (getenv("EMU_IGNORE")) { printf("machine: ignores the weight (EMU_IGNORE)\n"); return BD_OK; }
+  if (g_ignore) { printf("machine: ignores the weight (EMU_IGNORE)\n"); return BD_OK; }
   on_weight(name, w10);
   if (!save) printf("machine: (not saved, only for now)\n");
   else emu_stored(profile_id, grams, -1);
@@ -745,7 +755,7 @@ bd_result bd_set_brew_temp(int profile_id, int deg, bool save) {
   const bd_result r = logged(cs_cmd_temp(profile_id, deg, &name), false, "brew_temp profile=%d deg=%d save=%d", profile_id,
                              deg, save);
   if (r != BD_OK) return r;
-  if (getenv("EMU_IGNORE")) { printf("machine: ignores the temperature (EMU_IGNORE)\n"); return BD_OK; }
+  if (g_ignore) { printf("machine: ignores the temperature (EMU_IGNORE)\n"); return BD_OK; }
   on_temp(name, deg);
   if (!save) printf("machine: (not saved, only for now)\n");
   else emu_stored(profile_id, -1, deg);
@@ -756,14 +766,14 @@ bd_result bd_flush_mode(bd_flush mode) {
   static const char *const FM[3] = {"off", "on", "timed"};
   const bd_result r = logged(cs_cmd_flush(mode, &pm), false, "flush mode=%s", (unsigned)mode < 3 ? FM[mode] : "?");
   if (r != BD_OK) return r;
-  if (getenv("EMU_IGNORE")) { printf("machine: ignores the flush change (EMU_IGNORE)\n"); return BD_OK; }
+  if (g_ignore) { printf("machine: ignores the flush change (EMU_IGNORE)\n"); return BD_OK; }
   on_flush(pm);
   return BD_OK;
 }
 bd_result bd_tare(void) {
   const bd_result r = logged(cs_cmd_tare(), false, "tare");
   if (r != BD_OK) return r;
-  if (getenv("EMU_IGNORE")) { printf("machine: ignores the tare (EMU_IGNORE)\n"); return BD_OK; }
+  if (g_ignore) { printf("machine: ignores the tare (EMU_IGNORE)\n"); return BD_OK; }
   on_tare();
   return r;
 }
@@ -1007,7 +1017,8 @@ static bool text_has(const char *text, const char *alts) {   // "a|b": contains 
 static void tag_missing(const char *tag) { printf("MISSING %s\n", tag); g_missing = true; }
 // a check that may wait: re-tested every loop pass until it holds or its time is up (the script waits meanwhile)
 static struct { int kind; char tag[64]; char arg[200]; uint32_t until; } g_pend = {0, "", "", 0};   // kind 0 = none
-enum { PEND_VISIBLE = 1, PEND_HIDDEN, PEND_TEXT, PEND_WAIT, PEND_BACKLIGHT };
+enum { PEND_VISIBLE = 1, PEND_HIDDEN, PEND_TEXT, PEND_WAIT, PEND_BACKLIGHT, PEND_HOME };
+static void home_tap(uint32_t now);   // back_to_ready: one more tap on Back / Close (below)
 static bool bl_holds(const char *op, int pct) {
   const int b = g_backlight;
   return !strcmp(op, "<") ? b < pct : !strcmp(op, "<=") ? b <= pct : !strcmp(op, ">") ? b > pct
@@ -1017,7 +1028,7 @@ static bool pend_holds(void) {
   if (g_pend.kind == PEND_BACKLIGHT) return bl_holds(g_pend.tag, atoi(g_pend.arg));
   lv_obj_t *sh, *any;
   tag_find(g_pend.tag, &sh, &any);
-  if (g_pend.kind == PEND_VISIBLE || g_pend.kind == PEND_WAIT) return sh != NULL;
+  if (g_pend.kind == PEND_VISIBLE || g_pend.kind == PEND_WAIT || g_pend.kind == PEND_HOME) return sh != NULL;
   if (g_pend.kind == PEND_HIDDEN) return sh == NULL;
   return sh && text_has(tag_text(sh), g_pend.arg);
 }
@@ -1028,11 +1039,11 @@ static void pend_start(int kind, const char *tag, const char *arg, int ms, uint3
   snprintf(g_pend.arg, sizeof g_pend.arg, "%s", arg ? arg : "");
   g_pend.until = now + (uint32_t)(ms > 0 ? ms : 1500) / (uint32_t)g_fast;   // screen time
 }
-static const char *const PEND_NAME[] = {"", "expect_visible", "expect_hidden", "expect_text", "wait_for", "expect_backlight"};
+static const char *const PEND_NAME[] = {"", "expect_visible", "expect_hidden", "expect_text", "wait_for", "expect_backlight", "back_to_ready"};
 static void pend_step(uint32_t now) {   // called every loop pass while a check waits
   if (!g_pend.kind) return;
   const bool ok = pend_holds();
-  if (!ok && now < g_pend.until) return;
+  if (!ok && now < g_pend.until) { if (g_pend.kind == PEND_HOME) home_tap(now); return; }
   if (g_pend.kind == PEND_WAIT) { g_pend.kind = 0; return; }   // only a wait: not a check
   if (g_pend.kind != PEND_BACKLIGHT) {
     lv_obj_t *sh, *any;
@@ -1086,8 +1097,11 @@ static bool tap_point(lv_obj_t *o, int *x, int *y) {
       lv_point_t p = {xx, yy};
       lv_obj_t *hit = NULL;
       for (lv_obj_t *root : roots) if ((hit = lv_indev_search_obj(root, &p)) != NULL) break;
-      for (lv_obj_t *h = hit; h; h = lv_obj_get_parent(h))
-        if (h == o) { *x = xx; *y = yy; return true; }
+      lv_obj_t *t = o;                                         // what takes o's taps: o, or the nearest clickable
+      while (t && !lv_obj_has_flag(t, LV_OBJ_FLAG_CLICKABLE)) t = lv_obj_get_parent(t);   // parent (a label on a card)
+      if (!t) t = o;
+      for (lv_obj_t *h = hit; h; h = lv_obj_get_parent(h))     // it, or a child of it, takes the tap
+        if (h == t) { *x = xx; *y = yy; return true; }
     }
   return false;
 }
@@ -1109,10 +1123,44 @@ static int g_click_up = 0, g_click_x, g_click_y;   // release a "click" a few pa
 static size_t g_cmd_n = 0;
 static uint32_t g_cmd_wait = 0;
 static int g_tap_phase = 0, g_tx = 0, g_ty = 0, g_tx2 = 0, g_ty2 = 0, g_tap_ms = 120;   // g_tap_ms: how long pressed
+static std::deque<std::string> g_queue;     // lines of a repeat block, run before the next stdin line
+static std::vector<std::string> g_rep;      // the block being read (repeat N ... end)
+static int g_rep_n = 0;
+static size_t g_mem_mark = 0;               // mem_mark: the heap in use then
+static int g_home_taps = 0, g_home_max = 0;
+static uint32_t g_home_t = 0;
+// back_to_ready: tap the shown Back, else Close, every 0.8 s until Ready shows (at most g_home_max taps)
+static void home_tap(uint32_t now) {
+  if (g_tap_phase || now - g_home_t < 800 / (uint32_t)g_fast) return;
+  lv_obj_t *sh = NULL, *any;
+  tag_find("action.back", &sh, &any);
+  if (!sh) tag_find("action.close", &sh, &any);
+  if (!sh || g_home_taps >= g_home_max || !tap_point(sh, &g_tx, &g_ty)) return;   // stuck: fails when the time is up
+  g_tx2 = g_tx; g_ty2 = g_ty; g_tap_ms = 120; g_tap_phase = 1;
+  g_home_taps++;
+  g_home_t = now;
+}
 static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
   int a, b, c, d;
   char f[400];
+  if (g_rep_n) {                                    // inside repeat N ... end
+    if (strcmp(l, "end")) { g_rep.push_back(l); return true; }
+    for (int i = 0; i < g_rep_n; i++) g_queue.insert(g_queue.end(), g_rep.begin(), g_rep.end());
+    g_rep.clear();
+    g_rep_n = 0;
+    return true;
+  }
   if (l[0] == '#' || !l[0]) return true;
+  if (sscanf(l, "repeat %d", &a) == 1) { g_rep_n = a > 0 ? a : 1; return true; }
+  if (!strncmp(l, "if_shown ", 9) || !strncmp(l, "if_hidden ", 10)) {   // if_shown <tag> : <command>
+    const bool want = l[3] == 's';
+    const char *sep = strstr(l, " : ");
+    if (!sep) return true;
+    snprintf(f, sizeof f, "%.*s", (int)(sep - l - (want ? 9 : 10)), l + (want ? 9 : 10));
+    lv_obj_t *sh, *any;
+    tag_find(f, &sh, &any);
+    return (sh != NULL) == want ? cmd_line(sep + 3, now, key) : true;
+  }
   if (sscanf(l, "key %c", (char *)f) == 1) *key = (SDL_Keycode)f[0];
   else if (sscanf(l, "hold %d %d %d", &a, &b, &c) == 3) { g_tx = g_tx2 = a; g_ty = g_ty2 = b; g_tap_ms = c; g_tap_phase = 1; }
   else if (sscanf(l, "tap %d %d", &a, &b) == 2) { g_tx = g_tx2 = a; g_ty = g_ty2 = b; g_tap_ms = 120; g_tap_phase = 1; }
@@ -1144,6 +1192,19 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
     if (sscanf(l, "machine steam %d", &a) != 1) a = 1;
     machine_up(); stop_shot(); release_cancel(); g_heating = false;
     steam_set(true, a > 0 ? a : 1);
+  } else if (!strncmp(l, "machine ignore ", 15)) {   // on: the machine ignores the UI's commands (like EMU_IGNORE=1)
+    g_ignore = !strncmp(l + 15, "on", 2);
+  } else if (!strcmp(l, "mem_mark")) {
+    g_mem_mark = mem_used();
+  } else if (sscanf(l, "expect_mem_growth %d", &a) == 1) {   // KB of heap in use more than at mem_mark
+    const long kb = ((long)mem_used() - (long)g_mem_mark) / 1024;
+    snprintf(f, sizeof f, "expect_mem_growth %d (grew %ld KB)", a, kb);
+    check(kb <= a, f);
+  } else if (!strncmp(l, "back_to_ready", 13)) {   // back_to_ready [taps]: Back / Close until Ready, a check
+    g_home_max = sscanf(l, "back_to_ready %d", &a) == 1 ? a : 6;
+    g_home_taps = 0;
+    g_home_t = 0;
+    pend_start(PEND_HOME, "screen.ready", NULL, 12000, now);
   } else if (!strncmp(l, "machine link ", 13)) {   // off: unreachable, but it goes on with its shot / steam
     g_offline = !strncmp(l + 13, "off", 3);
   } else if (sscanf(l, "machine readiness %d", &a) == 1) {   // -1: back to the state's own
@@ -1447,7 +1508,12 @@ int main(int argc, char **argv) {
     g_tapping = g_tap_phase != 0;
     if (g_tap_phase) tap_step();
     else if (g_pend.kind) { pend_step(now); if (g_missing) run = false; }   // a missing tag ends the script
-    else if (now >= g_cmd_wait) {
+    else if (now >= g_cmd_wait && !g_queue.empty()) {   // the lines of a repeat block first
+      const std::string q = g_queue.front();
+      g_queue.pop_front();
+      SDL_Keycode k = 0;
+      if (!cmd_line(q.c_str(), now, &k)) run = false;
+    } else if (now >= g_cmd_wait) {
       char c;
       while (read(0, &c, 1) == 1) {
         if (c != '\n') { if (g_cmd_n + 1 < sizeof g_cmd_buf) g_cmd_buf[g_cmd_n++] = c; continue; }
