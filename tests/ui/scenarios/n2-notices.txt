@@ -1,0 +1,16 @@
+# N2 machine notices are shown, on any screen: a warning on Ready, then one with the menu open.
+# checks: N2
+wait 500
+wait_for screen.ready 10000
+button Notification
+wait 6000
+button Notification
+expect_text info.notice test warning 1000
+shot N2: a notice on Ready
+wait 6000
+tap_tag action.menu
+wait 800
+button Notification
+expect_text info.notice test success 1000
+shot N2: a notice over the menu
+quit

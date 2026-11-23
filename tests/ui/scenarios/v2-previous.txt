@@ -1,0 +1,10 @@
+# V2 after a shot the previous shot of the same profile is asked for once (not once per redraw or retry).
+# checks: V2
+wait 500
+wait_for screen.ready 10000
+expect_no_cmd
+machine shot 10
+expect_visible screen.brewing 3000
+wait 15000
+expect_cmds 1 load_previous_shot profile="LMD Single v1.1 (community)"
+quit

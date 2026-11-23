@@ -1,0 +1,18 @@
+# F1 flush mode: a tap turns it on (shown while on), another tap off; F2 a hold starts the timed flush, a tap never.
+# checks: F1, F2
+wait 500
+wait_for screen.ready 10000
+tap_tag action.flush
+wait 800
+expect_cmds 1 flush mode=on
+expect_text value.state Flush 3000
+shot F1: flush mode on
+tap_tag action.flush
+wait 800
+expect_cmds 1 flush mode=off
+expect_text value.state Ready 5000
+hold_tag action.flush 900
+wait 800
+expect_cmds 1 flush mode=timed
+expect_no_text value.state Ready 3000
+quit

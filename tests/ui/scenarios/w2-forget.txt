@@ -1,0 +1,20 @@
+# W2 network details and Forget: one tap on Forget forgets nothing; the confirming tap does.
+# checks: W2
+wait 500
+wait_for screen.ready 10000
+tap_tag action.menu
+wait 800
+tap_tag action.wifi_settings
+expect_visible row.wifi.Home Wi-Fi 4000
+if_hidden action.forget : tap_tag row.wifi.Home Wi-Fi
+wait 800
+shot W2: network details
+expect_cmd wifi_scan
+tap_tag action.forget
+wait 800
+expect_no_cmd
+shot W2: tap again to forget
+tap_tag action.forget
+wait 800
+expect_cmd wifi_forget
+quit
