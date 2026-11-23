@@ -31,9 +31,13 @@ since the previous check; reads of stored shots do not count) and `expect_cmd <t
 text, e.g. `expect_cmd select id=7`). Checks print PASS / FAIL, and the emulator exits with 1 if one failed.
 
 **Shared UI scenarios.** `tests/ui/run.sh [ui]` runs every script in `tests/ui/scenarios` against a UI (a folder
-under `firmware/src`, default Brewdeck's `ui`, or a path to a UI folder) without a window, and keeps the logs in
-`tests/ui/out/`. The scenarios check the features in [ui-features.md](ui-features.md) that do not depend on the
-layout; so far X1, no command without a user action (~2 min).
+under `firmware/src`, default Brewdeck's `ui`, or a path to a UI folder) without a window, then prints the UI's
+status table: per feature of [ui-features.md](ui-features.md) done / partial / FAILED / missing / omitted / not
+checked yet / by hand, with Required features that are missing or failing listed first. It reads the UI's exceptions
+from `ui-features.txt` in its folder (format and rules: [Leaving features out](ui-features.md#leaving-features-out))
+and writes `status.md`, the logs and the UI's commands to `tests/ui/out/<emulator>/`. Each scenario names what it
+checks in a `# checks: X1` line, and is skipped when all of those are omitted or missing. `SCENARIO=x1` runs only
+the scenarios whose file name starts with `x1`. So far: X1, no command without a user action (~2 min).
 
 ## Building the firmware
 

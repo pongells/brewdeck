@@ -1,4 +1,5 @@
 # X1 (Required): no command without a user action. Nothing touches the screen: only the fake machine changes.
+# checks: X1
 # Reads of stored shots (the previous shot after a shot) are allowed.
 
 # warm-up from a cold boiler

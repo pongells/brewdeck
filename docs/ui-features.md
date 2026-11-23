@@ -1,6 +1,7 @@
 # UI features and checks
 
-**Draft.** Nothing described under [How the checks work](#how-the-checks-work) is built yet.
+**Draft.** Partly built: `tests/ui/run.sh` runs the scenarios and prints a UI's status table (see
+[development.md](development.md)); so far only X1 has a scenario, and no tags exist yet.
 
 This is the list of what a UI on Brewdeck's core is expected to do, and how each item is checked. Every UI
 (Brewdeck's own, Ledger, yours) is themed completely its own way, so nothing here says how a screen looks. It says what
