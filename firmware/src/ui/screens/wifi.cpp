@@ -340,6 +340,7 @@ void build_wifi(lv_obj_t *m) {
   g_pw_cur = box(fr, 0, 0, 2, 24, COL_GOLD, 0);
   g_pw_eye = box(f, 696, 8, 40, 40, COL_WELL, 10);
   make_button(g_pw_eye, COL_CARD);
+  lv_obj_set_ext_click_area(g_pw_eye, 4);          // 40 px drawn, 48 px to tap
   {
     static const lv_point_t top[] = {{2, 11}, {6, 6}, {11, 4}, {16, 6}, {20, 11}};
     static const lv_point_t bot[] = {{2, 11}, {6, 16}, {11, 18}, {16, 16}, {20, 11}};

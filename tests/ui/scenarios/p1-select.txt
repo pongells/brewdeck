@@ -4,7 +4,6 @@ wait 500
 wait_for screen.ready 10000
 tap_tag action.profiles
 expect_visible row.profile.8 3000
-shot P2 P3: profiles
 tap_tag row.profile.8
 wait 500
 expect_cmd select id=8

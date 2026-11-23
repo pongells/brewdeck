@@ -23,6 +23,7 @@
 #include "net.h"
 #include "ws.h"
 #include "debug_http.h"
+#include "frames.h"
 
 void bd_log(const char *fmt, ...) {
   char b[192];
@@ -283,6 +284,11 @@ void bd_core_loop(void) {
   if (dt >= 40) Log.printf("ui: slow frame %u ms: flush %u ms for %u px, layout + drawing %u ms\n", (unsigned)dt,
                            (unsigned)(fus / 1000), (unsigned)fpx, (unsigned)(dt - fus / 1000));
   if (pf_shots) { pf_n++; pf_sum += dt; if (dt > pf_max) pf_max = dt; }
+  {                                         // frame times per shot / steam session (debug /frames, tools/frames.sh)
+    const bd_machine *m = bd_machine_state();
+    const bool on = m->link == BD_LINK_ONLINE;
+    frames_add(t0, dt, on && m->brewing ? FR_SHOT : on && (m->steaming || !strcmp(m->mode, "STEAM")) ? FR_STEAM : FR_IDLE);
+  }
   if (millis() - pf_t > 5000) {     // render time while shot data arrives: one line per 5 s of a shot
     if (pf_shots) Log.printf("ui: 5 s: %u shot points, bd_ui_tick avg %u ms max %u ms\n", (unsigned)pf_shots,
                              (unsigned)(pf_n ? pf_sum / pf_n : 0), (unsigned)pf_max);

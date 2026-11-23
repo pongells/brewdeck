@@ -265,6 +265,7 @@ static void steam_step(uint32_t now) {
     }
     return;
   }
+  if ((int32_t)(now - g_st.t0) < 0) return;              // started after this loop pass read the clock
   while (g_st.i < g_steam.size() && (now - g_st.t0) * (uint32_t)g_st.speed >= g_steam[g_st.i].at) {
     const std::vector<uint8_t> &f = g_steam[g_st.i++].b;
     char act[24]; const uint8_t *d; size_t dl;
@@ -462,7 +463,7 @@ static void shot_step(uint32_t now) {
   if (!g_shot_on) return;
   while (g_shot_i < g_shot.size()) {
     Frame &f = g_shot[g_shot_i];
-    if ((now - g_shot_t0) * (uint32_t)g_speed < f.at) break;
+    if ((int32_t)(now - g_shot_t0) < 0 || (now - g_shot_t0) * (uint32_t)g_speed < f.at) break;   // started after this pass read the clock
     char act[24];
     const uint8_t *d;
     size_t dl;
@@ -1022,6 +1023,19 @@ static const char *tag_text(lv_obj_t *o) {
   for (uint32_t i = 0; i < n; i++) { const char *t = tag_text(lv_obj_get_child(o, (int32_t)i)); if (t) return t; }
   return NULL;
 }
+extern "C" void lv_obj_get_click_area(const lv_obj_t *obj, lv_area_t *area);   // LVGL, not in its public headers
+// every shown label under o, in order, joined by " / " (a row: its name, values, last use)
+static std::string tag_alltext(lv_obj_t *o) {
+  std::string s;
+  if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) return s;
+  if (lv_obj_check_type(o, &lv_label_class)) return lv_label_get_text(o);
+  const uint32_t n = lv_obj_get_child_count(o);
+  for (uint32_t i = 0; i < n; i++) {
+    const std::string t = tag_alltext(lv_obj_get_child(o, (int32_t)i));
+    if (!t.empty()) s += (s.empty() ? "" : " / ") + t;
+  }
+  return s;
+}
 static bool text_has(const char *text, const char *alts) {   // "a|b": contains a or b, ignoring case
   if (!text) return false;
   char buf[200];
@@ -1046,7 +1060,7 @@ static bool pend_holds(void) {
   tag_find(g_pend.tag, &sh, &any);
   if (g_pend.kind == PEND_VISIBLE || g_pend.kind == PEND_WAIT || g_pend.kind == PEND_HOME) return sh != NULL;
   if (g_pend.kind == PEND_HIDDEN) return sh == NULL;
-  return sh && text_has(tag_text(sh), g_pend.arg);
+  return sh && text_has(tag_alltext(sh).c_str(), g_pend.arg);
 }
 // a tag not there yet may come (a list filled after a scan): it is missing only if still absent when the time is up
 static void pend_start(int kind, const char *tag, const char *arg, int ms, uint32_t now) {
@@ -1072,7 +1086,7 @@ static void pend_step(uint32_t now) {   // called every loop pass while a check 
   if (!ok && g_pend.kind == PEND_TEXT) {
     lv_obj_t *sh, *any;
     tag_find(g_pend.tag, &sh, &any);
-    const char *t = sh ? tag_text(sh) : NULL;
+    const std::string ts = sh ? tag_alltext(sh) : std::string(); const char *t = sh ? ts.c_str() : NULL;
     snprintf(what + strlen(what), sizeof what - strlen(what), " (%s: \"%s\")", sh ? "text" : "not shown", t ? t : "");
   }
   if (!ok && g_pend.kind == PEND_BACKLIGHT)
@@ -1212,6 +1226,41 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
     g_ignore = !strncmp(l + 15, "on", 2);
   } else if (!strcmp(l, "shot") || !strncmp(l, "shot ", 5)) {   // shot <caption>: for the contact sheet
     shot_save(l[4] ? l + 5 : "");
+  } else if (!strncmp(l, "expect_order ", 13)) {   // expect_order row.profile.7 row.profile.1 ...: shown, top to bottom
+    std::vector<int> ys;
+    std::string bad;
+    snprintf(f, sizeof f, "%s", l + 13);
+    for (char *t = strtok(f, " "); t; t = strtok(NULL, " ")) {
+      lv_obj_t *sh, *any;
+      if (!tag_find(t, &sh, &any)) { tag_missing(t); return false; }
+      lv_area_t r;
+      if (sh) lv_obj_get_coords(sh, &r);
+      ys.push_back(sh ? r.y1 * 1000 + r.x1 : -1);
+      if (!sh || (ys.size() > 1 && ys[ys.size() - 2] >= ys.back())) bad += std::string(bad.empty() ? "" : ", ") + t;
+    }
+    check(bad.empty(), ("expect_order " + std::string(l + 13) + (bad.empty() ? "" : " (out of place or not shown: " + bad + ")")).c_str());
+  } else if (sscanf(l, "expect_touch_targets %d", &a) == 1) {   // every shown object a tap does something on: >= a x a px
+    const std::vector<lv_obj_t *> all = tag_all();
+    std::string small;
+    int n = 0;
+    for (lv_obj_t *o : all) {
+      if (!lv_obj_has_flag(o, LV_OBJ_FLAG_CLICKABLE) || !lv_obj_get_event_count(o) || o == lv_display_get_screen_active(g_dev_disp) ||
+          lv_obj_get_parent(o) == NULL || !tag_visible(o) || tag_covered(o, all))
+        continue;
+      lv_area_t r;
+      lv_obj_get_click_area(o, &r);                 // with its extra click padding
+      const int w = lv_area_get_width(&r), h = lv_area_get_height(&r);
+      n++;
+      if (w >= a && h >= a) continue;
+      const char *nm = lv_obj_get_name(o);
+      const std::string t = tag_alltext(o);
+      char d[160];
+      snprintf(d, sizeof d, "%s%s %dx%d at %d,%d", small.empty() ? "" : "; ", nm ? nm : t.empty() ? "(no name)" : t.substr(0, 24).c_str(),
+               w, h, (int)r.x1, (int)r.y1);
+      small += d;
+    }
+    snprintf(f, sizeof f, "expect_touch_targets %d (%d shown", a, n);
+    check(small.empty(), (std::string(f) + (small.empty() ? ")" : ", too small: " + small + ")")).c_str());
   } else if (!strcmp(l, "mem_mark")) {
     g_mem_mark = mem_used();
   } else if (sscanf(l, "expect_mem_growth %d", &a) == 1) {   // KB of heap in use more than at mem_mark
@@ -1382,7 +1431,7 @@ static void emu_step(uint32_t now) {
   shot_step(now);
   prev_step(now);
   hist_step(now);
-  if (g_autoflush_ms) {                                    // fake timed flush
+  if (g_autoflush_ms && (int32_t)(now - g_autoflush_ms) >= 0) {   // fake timed flush (not one started after this pass read the clock)
     const uint32_t t = now - g_autoflush_ms;
     g_m.pressure = t < 5000 ? 1.4f : 0;
     if (t >= 5000) { g_autoflush_ms = 0; strcpy(g_m.mode, "HOME"); printf("machine: auto flush done\n"); }

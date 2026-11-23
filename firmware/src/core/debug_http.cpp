@@ -12,6 +12,7 @@
 #include "board_core.h"
 #include "net.h"
 #include "tlog.h"
+#include "frames.h"
 
 static WiFiServer g_srv(80);
 // the UI's own debug route (bd_debug_route)
@@ -205,6 +206,11 @@ static void task(void *) {
                (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
                (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), (int)rssi, ch, ap, (unsigned long)(millis() / 1000),
                (int)esp_reset_reason(), board_display_mode());
+    } else if (strncmp(line, "GET /frames ", 12) == 0) {   // frame times per shot / steam session (tools/frames.sh)
+      static char rep[1600];
+      frames_report(rep, sizeof rep);
+      c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n");
+      c.print(rep);
     } else if (strncmp(line, "GET /flash ", 11) == 0) {   // flash read mode + raw read speed (debug)
       uint32_t ctrl = 0;
       const char *mode = board_flash_mode(&ctrl);   // chip-specific registers: the board layer reads them

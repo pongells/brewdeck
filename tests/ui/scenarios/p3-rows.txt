@@ -1,0 +1,14 @@
+# P3 each row shows the profile's brew temperature and stop weight (LMD Single: 91 C, 21 g; its last use is checked
+# by looking); P5 tapping the active profile closes the list.
+# checks: P3, P5
+wait 500
+wait_for screen.ready 10000
+tap_tag action.profiles
+expect_visible row.profile.7 3000
+expect_text row.profile.7 91 2000
+expect_text row.profile.7 21
+expect_text row.profile.8 90
+tap_tag row.profile.7
+expect_hidden screen.profiles 2000
+expect_visible screen.ready 1000
+quit

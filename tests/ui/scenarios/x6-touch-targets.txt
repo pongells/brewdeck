@@ -1,0 +1,36 @@
+# X6 touch targets: every object a tap acts on is at least 48 x 48 px (its extra click area included; about 5.7 mm on
+# a 4.3" 800 x 480 panel), on Ready, the profiles, the editors, the menu, the Wi-Fi pages and the offline page.
+# checks: X6
+wait 500
+wait_for screen.ready 10000
+wait 1000
+expect_touch_targets 48
+tap_tag action.profiles
+wait 800
+expect_touch_targets 48
+back_to_ready
+tap_tag value.brew_temp
+wait 800
+expect_touch_targets 48
+back_to_ready
+tap_tag value.stop_weight
+wait 800
+expect_touch_targets 48
+back_to_ready
+tap_tag action.menu
+wait 800
+expect_touch_targets 48
+tap_tag action.wifi_settings
+expect_visible row.wifi.Home Wi-Fi 2 4000
+expect_touch_targets 48
+tap_tag row.wifi.Home Wi-Fi 2
+wait 800
+expect_touch_targets 48
+back_to_ready
+machine link off
+expect_visible screen.offline 8000
+button +20 s
+wait 1500
+expect_touch_targets 48
+machine link on
+quit

@@ -18,6 +18,7 @@ run() {   # name, sources..., -- args...
 }
 run parse_test   tests/parse_test.cpp   $CORE/parse.cpp                -- $D/profiles_all.json $D/profile_8.json $D/profile_1.json $D/status.json
 run preview_test tests/preview_test.cpp $CORE/parse.cpp $CORE/preview.cpp -- $V $D/profile_8.json $D/profile_1.json $D/profile_4.json $D/profile_5.json
+run frames_test  tests/frames_test.cpp  $CORE/frames.cpp              --
 run pb_test      tests/pb_test.cpp      $CORE/pb.cpp                   -- $D/ws_idle.bin
 run shot_test    tests/shot_test.cpp    $CORE/parse.cpp $CORE/pb.cpp     -- $D/shot_298.json $D/shot_297.json $D/ws_idle.bin $D/ws_shot.bin
 run core_state_test tests/core_state_test.cpp $CORE/core_state.cpp $CORE/preview.cpp $CORE/pb.cpp $CORE/parse.cpp --

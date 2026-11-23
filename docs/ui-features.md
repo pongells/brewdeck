@@ -51,7 +51,7 @@ it leaves a feature out on purpose: [Leaving features out](#leaving-features-out
 | R8 | Pressure, scale (type, connected), water level | Expected | Test | `value.pressure`, `value.scale`, `value.water` follow the machine |
 | R9 | Pressure warning: pressure left in the system while idle (above 0.8 bar) | Expected | Test | 1.4 bar idle: `warn.pressure` visible; 2 s at 0.8 bar or less: hidden |
 | R10 | No scale and low water (below 20 %) warnings | Expected | Test | `warn.no_scale` and `warn.refill` visible exactly while the condition holds |
-| R11 | Time of day | Optional | Look | the idle clock (I1) is enough |
+| R11 | Time of day | Optional | Tag | `value.clock` on the idle clock shows hours:minutes (I1 is enough) |
 
 ## Brew temperature and stop weight
 
@@ -72,10 +72,10 @@ it leaves a feature out on purpose: [Leaving features out](#leaving-features-out
 | ID | Feature | Level | Check | Checked |
 |---|---|---|---|---|
 | P1 | List of the machine's profiles; a tap selects one (saved as the boot profile) | Required | Test | `action.profiles`, tap `row.profile.<id>`: the core receives a select of that id; once the machine reports it, `value.profile` shows its name |
-| P2 | Order: active first, recently used, then by name | Optional | Look | |
-| P3 | Stop weight, brew temperature and last use per row | Optional | Look | |
+| P2 | Order: active first, recently used, then by name | Optional | Test | the shown `row.profile.<id>` rows top to bottom: active, recently used (fake shot history), then by name ignoring leading symbols |
+| P3 | Stop weight, brew temperature and last use per row | Optional | Test + Look | `row.profile.<id>` text holds its brew temperature and stop weight; the last use by looking |
 | P4 | Originals per profile: restore or keep the current values | Optional | Tag | `action.restore` |
-| P5 | Tapping the active profile just closes the list | Optional | None | selecting it again is harmless |
+| P5 | Tapping the active profile just closes the list | Optional | Test | tap the active `row.profile.<id>`: `screen.profiles` hidden, Ready shown (selecting it again is harmless) |
 
 ## Shot
 
@@ -86,7 +86,7 @@ it leaves a feature out on purpose: [Leaving features out](#leaving-features-out
 | B3 | Target pressure / flow drawn against the live lines | Optional | Look | |
 | B4 | Weight (against the stop weight) and shot time | Required | Test | `value.weight` and `value.shot_time` follow the shot points within 1 s |
 | B5 | Weight smoothed between slow scale readings | Optional | Look | |
-| B6 | Time axis grows without slow frames | Expected | Panel | longest frame during a shot (see X5) |
+| B6 | Time axis grows without slow frames | Expected | Panel | longest frame during a shot (see X5; `tools/frames.sh` after a shot on a debug build) |
 | B7 | End of the shot: result shown, then back to Ready by itself | Required | Test | after the end: the final weight and time are shown; 60 s untouched: `screen.ready` |
 
 ## Shot review and history
@@ -164,8 +164,8 @@ it leaves a feature out on purpose: [Leaving features out](#leaving-features-out
 | X2 | No dead ends: every screen can be left | Required | Test | from each tagged screen, `action.close` / `action.back` (or waiting 60 s) leads back to `screen.ready` |
 | X3 | A shot or steam takes over whatever is open (menu, lists, editors, a review) | Required | Test | start a shot / steam with each open: `screen.brewing` / `screen.steam` |
 | X4 | No crash and no memory left behind | Required | Test | every scenario runs to its end; opening and closing each screen 20 times does not grow the memory in use |
-| X5 | No slow frames while live data is shown | Expected | Panel | longest `bd_ui_tick` during a shot and a steam session (Brewdeck's own UI: most frames under 40 ms, full redraws such as opening a screen ~50-150 ms) |
-| X6 | Touch targets big enough for a wet finger | Expected | Panel | |
+| X5 | No slow frames while live data is shown | Expected | Panel | `tools/frames.sh` after a shot or steam on a debug build: after the screen opening (1.5 s), no frame of 150 ms or more and at most 2 % of 40 ms or more (Brewdeck: most under 40 ms, full redraws ~50-150 ms) |
+| X6 | Touch targets big enough for a wet finger | Expected | Test | every shown object a tap acts on is at least 48 x 48 px, its extra click area included (about 5.7 mm on a 4.3" 800 x 480 panel), on each screen the scenarios open |
 
 ## How the checks work
 
@@ -203,7 +203,7 @@ Required features that are missing are listed first. The screenshots of every sc
 | Kind | Tags |
 |---|---|
 | Screens | `screen.ready`, `screen.brewing`, `screen.review`, `screen.steam`, `screen.offline`, `screen.profiles`, `screen.keypad`, `screen.history`, `screen.notices`, `screen.menu`, `screen.wifi`, `screen.wifi_details`, `screen.password`, `screen.machine_address`, `screen.scale`, `screen.display`, `screen.about`, `screen.idle` |
-| Values (a label, or an object whose first label child holds the text) | `value.state`, `value.boiler_temp`, `value.profile`, `value.pressure`, `value.scale`, `value.water`, `value.brew_temp`, `value.stop_weight`, `value.weight`, `value.shot_time`, `value.offline_reason` |
+| Values (a label, or an object whose first label child holds the text) | `value.state`, `value.boiler_temp`, `value.profile`, `value.pressure`, `value.scale`, `value.water`, `value.brew_temp`, `value.stop_weight`, `value.weight`, `value.shot_time`, `value.offline_reason`, `value.clock` |
 | Warnings (checked visible / hidden) | `warn.pressure`, `warn.no_scale`, `warn.refill`, `warn.release` |
 | Information | `info.unofficial`, `info.notice`, `info.update`, `info.refusal`, `info.wifi_error` |
 | Actions | `action.temp_up`, `action.temp_down`, `action.weight_up`, `action.weight_down`, `action.done` (a keypad or editor), `action.reset`, `action.restore`, `action.profiles`, `action.menu` (the menu or settings, from Ready), `action.notices`, `action.flush`, `action.close`, `action.back`, `action.join`, `action.forget`, `action.use`, `action.retry`, `action.wifi_settings`, `action.machine_address` |

@@ -47,7 +47,9 @@ tag is even when something covers it (the idle clock, screen off). `machine igno
 commands (as `EMU_IGNORE=1`). `back_to_ready [taps]` (a check) taps the shown Back, else Close, until Ready shows.
 `if_shown <tag> : <command>` / `if_hidden <tag> : <command>` run a command only then (UIs reach a control in
 different ways). `repeat <n>` ... `end` runs the lines between n times. `mem_mark` / `expect_mem_growth <KB>` check
-the heap in use.
+the heap in use. `expect_order <tag> <tag> ...` checks that they are shown top to bottom in that order;
+`expect_touch_targets <px>` that every shown object a tap acts on (clickable, with an event handler) is at least px
+square, its extra click area included. `expect_text` looks at all the shown labels under the tagged object.
 
 **Shared UI scenarios.** `tests/ui/run.sh [ui]` runs every script in `tests/ui/scenarios` against a UI (a folder
 under `firmware/src`, default Brewdeck's `ui`, or a path to a UI folder) without a window, then prints the UI's
@@ -99,6 +101,7 @@ waits about 5 s for IPv6 over mDNS.
 | `/rec?every=ms[&max=n]`, `/rec`, `/rec/stop`, `/rec.bin`, `/rec/free` | screen recorder: frames kept in PSRAM, downloaded at the end (`tools/record.sh`) |
 | `/heap`, `/tasks`, `/flash` | free memory, Wi-Fi link, uptime and the raw reset reason (`esp_reset_reason`); stack left per task; flash mode and read speed |
 | `/touch?x=&y=&ms=` | presses the screen |
+| `/frames` | frame times (`bd_ui_tick`) of the last 4 shot / steam sessions: count, longest, slow ones; `tools/frames.sh` after a shot says whether they were fast enough |
 | `/roam` | starts a Wi-Fi roaming check (result in the serial log) |
 | `/i2c` | every address that answers on the touch controller's I2C bus, with a guess at what it is (audio codec, ...) |
 | `/bl?pct=&hz=` | sets the backlight level and PWM frequency |
