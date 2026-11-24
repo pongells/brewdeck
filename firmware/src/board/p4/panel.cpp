@@ -15,6 +15,7 @@ void board_init() {
   if (!gfx->begin()) Serial.println("gfx->begin() failed");
   gfx->setRotation(PANEL_ROT);
   gfx->fillScreen(0x0000);
+  delay(50);                   // ~3 frames of the black fill first: lit at once, the panel showed its blue for a frame
   digitalWrite(PIN_BL, HIGH);
 }
 

@@ -66,9 +66,12 @@ if (( OTA )); then   # over Wi-Fi to the debug web server (src/core/ota.h)
   BEFORE="$(heap | sed -n 's/^firmware: //p')"
   [[ -n "$BEFORE" ]] || { echo "no answer from $HOST (a debug build with OTA, flashed once by USB?)" >&2; exit 1; }
   echo "Screen runs: $BEFORE"
+  [[ "$BEFORE" == *"on trial"* ]] && { echo "Its firmware is still on its 60 s trial: try again in a minute" >&2; exit 1; }
   echo "Sending $(wc -c < "$BP/firmware.bin" | tr -d ' ') bytes to $HOST ..."
-  ANS="$(curl -4 -sS -m 300 -H "Expect:" -H "X-OTA-Token: $TOKEN" -H "Content-Type: application/octet-stream" \
-         --data-binary @"$BP/firmware.bin" "http://$HOST/ota")" || { echo "the upload failed; nothing changed" >&2; exit 1; }
+  # a refusal comes before the image is read, then the screen closes: curl reports a reset, the answer is still there
+  ANS="$(curl -4 -s -m 300 -H "Expect:" -H "X-OTA-Token: $TOKEN" -H "Content-Type: application/octet-stream" \
+         --data-binary @"$BP/firmware.bin" "http://$HOST/ota" || true)"
+  [[ -n "$ANS" ]] || { echo "no answer from $HOST: the upload failed; nothing changed" >&2; exit 1; }
   echo "Screen: $ANS"
   [[ "$ANS" == installed* ]] || exit 1
   echo "Waiting for it to restart and pass its 60 s trial ..."

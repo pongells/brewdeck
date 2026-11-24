@@ -74,6 +74,7 @@ static void image_built(const uint8_t *b, size_t n, char *out, size_t cap) {
   snprintf(out, cap, "%d %s %d %.5s", day, mon, year, d->time);
 }
 
+static esp_ota_img_states_t run_state(void);
 static bool machine_busy(char *why, size_t cap) {
   const bd_machine *m = bd_machine_state();     // read from this task: flags only, a stale value costs one retry
   if (m->link != BD_LINK_ONLINE) return false;  // machine off or unreachable: nothing can be running
@@ -90,6 +91,9 @@ bool ota_receive(WiFiClient &c, size_t len, const char *token, char *msg, size_t
     return snprintf(msg, cap, "refused: wrong password\n"), false;
   }
   if (machine_busy(msg, cap)) return false;
+  if (run_state() == ESP_OTA_IMG_PENDING_VERIFY)   // the way back must lead to a firmware that passed its trial
+    return snprintf(msg, cap, "refused: the running firmware is still on trial (%lu s left); try again then\n",
+                    (unsigned long)(millis() < KEEP_AFTER_MS ? (KEEP_AFTER_MS - millis()) / 1000 + 1 : 1)), false;
   const esp_partition_t *next = esp_ota_get_next_update_partition(NULL);
   if (!next || len < sizeof(esp_image_header_t) || len > next->size)
     return snprintf(msg, cap, "refused: image size %u (slot %u)\n", (unsigned)len, next ? (unsigned)next->size : 0), false;

@@ -5,6 +5,8 @@
 #ifdef BREWDECK_DEBUG_HTTP
 #include <WiFi.h>
 #include <esp_flash.h>
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
 #include <string.h>
@@ -300,6 +302,44 @@ static void task(void *) {
     } else if (strncmp(line, "GET /roam ", 10) == 0) {   // roaming test (debug): scan now, move if clearly better (log)
       net_roam_check();
       c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nroaming check started, see the serial log\n");
+    } else if (strncmp(line, "GET /flashtest?", 15) == 0) {   // debug: flash operations alone, on the free app slot
+      // /flashtest?op=erase|write&ms=5000: 4 KB erases or 2 KB writes back to back, to see what the panel does
+      const bool erase = strstr(line, "op=erase") != NULL;
+      const char *pc = strstr(line, "chunk=");
+      const size_t chunk = pc ? (size_t)atoi(pc + 6) : 2048;   // write size (1..2048)
+      const bool pre = strstr(line, "pre=1") != NULL;          // erase 256 KB first, wait 5 s, then only writes
+      const char *pm = strstr(line, "ms=");
+      const uint32_t ms = pm ? (uint32_t)atoi(pm + 3) : 5000;
+      const esp_partition_t *p = esp_ota_get_next_update_partition(NULL);
+      static uint8_t wb[2048];
+      memset(wb, 0xA5, sizeof wb);
+      uint32_t n = 0, off = 0, worst = 0;
+      const uint32_t t0 = millis();
+      if (p) {
+        if (!erase) esp_partition_erase_range(p, 0, pre ? 256 * 1024 : 64 * 1024);   // something to write into
+        if (pre) delay(5000);
+        const uint32_t t1 = millis();
+        while (millis() - t1 < ms) {
+          const uint32_t a0 = micros();
+          if (erase) esp_partition_erase_range(p, off, 4096), off = (off + 4096) % (256 * 1024);
+          else {
+            const size_t cs = chunk < 1 ? 1 : chunk > sizeof wb ? sizeof wb : chunk;
+            if (off + cs > (pre ? 256u : 64u) * 1024) {
+              if (pre) break;                                  // pre-erased area used up: no erase in the test
+              esp_partition_erase_range(p, 0, 64 * 1024);
+              off = 0;
+            }
+            esp_partition_write(p, off, wb, cs), off += cs;
+          }
+          const uint32_t d = micros() - a0;
+          if (d > worst) worst = d;
+          n++;
+          delay(1);
+        }
+      }
+      c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n%s: %lu in %lu ms, longest %lu us (%s)\n",
+               erase ? "4 KB erases" : pre ? "writes into erased flash" : "2 KB writes", (unsigned long)n, (unsigned long)(millis() - t0), (unsigned long)worst,
+               p ? p->label : "no free slot");
     } else if (strncmp(line, "GET /ppatest?stall=1", 20) == 0) {   // the next PPA copy hangs: the fallback takes over
       board_ppa_stall();
       c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nthe next PPA copy will hang\n");

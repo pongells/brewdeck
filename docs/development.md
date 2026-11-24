@@ -80,8 +80,12 @@ Prerequisites and the first build: README, [Building](../README.md#building). In
 | `touchtest` | raw touch test for the S3: shows touch coordinates, tap the corners to check the axes |
 
 `./build.sh <env>` builds, `--flash` flashes through `flash.sh`; `UI=<folder>` builds another UI folder (a folder name under `src/`, or a path to one outside the repository). Options are
-in the header of [`build.sh`](../firmware/build.sh). Switching between S3 and P4 builds recompiles the Arduino
-libraries (2-3 minutes).
+in the header of [`build.sh`](../firmware/build.sh). Both boards change ESP-IDF settings (`custom_sdkconfig` in
+`platformio.ini`), so their first build recompiles the Arduino core's ESP-IDF libraries, and switching between S3 and
+P4 builds recompiles them again (a few minutes). The P4 runs its code from PSRAM (XIP): writing flash, as an update
+does, otherwise paused the panel's reads and it flashed light blue. `pin_components.py` pins the recompiled
+components to the exact versions of the stock libraries, whose headers the app is compiled against (newer ones broke
+Wi-Fi on the P4).
 
 ### Over Wi-Fi (debug builds)
 
@@ -158,6 +162,7 @@ waits about 5 s for IPv6 over mDNS.
 | `/roam` | starts a Wi-Fi roaming check (result in the serial log) |
 | `/i2c` | every address that answers on the touch controller's I2C bus, with a guess at what it is (audio codec, ...) |
 | `/ppatest?n=300&seed=1&hmin=1&hmax=40` | P4: rotates `n` random rectangles (heights `hmin`..`hmax`) with the 2D engine into a spare buffer (same settings as the display) and checks each against the CPU's rotation; lists wrong or unfinished copies (a copy that never finishes switches the display to the CPU path). Blocks the UI while it runs |
+| `/flashtest?op=erase\|write&ms=5000[&pre=1&chunk=256]` | flash erases or writes alone on the free app slot, to see what the panel does meanwhile (longest pause in the answer) |
 | `/ppatest?stall=1` | P4: the next 2D-engine copy hangs, as the known PPA bugs make it; checks that the screen switches to CPU rotation within 100 ms and keeps running (until a restart) |
 | `POST /ota` | a new firmware image (`build.sh <env> --ota`, see [Over Wi-Fi](#over-wi-fi-debug-builds)) |
 | `/log`, `/log/prev`, `/loghost?to=` | the memory log, the log from before a crash, the log server (see [Serial log](#serial-log)) |

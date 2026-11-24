@@ -3,13 +3,20 @@
 // src/board/p4; ui_select.py builds one) has its panel, display functions and board.h (pins, touch orientation).
 #include <Arduino.h>
 #include <esp_heap_caps.h>
+#include <esp_system.h>
 #include "board.h"
 #include "touch_gt911.h"
 #include "../../core/brewdeck_core.h"
 #include "board_core.h"
 
+// On a software restart (an update, the way back after a failed trial, esp_restart) the panel loses its picture
+// before the new start sets it up again, and the P4's panel shows that as a blue screen: the backlight goes off
+// first. Not on a crash (no shutdown handlers then).
+static void backlight_off_on_restart(void) { board_backlight(0); }
+
 bool board_begin(void) {
   board_init();
+  esp_register_shutdown_handler(backlight_off_on_restart);
   return touch_begin();
 }
 
