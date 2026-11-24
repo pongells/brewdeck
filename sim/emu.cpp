@@ -76,7 +76,7 @@ static bool g_mdown;
 static bool g_dirty = true;
 static uint32_t g_flush_px = 0;              // px flushed in this lv_timer_handler pass (EMU_FLUSHLOG=1 prints big ones)
 
-static const bd_display_info g_bd_info = {W, H, BD_PIXEL_RGB565, 80};
+static const bd_display_info g_bd_info = {W, H, BD_PIXEL_RGB565, 80, 16};   // 16-row bands like the P4 (bd_lvgl9.h)
 const bd_display_info *bd_display(void) { return &g_bd_info; }
 void bd_display_flush(int x1, int y1, int x2, int y2, const uint16_t *px) {
   for (int y = y1; y <= y2; y++)

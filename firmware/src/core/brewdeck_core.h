@@ -233,7 +233,10 @@ typedef struct {
   int width, height;              // landscape, as the UI draws: 800 x 480 on both boards (the P4's portrait panel is turned by its board layer)
   bd_pixel_format format;
   int draw_lines;                 // rows of one draw strip (width x draw_lines RGB565) that fit in internal RAM next to
-                                  // Wi-Fi: 40 on both boards (64 KB). One strip: the copy is synchronous anyway.
+                                  // Wi-Fi: 40 on the S3 (64 KB), 48 on the P4. One strip: the copy is synchronous anyway.
+  int row_align;                  // 0 = any rectangle. Else flushed rectangles should start on a multiple of row_align
+                                  // rows and be a multiple of it tall (P4: 16; its 2D engine can hang on copies only
+                                  // 2-3 rows tall, so thinner ones are copied by the CPU, more slowly). bd_lvgl9.h does it.
 } bd_display_info;
 const bd_display_info *bd_display(void);
 // Puts a finished rectangle on the screen (x2 / y2 inclusive, px row by row, (x2-x1+1) * (y2-y1+1) pixels). Returns

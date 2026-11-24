@@ -41,6 +41,16 @@ static void bd_lv_touch(lv_indev_t *in, lv_indev_data_t *data) {
   }
 }
 
+// Redrawn areas in whole bands of row_align rows (bd_display_info). LVGL rounds its strip heights with the same
+// event, so every flushed rectangle is then a multiple of row_align rows tall.
+static void bd_lv_round(lv_event_t *e) {
+  lv_area_t *a = (lv_area_t *)lv_event_get_param(e);
+  const int32_t r = bd_display()->row_align;
+  a->y1 -= a->y1 % r;
+  a->y2 += r - 1 - a->y2 % r;
+  if (a->y2 >= bd_display()->height) a->y2 = bd_display()->height - 1;
+}
+
 // Call once from bd_ui_init(). One draw strip of the board's draw_lines in internal RAM (bd_display_flush
 // copies synchronously, so a second strip would never be drawn into while the first is sent; and LVGL 9 walks the
 // object tree once per strip, so fewer, taller strips are faster: 20-line pairs took ~128 ms for a full Ready
@@ -59,6 +69,7 @@ static bool bd_lvgl9_setup(void) {
   lv_display_set_color_format(bd_lv_disp, LV_COLOR_FORMAT_RGB565);
   lv_display_set_buffers(bd_lv_disp, b1, NULL, bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
   lv_display_set_flush_cb(bd_lv_disp, bd_lv_flush);
+  if (di->row_align > 1) lv_display_add_event_cb(bd_lv_disp, bd_lv_round, LV_EVENT_INVALIDATE_AREA, NULL);
   lv_indev_t *in = lv_indev_create();
   lv_indev_set_type(in, LV_INDEV_TYPE_POINTER);
   lv_indev_set_read_cb(in, bd_lv_touch);

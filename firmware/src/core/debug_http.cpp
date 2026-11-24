@@ -233,6 +233,16 @@ static void task(void *) {
     } else if (strncmp(line, "GET /roam ", 10) == 0) {   // roaming test (debug): scan now, move if clearly better (log)
       net_roam_check();
       c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nroaming check started, see the serial log\n");
+    } else if (strncmp(line, "GET /ppatest", 12) == 0 && (line[12] == ' ' || line[12] == '?')) {
+      const char *pn = strstr(line, "n="), *ps = strstr(line, "seed=");   // run by the UI task: no flush meanwhile
+      const char *ph0 = strstr(line, "hmin="), *ph1 = strstr(line, "hmax=");
+      board_ppa_test_args(pn ? atoi(pn + 2) : 300, ps ? (uint32_t)strtoul(ps + 5, NULL, 10) : 1, ph0 ? atoi(ph0 + 5) : 0,
+                          ph1 ? atoi(ph1 + 5) : 0);
+      g_rt_done = false;
+      g_rt_job = board_ppa_test;
+      const uint32_t t0 = millis();
+      while (!g_rt_done && millis() - t0 < 60000) delay(20);
+      c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n%s", g_rt_done ? g_rt_out : "timeout\n");
     } else if (route_match(line) || strncmp(line, "GET /i2c ", 9) == 0) {   // run by the UI task: the UI's route
       g_rt_done = false;                             // (bd_debug_route) or the I2C scan (touch reads share the bus)
       g_rt_job = route_match(line) ? g_rt_fn : board_i2c_scan;
@@ -249,7 +259,7 @@ static void task(void *) {
       if (pp) bd_set_backlight(atoi(pp + 4));
       c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nok\n");
     } else {
-      c.print("HTTP/1.0 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nGET /screen.bmp, /rec?every=ms[&max=n], /rec, /rec/stop, /rec.bin, /rec/free, /heap, /tasks, /flash, /roam, /i2c, /touch?x=&y=&ms=, /bl?pct=&hz=\n");
+      c.print("HTTP/1.0 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nGET /screen.bmp, /rec?every=ms[&max=n], /rec, /rec/stop, /rec.bin, /rec/free, /heap, /tasks, /flash, /roam, /i2c, /ppatest?n=&seed=&hmin=&hmax=, /touch?x=&y=&ms=, /bl?pct=&hz=\n");
     }
     c.stop();
   }

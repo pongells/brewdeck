@@ -230,6 +230,7 @@ void bd_core_loop(void) {
   // shot snapshots first, as soon as they are here (~7/s; polling at 150 ms made the chart jerky): the last points of a
   // shot must be in before the state that says it ended
   static uint32_t pf_n = 0, pf_max = 0, pf_sum = 0, pf_shots = 0, pf_t = 0;
+  const uint32_t lp0 = millis();            // a slow pass is logged by section (the UI must keep answering touch)
   WsShot shot;
   while (net_get_shot(&shot)) { cs_shot_point(&shot); pf_shots++; }
   mem_watch("loop: shot points");
@@ -269,10 +270,12 @@ void bd_core_loop(void) {
     if (changed) cs_hist_loaded(st, g_buf.hs, g_buf.hsh, g_buf.hp, pst);
   }
   mem_watch("loop: stored shots, notices");
+  const uint32_t lp1 = millis();
   cs_tick(millis());
 #ifdef BREWDECK_DEBUG_HTTP
   debug_http_service();                   // a UI debug route asked for (bd_debug_route): answered here, on the UI task
 #endif
+  const uint32_t lp2 = millis();
   bd_display_stats(NULL, NULL, true);
   const uint32_t t0 = millis();
   bd_ui_tick(t0);
@@ -295,5 +298,9 @@ void bd_core_loop(void) {
     pf_n = pf_max = pf_sum = pf_shots = 0;
     pf_t = millis();
   }
+  const uint32_t lp3 = millis();
+  if (lp3 - lp0 >= 250)
+    Log.printf("core: slow loop pass %u ms: network data %u, core + debug %u, UI %u, after %u\n", (unsigned)(lp3 - lp0),
+               (unsigned)(lp1 - lp0), (unsigned)(lp2 - lp1), (unsigned)dt, (unsigned)(lp3 - lp2 - dt));
   delay(5);
 }

@@ -107,6 +107,7 @@ waits about 5 s for IPv6 over mDNS.
 | `/frames` | frame times (`bd_ui_tick`) of the last 4 shot / steam sessions: count, longest, slow ones; `tools/frames.sh` after a shot says whether they were fast enough |
 | `/roam` | starts a Wi-Fi roaming check (result in the serial log) |
 | `/i2c` | every address that answers on the touch controller's I2C bus, with a guess at what it is (audio codec, ...) |
+| `/ppatest?n=300&seed=1&hmin=1&hmax=40` | P4: rotates `n` random rectangles (heights `hmin`..`hmax`) with the 2D engine into a spare buffer (same settings as the display) and checks each against the CPU's rotation; lists wrong or unfinished copies (a copy that never finishes switches the display to the CPU path). Blocks the UI while it runs |
 | `/bl?pct=&hz=` | sets the backlight level and PWM frequency |
 
 A UI can add one route of its own with `bd_debug_route` (Brewdeck's UI: `/bench`).
