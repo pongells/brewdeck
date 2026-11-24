@@ -21,7 +21,7 @@
 #include "net_ws.h"
 #include "parse.h"
 #include "net_int.h"
-#include <Preferences.h>
+#include "kv.h"
 
 static int g_select_req = 0;          // profile id to select (0 = none), set by the UI task
 static uint32_t g_select_ms = 0;      // when it was asked for: dropped after 5 s (the core answers
@@ -62,12 +62,7 @@ static bool g_mhost_req = false;
 static char g_mhost_new[64];
 static bool host_is_ip(const char *h) { IPAddress t; return t.fromString(h); }
 static void load_mhost(void) {
-  Preferences p;
-  if (p.begin("machine", true)) {
-    String h = p.getString("host", "");
-    p.end();
-    if (h.length() && h.length() < sizeof g_mhost) { snprintf(g_mhost, sizeof g_mhost, "%s", h.c_str()); return; }
-  }
+  if (kv_get_str("machine", "host", g_mhost, sizeof g_mhost) && g_mhost[0]) return;
   if (strlen(MACHINE_IP) > 0) snprintf(g_mhost, sizeof g_mhost, "%s", MACHINE_IP);
   else snprintf(g_mhost, sizeof g_mhost, "%s.local", MACHINE_HOST);
 }
@@ -413,8 +408,7 @@ static void loop_machine_addr(void) {
   g_mhost_req = false;
   xSemaphoreGive(g_net_mtx);
   if (!hreq) return;
-  Preferences p;
-  if (p.begin("machine", false)) { p.putString("host", nh); p.end(); }
+  kv_set_str("machine", "host", nh);
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   snprintf(g_mhost, sizeof g_mhost, "%s", nh);
   g_have_ip = false;

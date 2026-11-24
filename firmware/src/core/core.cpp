@@ -2,7 +2,6 @@
 // (net.cpp, ws.cpp: polling, WebSocket, the command rules), settings storage, and the UI through bd_ui_*. The state,
 // events, notice filtering and command answers are in core_state.cpp (shared with the emulator).
 #include <Arduino.h>
-#include <Preferences.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
 #include <nvs.h>
@@ -42,7 +41,7 @@ void bd_log(const char *fmt, ...) {
 }
 
 // ---- state (core_state.cpp) and what only the device knows ---------------------------------------------------------
-static Preferences g_store;
+static nvs_handle_t g_store;
 static bool g_store_ok = false;
 
 const bd_core_info *bd_core(void) {
@@ -117,31 +116,45 @@ void bd_wifi_retry(void) { net_wifi_retry(); }
 void bd_set_machine_address(const char *host) { net_set_machine(host); }
 
 // ---- the UI's storage (NVS, namespace = BD_UI.name) ---------------------------------------------------------------
+static nvs_type_t store_type(const char *key) {   // NVS_TYPE_ANY: no such key
+  nvs_type_t t = NVS_TYPE_ANY;
+  return g_store_ok && nvs_find_key(g_store, key, &t) == ESP_OK ? t : NVS_TYPE_ANY;
+}
+static void store_commit(const char *key, esp_err_t e) {
+  if (e == ESP_OK) e = nvs_commit(g_store);
+  if (e != ESP_OK) Log.printf("core: store %s not saved (%s)\n", key, esp_err_to_name(e));
+}
 int32_t bd_store_get_int(const char *key, int32_t def) {
-  if (!g_store_ok || !g_store.isKey(key)) return def;
-  switch (g_store.getType(key)) {   // keys written by older firmware keep their own type (bool, u32)
-    case PT_I32: return g_store.getInt(key, def);
-    case PT_U32: return (int32_t)g_store.getUInt(key, (uint32_t)def);
-    case PT_U8:  return g_store.getUChar(key, (uint8_t)def);
-    case PT_I8:  return g_store.getChar(key, (int8_t)def);
-    case PT_U16: return g_store.getUShort(key, (uint16_t)def);
-    case PT_I16: return g_store.getShort(key, (int16_t)def);
-    default:     return def;
+  // keys written by older firmware keep their own type (bool = u8, u32)
+  union { int32_t i32; uint32_t u32; int16_t i16; uint16_t u16; int8_t i8; uint8_t u8; } v;
+  switch (store_type(key)) {
+    case NVS_TYPE_I32: return nvs_get_i32(g_store, key, &v.i32) == ESP_OK ? v.i32 : def;
+    case NVS_TYPE_U32: return nvs_get_u32(g_store, key, &v.u32) == ESP_OK ? (int32_t)v.u32 : def;
+    case NVS_TYPE_U8:  return nvs_get_u8(g_store, key, &v.u8) == ESP_OK ? v.u8 : def;
+    case NVS_TYPE_I8:  return nvs_get_i8(g_store, key, &v.i8) == ESP_OK ? v.i8 : def;
+    case NVS_TYPE_U16: return nvs_get_u16(g_store, key, &v.u16) == ESP_OK ? v.u16 : def;
+    case NVS_TYPE_I16: return nvs_get_i16(g_store, key, &v.i16) == ESP_OK ? v.i16 : def;
+    default:           return def;
   }
 }
 void bd_store_set_int(const char *key, int32_t v) {
   if (!g_store_ok) return;
-  if (g_store.isKey(key) && g_store.getType(key) != PT_I32) g_store.remove(key);   // NVS keys are typed
-  g_store.putInt(key, v);
+  const nvs_type_t t = store_type(key);
+  if (t != NVS_TYPE_ANY && t != NVS_TYPE_I32) nvs_erase_key(g_store, key);   // NVS keys are typed
+  store_commit(key, nvs_set_i32(g_store, key, v));
 }
 size_t bd_store_get_blob(const char *key, void *buf, size_t cap) {
-  if (!g_store_ok || !g_store.isKey(key)) return 0;
-  const size_t n = g_store.getBytesLength(key);
-  if (buf && cap >= n) g_store.getBytes(key, buf, n);   // Preferences copies nothing when the buffer is too small
+  size_t n = 0;
+  if (store_type(key) != NVS_TYPE_BLOB || nvs_get_blob(g_store, key, NULL, &n) != ESP_OK) return 0;
+  if (buf && cap >= n && nvs_get_blob(g_store, key, buf, &n) != ESP_OK) return 0;   // too small: nothing copied
   return n;
 }
-void bd_store_set_blob(const char *key, const void *buf, size_t n) { if (g_store_ok) g_store.putBytes(key, buf, n); }
-void bd_store_erase(const char *key) { if (g_store_ok && g_store.isKey(key)) g_store.remove(key); }
+void bd_store_set_blob(const char *key, const void *buf, size_t n) {
+  if (g_store_ok) store_commit(key, nvs_set_blob(g_store, key, buf, n));
+}
+void bd_store_erase(const char *key) {
+  if (store_type(key) != NVS_TYPE_ANY) store_commit(key, nvs_erase_key(g_store, key));
+}
 
 // One-time move of the per-profile originals from their old namespace ("orig", u32 values) into the UI's store.
 static void migrate_orig(void) {
@@ -149,16 +162,20 @@ static void migrate_orig(void) {
   nvs_iterator_t it = NULL;
   int moved = 0;
   esp_err_t e = nvs_entry_find(NVS_DEFAULT_PART_NAME, "orig", NVS_TYPE_U32, &it);
-  Preferences old;
-  const bool open = old.begin("orig", true);
+  nvs_handle_t old;
+  const bool open = nvs_open("orig", NVS_READONLY, &old) == ESP_OK;
   while (e == ESP_OK && it) {
     nvs_entry_info_t info;
     nvs_entry_info(it, &info);
-    if (open && !g_store.isKey(info.key)) { bd_store_set_int(info.key, (int32_t)old.getUInt(info.key, 0)); moved++; }
+    uint32_t v = 0;
+    if (open && store_type(info.key) == NVS_TYPE_ANY && nvs_get_u32(old, info.key, &v) == ESP_OK) {
+      bd_store_set_int(info.key, (int32_t)v);
+      moved++;
+    }
     e = nvs_entry_next(&it);
   }
   nvs_release_iterator(it);
-  if (open) old.end();
+  if (open) nvs_close(old);
   bd_store_set_int("orig_moved", 1);
   if (moved) Log.printf("core: %d kept profile originals moved into the UI's store\n", moved);
 }
@@ -215,7 +232,7 @@ void bd_core_setup(void) {
   if (BD_UI.api_version > BD_API_VERSION)
     Log.printf("core: WARNING: the UI wants a newer API (%d) than this core has (%d)\n", BD_UI.api_version, BD_API_VERSION);
   alloc_buffers();
-  g_store_ok = g_store.begin(BD_UI.name, false);
+  g_store_ok = nvs_open(BD_UI.name, NVS_READWRITE, &g_store) == ESP_OK;
   migrate_orig();
   bd_ui_init();
   Log.printf("internal RAM free %u, largest block %u\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),

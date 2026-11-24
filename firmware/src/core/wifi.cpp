@@ -4,7 +4,7 @@
 // every Wi-Fi query is a request to its ESP32-C6 and can block, so the UI task never asks Wi-Fi itself.
 #include <Arduino.h>
 #include <WiFi.h>
-#include <Preferences.h>
+#include "kv.h"
 #include <string.h>
 #include "stamp.h"
 #include "tlog.h"
@@ -27,19 +27,11 @@ static bool compiled_net(void) { return strcmp(WIFI_SSID, "YOUR_WIFI_NAME") != 0
 #define GAGGI_TZ "CET-1CEST,M3.5.0,M10.5.0/3"
 #endif
 static void load_creds(void) {
-  Preferences p;
   g_saved_net = false;
-  g_no_builtin = false;
-  if (p.begin("wifi", true)) {
-    String s = p.getString("ssid", ""), w = p.getString("pass", "");
-    g_no_builtin = p.getBool("nobuiltin", false);
-    p.end();
-    if (s.length() && s.length() < sizeof g_ssid && w.length() < sizeof g_pass) {
-      snprintf(g_ssid, sizeof g_ssid, "%s", s.c_str());
-      snprintf(g_pass, sizeof g_pass, "%s", w.c_str());
-      g_saved_net = true;
-      return;
-    }
+  g_no_builtin = kv_get_bool("wifi", "nobuiltin", false);
+  if (kv_get_str("wifi", "ssid", g_ssid, sizeof g_ssid) && g_ssid[0] && kv_get_str("wifi", "pass", g_pass, sizeof g_pass)) {
+    g_saved_net = true;
+    return;
   }
   if (g_no_builtin || !compiled_net()) { g_ssid[0] = 0; g_pass[0] = 0; return; }
   snprintf(g_ssid, sizeof g_ssid, "%s", WIFI_SSID);
@@ -295,8 +287,9 @@ static bool wifi_join_step(void) {
   }
   g_down_ms = 0;                                     // the 15 s rejoin timer starts again from here
   if (ok) {
-    Preferences p;
-    if (p.begin("wifi", false)) { p.putString("ssid", ssid); p.putString("pass", pass); p.remove("nobuiltin"); p.end(); }
+    kv_set_str("wifi", "ssid", ssid);
+    kv_set_str("wifi", "pass", pass);
+    kv_erase("wifi", "nobuiltin");
     g_no_builtin = false;
     xSemaphoreTake(g_net_mtx, portMAX_DELAY);           // g_ssid is read by the core loop (net_wifi_target)
     snprintf(g_ssid, sizeof g_ssid, "%s", ssid);
@@ -329,8 +322,9 @@ bool wifi_step(bool idle) {
   xSemaphoreGive(g_net_mtx);
   if (g_forget_req) {
     g_forget_req = false;
-    Preferences p;
-    if (p.begin("wifi", false)) { p.remove("ssid"); p.remove("pass"); p.putBool("nobuiltin", true); p.end(); }
+    kv_erase("wifi", "ssid");
+    kv_erase("wifi", "pass");
+    kv_set_bool("wifi", "nobuiltin", true);
     Log.printf("wifi: forgot \"%s\" (saved password deleted, built-in network off)\n", g_ssid);
     xSemaphoreTake(g_net_mtx, portMAX_DELAY);
     g_ssid[0] = 0;

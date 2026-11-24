@@ -3,7 +3,7 @@
 #ifdef BREWDECK_DEBUG_HTTP
 #include <WiFi.h>
 #include <WiFiUdp.h>
-#include <Preferences.h>
+#include "kv.h"
 #include <string.h>
 #include "logsend.h"
 #include "board_core.h"
@@ -59,12 +59,8 @@ void logsend_counts(uint32_t *sent, uint32_t *errors, uint32_t *unresolved) {
   *unresolved = g_resolve_err;
 }
 void logsend_set_target(const char *to) {
-  Preferences p;
-  if (p.begin("debug", false)) {
-    p.putString("loghost", to ? to : "");
-    p.putBool("loghost_set", true);
-    p.end();
-  }
+  kv_set_str("debug", "loghost", to ? to : "");
+  kv_set_bool("debug", "loghost_set", true);
   parse_target(to);
   Log.printf("log: server %s\n", g_target_txt[0] ? g_target_txt : "off");
 }
@@ -160,15 +156,10 @@ static void task(void *) {
 }
 
 void logsend_begin(void) {
-  Preferences p;
-  String saved;
-  bool set = false;
-  if (p.begin("debug", true)) {
-    set = p.getBool("loghost_set", false);
-    saved = p.getString("loghost", "");
-    p.end();
-  }
-  parse_target(set ? saved.c_str() : LOG_HOST);
+  char saved[64];
+  const bool set = kv_get_bool("debug", "loghost_set", false);
+  kv_get_str("debug", "loghost", saved, sizeof saved);
+  parse_target(set ? saved : LOG_HOST);
   if (g_target_txt[0]) Log.printf("log: sending to %s (UDP)\n", g_target_txt);
   xTaskCreatePinnedToCore(task, "logsend", 4096, NULL, 1, NULL, 0);
 }

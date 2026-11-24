@@ -90,6 +90,8 @@ void bd_ui_init(void) {
   g_idle = bd_store_get_int("idle", 10);
   g_bounce = bd_store_get_int("bounce", 0) != 0;
   g_splash = bd_store_get_int("splash", 1) != 0;
+  bd_log("settings: brightness %d %%, idle %d min, idle clock %s, splash %s, %u B of last picks", g_bright, g_idle,
+         g_bounce ? "bouncing" : "still", g_splash ? "on" : "off", (unsigned)picks_load(NULL, 0));
   // brightness below 20 % is refused by ui_set_settings
   ui_set_settings(g_bright, g_idle, g_bounce, g_splash);
   if (g_splash) ui_splash();       // Display > "Splash at start" (on by default), after the saved settings
