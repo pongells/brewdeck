@@ -13,6 +13,13 @@
 #include "net.h"
 #include "tlog.h"
 #include "logsend.h"
+#include "ota.h"
+#if __has_include("brewdeck_version.h")
+#include "brewdeck_version.h"
+#endif
+#ifndef BREWDECK_VERSION
+#define BREWDECK_VERSION ""
+#endif
 #include "frames.h"
 
 static WiFiServer g_srv(80);
@@ -167,12 +174,30 @@ static void task(void *) {
     char line[96] = "";
     size_t n = c.readBytesUntil('\n', line, sizeof line - 1);
     line[n] = 0;
-    while (c.connected()) {                         // skip the request headers
+    size_t clen = 0;                                // request headers: only these two are used (POST /ota)
+    char token[48] = "";
+    while (c.connected()) {
       char hb[128];
       size_t m = c.readBytesUntil('\n', hb, sizeof hb - 1);
       if (m <= 1) break;
+      hb[m] = 0;
+      if (hb[m - 1] == '\r') hb[m - 1] = 0;
+      if (!strncasecmp(hb, "Content-Length:", 15)) clen = (size_t)strtoul(hb + 15, NULL, 10);
+      else if (!strncasecmp(hb, "X-OTA-Token:", 12)) {
+        const char *v = hb + 12;
+        while (*v == ' ') v++;
+        snprintf(token, sizeof token, "%s", v);
+      }
     }
-    if (strncmp(line, "GET /screen.bmp ", 16) == 0 && board_screen_rows(0, 1)) {
+    if (strncmp(line, "POST /ota ", 10) == 0) {   // firmware pushed by build.sh --ota (ota.h)
+      static char msg[200];
+      c.setTimeout(10000);
+      const bool ok = ota_receive(c, clen, token, msg, sizeof msg);
+      c.printf("HTTP/1.0 %s\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n%s", ok ? "200 OK" : "409 Conflict", msg);
+      c.stop();
+      if (ok) ota_restart();
+      continue;
+    } else if (strncmp(line, "GET /screen.bmp ", 16) == 0 && board_screen_rows(0, 1)) {
       uint32_t t0 = millis();
       send_bmp(c);
       mem_watch("screenshot");
@@ -229,8 +254,11 @@ static void task(void *) {
         logsend_set_target(to);
       }
       const char *t = logsend_target();
-      c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nlog server: %s\n",
-               t[0] ? t : "off");
+      uint32_t sent, err, unres;
+      logsend_counts(&sent, &err, &unres);
+      c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nlog server: %s\n"
+               "lines sent %lu, send errors %lu, address not found %lu\n", t[0] ? t : "off", (unsigned long)sent,
+               (unsigned long)err, (unsigned long)unres);
     } else if (strncmp(line, "GET /heap ", 10) == 0) {   // memory and Wi-Fi link
       char ssid[33], ap[18];
       int8_t rssi;
@@ -238,12 +266,13 @@ static void task(void *) {
       net_wifi_info(ssid, sizeof ssid, &rssi, &ch, ap, sizeof ap);
       c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n"
                "internal free %u, largest block %u, lowest since boot %u\npsram free %u\nwifi rssi %d dBm, channel %d, ap %s\n"
-               "uptime %lu s, reset reason %d (esp_reset_reason)\ndisplay: %s\n",
+               "uptime %lu s, reset reason %d (esp_reset_reason)\ndisplay: %s\nfirmware: %s, built %s %s, %s\n",
                (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
                (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
                (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
                (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), (int)rssi, ch, ap, (unsigned long)(millis() / 1000),
-               (int)esp_reset_reason(), board_display_mode());
+               (int)esp_reset_reason(), board_display_mode(), BREWDECK_VERSION[0] ? BREWDECK_VERSION : "?", __DATE__,
+               __TIME__, ota_slot());
     } else if (strncmp(line, "GET /frames ", 12) == 0) {   // frame times per shot / steam session (tools/frames.sh)
       static char rep[1600];
       frames_report(rep, sizeof rep);
@@ -271,6 +300,9 @@ static void task(void *) {
     } else if (strncmp(line, "GET /roam ", 10) == 0) {   // roaming test (debug): scan now, move if clearly better (log)
       net_roam_check();
       c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nroaming check started, see the serial log\n");
+    } else if (strncmp(line, "GET /ppatest?stall=1", 20) == 0) {   // the next PPA copy hangs: the fallback takes over
+      board_ppa_stall();
+      c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nthe next PPA copy will hang\n");
     } else if (strncmp(line, "GET /ppatest", 12) == 0 && (line[12] == ' ' || line[12] == '?')) {
       const char *pn = strstr(line, "n="), *ps = strstr(line, "seed=");   // run by the UI task: no flush meanwhile
       const char *ph0 = strstr(line, "hmin="), *ph1 = strstr(line, "hmax=");
@@ -297,7 +329,7 @@ static void task(void *) {
       if (pp) bd_set_backlight(atoi(pp + 4));
       c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nok\n");
     } else {
-      c.print("HTTP/1.0 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nGET /screen.bmp, /rec?every=ms[&max=n], /rec, /rec/stop, /rec.bin, /rec/free, /heap, /tasks, /flash, /roam, /i2c, /ppatest?n=&seed=&hmin=&hmax=, /log[?from=], /log/prev, /loghost?to=, /touch?x=&y=&ms=, /bl?pct=&hz=\n");
+      c.print("HTTP/1.0 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nGET /screen.bmp, /rec?every=ms[&max=n], /rec, /rec/stop, /rec.bin, /rec/free, /heap, /tasks, /flash, /roam, /i2c, /ppatest?n=&seed=&hmin=&hmax=, /log[?from=], /log/prev, /loghost?to=, POST /ota, /touch?x=&y=&ms=, /bl?pct=&hz=\n");
     }
     c.stop();
   }

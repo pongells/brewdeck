@@ -210,6 +210,8 @@ static void on_tare(void) { printf("machine <- tare\n"); g_m.weight = 0; }
 // flush (c_opmode): FLUSH / HOME switch the mode; FLUSH_AUTO is played as a 5 s flush, then HOME (a GUESS of what the
 // machine does, its "Auto Flush Duration" defaults to 5 s; check against the real machine)
 static uint32_t g_autoflush_ms = 0;
+static uint32_t g_upd_ms = 0;               // a fake firmware update (update_step; "update" command)
+static bool g_upd_stop = false;
 static void on_flush(int mode) {
   static const char *const N[8] = {"", "", "FLUSH", "", "", "FLUSH_AUTO", "", "HOME"};
   const char *n = mode >= 0 && mode < 8 ? N[mode] : "";
@@ -1319,6 +1321,9 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
     snprintf(g_m.mode, sizeof g_m.mode, "%s", l + 13);
   } else if (!strncmp(l, "machine hotwater ", 17)) {   // on / off: hot water running
     g_m.hot_water_active = !strncmp(l + 17, "on", 2);
+  } else if (!strncmp(l, "update", 6) && (!l[6] || l[6] == ' ')) {   // a firmware update arriving ("update stop": it fails)
+    g_upd_ms = stamp_nz(SDL_GetTicks());
+    g_upd_stop = strstr(l, "stop") != NULL;
   } else if (!strncmp(l, "machine stopweight ", 19)) {   // the active profile's stop weight changed elsewhere (0: none)
     on_weight(profile_name(g_active_id), (int)(atof(l + 19) * 10 + 0.5));
   } else if (sscanf(l, "expect_cmds %d %n", &a, &b) == 1) {
@@ -1470,6 +1475,37 @@ static void emu_setup(void) {
   load_steam();
   if (g_pan_disp) build_panel();                            // the desktop window's control panel (the web page has HTML buttons)
 }
+// a firmware update over Wi-Fi as the device core plays it (ota.cpp): "update" = 1.6 MB in 6 s, installed, then the
+// "restart" 2.5 s later (the page closes); "update stop" = the connection ends at 38 %
+static void update_step(uint32_t now) {
+  static uint32_t last = 0;
+  static int sent = BD_UPDATE_NONE;
+  if (!g_upd_ms || (int32_t)(now - g_upd_ms) < 0) return;   // not one started after this pass read the clock
+  const uint32_t t = now - g_upd_ms, total = 1677721;
+  int st = t < 6000 ? BD_UPDATE_RECEIVING : t < 8500 ? BD_UPDATE_INSTALLED : BD_UPDATE_NONE;
+  uint32_t got = t < 6000 ? (uint32_t)((uint64_t)total * t / 6000) : total;
+  if (g_upd_stop && t >= 2280) {
+    st = BD_UPDATE_STOPPED;
+    got = total * 38 / 100;
+  }
+  if (st == sent && (st != BD_UPDATE_RECEIVING || now - last < 250)) return;
+  last = now;
+  sent = st;
+  bd_event e = {};
+  e.type = BD_EV_UPDATE;
+  e.u.update.state = (bd_update)st;
+  e.u.update.received = got;
+  e.u.update.total = total;
+  e.u.update.percent = (int)((uint64_t)got * 100 / total);
+  e.u.update.built = "24 Nov 2026 21:40";
+  e.u.update.from = "192.168.1.10";
+  bd_ui_event(&e);
+  if (st == BD_UPDATE_NONE || st == BD_UPDATE_STOPPED) {
+    printf("emulator: update %s\n", st == BD_UPDATE_NONE ? "installed, restarted" : "stopped at 38 %");
+    g_upd_ms = 0;
+    sent = BD_UPDATE_NONE;
+  }
+}
 static uint32_t last_live = 0, last_tick = 0, last_info = 0;
 static void emu_step(uint32_t now) {
   if (!last_tick) last_tick = now;
@@ -1487,6 +1523,7 @@ static void emu_step(uint32_t now) {
     if (t >= 5000) { g_autoflush_ms = 0; strcpy(g_m.mode, "HOME"); printf("machine: auto flush done\n"); }
   }
   wifi_step(now);
+  update_step(now);
   if (g_heating) {                                         // warm up slowly
     g_m.temperature += (g_m.target - g_m.temperature) * 0.0015f;
     if (g_m.warmup_remaining > 0 && now % 1000 < 20) g_m.warmup_remaining--;

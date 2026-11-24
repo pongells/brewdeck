@@ -46,6 +46,7 @@ const uint16_t *board_screen_rows(int y, int n) {
 }
 
 void board_ppa_test_args(int, uint32_t, int, int) {}
+void board_ppa_stall(void) {}
 size_t board_ppa_test(char *out, size_t cap) { return snprintf(out, cap, "no 2D engine on this board\n"); }
 
 const char *board_display_mode(void) { return "copied by the CPU (landscape panel, no rotation)"; }

@@ -22,6 +22,7 @@
 #include "tlog.h"
 #ifdef BREWDECK_DEBUG_HTTP
 #include "logsend.h"
+#include "ota.h"
 #define LOOP_MARK(where) loop_mark(where)   // the UI loop watch (logsend.h)
 #else
 #define LOOP_MARK(where) ((void)0)
@@ -222,6 +223,7 @@ void bd_core_setup(void) {
 #ifdef BREWDECK_DEBUG_HTTP
   debug_http_begin();                     // debug web server (debug_http.cpp: screen.bmp, heap, tasks, flash, roam, touch, bl, the UI's route): env ui-debug only
   logsend_begin();                        // log lines to a log server + the UI loop watch (logsend.h)
+  ota_begin();                            // a new firmware pushed from the computer: kept or rolled back (ota.h)
 #endif
   ws_begin();
   Log.printf("ui \"%s\" %s ready\n", BD_UI.name, BD_UI.version);
@@ -242,6 +244,9 @@ void bd_core_loop(void) {
   static uint32_t pf_n = 0, pf_max = 0, pf_sum = 0, pf_shots = 0, pf_t = 0;
   const uint32_t lp0 = millis();            // a slow pass is logged by section (the UI must keep answering touch)
   LOOP_MARK("shot points");
+#if defined(BREWDECK_DEBUG_HTTP) && defined(OTA_TEST_FREEZE)
+  if (millis() > 15000) for (;;) delay(1000);   // test build only: a firmware that stops, to check the rollback (ota.h)
+#endif
   WsShot shot;
   while (net_get_shot(&shot)) { cs_shot_point(&shot); pf_shots++; }
   mem_watch("loop: shot points");
@@ -286,6 +291,12 @@ void bd_core_loop(void) {
   LOOP_MARK("core tick");
   cs_tick(millis());
 #ifdef BREWDECK_DEBUG_HTTP
+#ifdef BREWDECK_DEBUG_HTTP
+  {
+    bd_event ev;
+    if (ota_poll(&ev)) bd_ui_event(&ev);    // a firmware update arriving over Wi-Fi (ota.h)
+  }
+#endif
   LOOP_MARK("debug job");
   debug_http_service();                   // a UI debug route asked for (bd_debug_route): answered here, on the UI task
 #endif

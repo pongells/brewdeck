@@ -31,6 +31,7 @@ void ui_set_wifi(const char *ssid, int rssi, int channel, const char *ap);   // 
 void ui_set_sysinfo(const char *build, const char *version, const char *uptime, const char *memory);   // About page
 void ui_set_wifi_scan(const bd_wifi_net *n, int count, bool scanning);
 void ui_set_wifi_join(int state);                         // bd_join
+void ui_set_update(int state, int pct, uint32_t got, uint32_t total, const char *built, const char *from);   // BD_EV_UPDATE
 void ui_set_offline_reason(int why, const char *ip);     // bd_why: why the link is down
 void ui_set_wifi_target(const char *ssid);                // network the screen tries to join ("" = none set up)
 void ui_set_machine_host(const char *host);               // configured machine address (shown, prefilled)

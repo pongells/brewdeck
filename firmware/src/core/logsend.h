@@ -11,5 +11,7 @@
 
 void logsend_begin(void);                   // after Wi-Fi is started
 void loop_mark(const char *where);          // bd_core_loop: the section it is entering (a string literal)
+uint32_t loop_last_ms(void);                // millis() of the last loop_mark (0 = none yet)
 const char *logsend_target(void);           // "host:port" or "" (off)
 void logsend_set_target(const char *to);    // "host[:port]", "" = off; saved
+void logsend_counts(uint32_t *sent, uint32_t *errors, uint32_t *unresolved);   // datagrams since boot

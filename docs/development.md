@@ -52,7 +52,9 @@ the heap in use. `expect_order <tag> <tag> ...` checks that they are shown top t
 square, its extra click area included. `expect_text` looks at all the shown labels under the tagged object; `expect_no_text <tag> <a|b> [ms]` checks it
 holds none of them. `expect_cmds <n> <command ...>`: 1 to n commands of that kind since the previous check, the
 last one starting with that text (a burst of taps). Fake machine: `machine mode <MODE>` (FLUSH, DESCALE, HOME),
-`machine hotwater on|off`, `machine stopweight <g>` (the active profile changed elsewhere; 0 = none).
+`machine hotwater on|off`, `machine stopweight <g>` (the active profile changed elsewhere; 0 = none). `update` plays
+a firmware update arriving over Wi-Fi (`BD_EV_UPDATE`: 1.6 MB in 6 s, installed, the page closes 2.5 s later as at the
+restart); `update stop` fails it at 38 %.
 
 **Shared UI scenarios.** `tests/ui/run.sh [ui]` runs every script in `tests/ui/scenarios` against a UI (a folder
 under `firmware/src`, default Brewdeck's `ui`, or a path to a UI folder) without a window, then prints the UI's
@@ -80,6 +82,25 @@ Prerequisites and the first build: README, [Building](../README.md#building). In
 `./build.sh <env>` builds, `--flash` flashes through `flash.sh`; `UI=<folder>` builds another UI folder (a folder name under `src/`, or a path to one outside the repository). Options are
 in the header of [`build.sh`](../firmware/build.sh). Switching between S3 and P4 builds recompiles the Arduino
 libraries (2-3 minutes).
+
+### Over Wi-Fi (debug builds)
+
+A screen running a debug build takes a new debug build over Wi-Fi, without a cable:
+
+```sh
+./build.sh ui-p4-debug --ota            # HOST=<name or address> for another screen (default brewdeck-p4.local / brewdeck.local)
+```
+
+The image goes into the free app slot and the screen restarts into it. It keeps the new firmware once it has run
+properly for 60 s (UI loop alive, Wi-Fi up); if the UI loop stops for 20 s, or Wi-Fi is not up within 3 minutes, it
+goes back to the previous one by itself, so a bad build cannot lock you out. `build.sh` waits and says which happened
+(`GET /heap`, line `firmware:`). Refused while a shot, steam, hot water or a flush runs. To check the way back:
+`PLATFORMIO_BUILD_FLAGS=-DOTA_TEST_FREEZE ./build.sh ui-p4-debug --ota` sends a build whose UI loop stops after 15 s;
+the screen returns to the previous firmware about 20 s later (`/log/prev` says why).
+
+The screen asks for a password: `include/ota_token.h`, made by `build.sh` on first use (git-ignored, never printed).
+A screen learns it from one flash by USB; after that only builds with the same file are accepted. Release builds have
+no web server and take no updates over Wi-Fi.
 
 ## Serial log
 
@@ -137,6 +158,8 @@ waits about 5 s for IPv6 over mDNS.
 | `/roam` | starts a Wi-Fi roaming check (result in the serial log) |
 | `/i2c` | every address that answers on the touch controller's I2C bus, with a guess at what it is (audio codec, ...) |
 | `/ppatest?n=300&seed=1&hmin=1&hmax=40` | P4: rotates `n` random rectangles (heights `hmin`..`hmax`) with the 2D engine into a spare buffer (same settings as the display) and checks each against the CPU's rotation; lists wrong or unfinished copies (a copy that never finishes switches the display to the CPU path). Blocks the UI while it runs |
+| `/ppatest?stall=1` | P4: the next 2D-engine copy hangs, as the known PPA bugs make it; checks that the screen switches to CPU rotation within 100 ms and keeps running (until a restart) |
+| `POST /ota` | a new firmware image (`build.sh <env> --ota`, see [Over Wi-Fi](#over-wi-fi-debug-builds)) |
 | `/log`, `/log/prev`, `/loghost?to=` | the memory log, the log from before a crash, the log server (see [Serial log](#serial-log)) |
 | `/bl?pct=&hz=` | sets the backlight level and PWM frequency |
 

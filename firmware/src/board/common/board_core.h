@@ -25,3 +25,4 @@ size_t board_i2c_scan(char *out, size_t cap);
 void board_flush_info(char *out, size_t cap);
 void board_ppa_test_args(int n, uint32_t seed, int hmin, int hmax);
 size_t board_ppa_test(char *out, size_t cap);
+void board_ppa_stall(void);   // debug: the next PPA copy hangs (to check the CPU fallback)

@@ -274,6 +274,9 @@ typedef enum {
   BD_EV_SHOT_LOADED,        // answer to bd_load_previous_shot / bd_load_stored_shot
   BD_EV_WIFI_SCAN,
   BD_EV_WIFI_JOIN,
+  BD_EV_UPDATE,             // a firmware update arriving over Wi-Fi (debug builds: build.sh --ota). The screen should say
+                            // so above everything (and stay on): RECEIVING with progress, then INSTALLED (the core
+                            // restarts ~2 s later) or STOPPED (nothing changed); NONE = nothing to show any more
 } bd_event_type;
 typedef enum { BD_NOTICE_INFO = 0, BD_NOTICE_SUCCESS, BD_NOTICE_WARN, BD_NOTICE_ERROR } bd_notice_type;
 typedef enum { BD_CMD_SELECT = 0, BD_CMD_STOP_WEIGHT, BD_CMD_BREW_TEMP, BD_CMD_FLUSH, BD_CMD_TARE } bd_command;
@@ -283,6 +286,8 @@ typedef enum { BD_CMD_SELECT = 0, BD_CMD_STOP_WEIGHT, BD_CMD_BREW_TEMP, BD_CMD_F
 typedef enum { BD_ANSWER_OK = 0, BD_ANSWER_REFUSED, BD_ANSWER_TIMEOUT, BD_ANSWER_NOT_TAKEN } bd_answer;
 typedef enum { BD_LOAD_NONE = 0, BD_LOAD_LOADING, BD_LOAD_OK, BD_LOAD_MISSING, BD_LOAD_FAILED } bd_load;
 typedef enum { BD_JOIN_IDLE = 0, BD_JOIN_BUSY, BD_JOIN_OK, BD_JOIN_FAILED } bd_join;
+typedef enum { BD_UPDATE_NONE = 0, BD_UPDATE_RECEIVING, BD_UPDATE_INSTALLED, BD_UPDATE_STOPPED } bd_update;
+#define BD_HAS_UPDATE_EVENT 1   // additions within API 1.x come with a macro: a UI can still build against an older core
 
 typedef struct {
   bd_event_type type;
@@ -297,6 +302,10 @@ typedef struct {
              const bd_shot *previous; bd_load previous_state; } loaded;
     struct { const bd_wifi_net *nets; int n; bool scanning; } scan;   // WIFI_SCAN, strongest first
     struct { bd_join state; } join;                               // WIFI_JOIN
+    struct { bd_update state; int percent;                        // UPDATE: percent received (STOPPED: where it stopped)
+             uint32_t received, total;                            //   bytes
+             const char *built;                                   //   the new firmware's build date ("24 Nov 2026 21:40", "" = not known)
+             const char *from; } update;                          //   the sender's address ("" = not known)
   } u;
 } bd_event;
 

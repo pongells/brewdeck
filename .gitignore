@@ -1,4 +1,6 @@
 firmware/include/wifi_config.h
+# the password for firmware pushed over Wi-Fi (build.sh --ota makes it)
+firmware/include/ota_token.h
 sim/lvgl/
 sim/obj/
 sim/render

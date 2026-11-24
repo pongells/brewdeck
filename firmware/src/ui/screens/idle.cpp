@@ -136,6 +136,11 @@ static void screen_wake(void) {
   bd_log("ui: screen on");
 }
 static void on_blank_touch(lv_event_t *e) { (void)e; screen_wake(); }
+void ui_screen_wake(void) {
+  screen_wake();
+  if (!lv_obj_is_hidden(g_idle)) idle_hide();
+  bl_set(g_bright);
+}
 static void on_blank_timer(lv_timer_t *t) {
   (void)t;
   const bool off_shown = !lv_obj_is_hidden(g_off);

@@ -105,6 +105,7 @@ Live values are meaningful only while `link == BD_LINK_ONLINE`.
 | `BD_EV_COMMAND` | the machine's answer to a command: done (it reports the change) or not taken (it did not within 5 s; 7 s for weight / temperature) |
 | `BD_EV_SHOT_LOADED` | a stored shot asked for with `bd_load_previous_shot` / `bd_load_stored_shot` arrived |
 | `BD_EV_WIFI_SCAN`, `BD_EV_WIFI_JOIN` | answers to `bd_wifi_scan` / `bd_wifi_join` |
+| `BD_EV_UPDATE` | debug builds: a firmware update arriving over Wi-Fi (`build.sh --ota`); show it above everything with its progress (`RECEIVING`), then `INSTALLED` (the screen restarts ~2 s later) or `STOPPED` (nothing changed); `NONE` = nothing to show. Optional (feature X7): a UI that ignores it still updates |
 
 ## The screen
 

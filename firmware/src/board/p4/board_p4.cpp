@@ -6,6 +6,7 @@
 #include <Arduino.h>
 #include <esp_heap_caps.h>
 #include <driver/ppa.h>
+#include <freertos/semphr.h>
 #include <esp_cache.h>
 #include <esp_private/esp_cache_private.h>   // esp_cache_get_alignment (what the PPA driver checks too)
 #include "soc/spi_mem_c_reg.h"
@@ -41,6 +42,7 @@ static bool g_ppa_tried = false;
 static size_t g_align = 128;   // cache line of the frame buffer (esp_cache_get_alignment)
 static const char *g_disp_mode = "rotated by the CPU";   // board_display_mode
 
+static bool ppa_worker_start(void);
 static void ppa_setup(void) {
   g_ppa_tried = true;
   if (!P4_PPA) return;
@@ -64,6 +66,10 @@ static void ppa_setup(void) {
     g_ppa = NULL;
     g_disp_mode = "rotated by the CPU (PPA not available)";
     Serial.println("board: PPA not available; rotating with the CPU");
+  } else if (!ppa_worker_start()) {
+    ppa_unregister_client(g_ppa);
+    g_ppa = NULL;
+    g_disp_mode = "rotated by the CPU (no memory for the PPA task)";
   } else {
     g_disp_mode = "rotated by the PPA";
     Serial.println("board: rotating with the PPA");
@@ -119,7 +125,6 @@ static void pt_sync(uint16_t *fb, size_t a, size_t b, size_t align, int dir) {  
   uintptr_t e = ((uintptr_t)(fb + b) + align - 1) & ~(uintptr_t)(align - 1);
   esp_cache_msync((void *)s, e - s, dir);
 }
-static uint32_t g_thin_flushes = 0;   // rectangles thinner than P4_ROWS, copied by the CPU
 static uint32_t g_flush_us = 0, g_flush_px = 0;   // time spent copying into the frame buffer (bd_display_stats)
 static volatile int g_fl_x = 0, g_fl_y = 0, g_fl_w = 0, g_fl_h = 0;   // the last flush (board_flush_info)
 static volatile bool g_fl_busy = false;
@@ -128,33 +133,77 @@ void board_flush_info(char *out, size_t cap) {
   snprintf(out, cap, "last flush %d,%d %dx%d by the %s%s", g_fl_x, g_fl_y, g_fl_w, g_fl_h, g_fl_how,
            g_fl_busy ? ", STILL COPYING" : ", finished");
 }
+// The PPA has known bugs on the P4 (ESP-IDF issues 19023, 19096, 19462, 18999, PR 19047): a rotation during DSI
+// scanout sometimes never finishes, for some sizes and positions and also at random under load, and the driver
+// neither notices nor recovers; the copy that hung is lost and the engine stays stuck. So: rectangles it is known to
+// trip on (thinner than P4_ROWS, output x not on a multiple of 4) go to the CPU; the others go to a helper task on
+// the UI's core (submitting from another core is one of the bugs) and the UI waits at most PPA_WAIT_MS for it. A
+// copy that does not finish (inside the driver call or after it) is redone by the CPU, which rotates from then on
+// until a restart; the helper task stays stuck, harmless. GET /heap ("display:") and the log say so.
+static const uint32_t PPA_WAIT_MS = 100;   // a copy takes ~0.5-6 ms
+static SemaphoreHandle_t g_job_go, g_job_done;
+static struct { int x1, y1; uint32_t w, h; const uint16_t *px; bool ok; } g_job;
+static uint32_t g_cpu_flushes = 0;         // rectangles the CPU rotated while the PPA is in use (thin or unaligned)
+static bool g_ppa_lost = false;
+static volatile bool g_ppa_stall = false;    // debug (GET /ppatest?stall=1): the next copy hangs, as a real one would
+void board_ppa_stall(void) { g_ppa_stall = true; }
+static void ppa_worker(void *) {
+  for (;;) {
+    xSemaphoreTake(g_job_go, portMAX_DELAY);
+    while (g_ppa_stall) vTaskDelay(pdMS_TO_TICKS(1000));
+    g_job.ok = ppa_flush(g_job.x1, g_job.y1, g_job.w, g_job.h, g_job.px);
+    xSemaphoreGive(g_job_done);
+  }
+}
+static bool ppa_worker_start(void) {
+  g_job_go = xSemaphoreCreateBinary();
+  g_job_done = xSemaphoreCreateBinary();
+  return g_job_go && g_job_done &&
+         xTaskCreatePinnedToCore(ppa_worker, "ppa", 3072, NULL, 5, NULL, xPortGetCoreID()) == pdPASS;
+}
+// true when the PPA rotated it; false: not finished in time (the PPA is then given up) or refused by the driver
+static bool ppa_copy(int x1, int y1, uint32_t w, uint32_t h, const uint16_t *px) {
+  g_job = {x1, y1, w, h, px, false};
+  xSemaphoreTake(g_job_done, 0);                 // no stale "done"
+  xSemaphoreGive(g_job_go);
+  if (xSemaphoreTake(g_job_done, pdMS_TO_TICKS(PPA_WAIT_MS)) == pdTRUE) return g_job.ok;
+  g_ppa_lost = true;
+  g_ppa = NULL;                                  // not unregistered: its stuck copy is still queued
+  g_disp_mode = "rotated by the CPU (a PPA copy never finished)";
+  bd_log("board: a PPA copy (%d,%d %lux%lu) did not finish in %lu ms; rotating with the CPU until a restart", x1, y1,
+         (unsigned long)w, (unsigned long)h, (unsigned long)PPA_WAIT_MS);
+  return false;
+}
+// the CPU's rotation; its frame buffer lines are dropped from the cache first: the PPA may have written them behind
+// the cache, and the CPU's write-back of a stale line would undo the PPA's pixels in it
+static void cpu_copy(int x1, int y1, uint32_t w, uint32_t h, const uint16_t *px) {
+  int ax, ay, bx, by;
+  pt_map(x1, y1, ax, ay);
+  pt_map(x1 + w - 1, y1 + h - 1, bx, by);
+  pt_sync(gfx->getFramebuffer(), (size_t)min(ay, by) * PANEL_W, (size_t)(max(ay, by) + 1) * PANEL_W, g_align,
+          ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+  gfx->draw16bitRGBBitmap(x1, y1, (uint16_t *)px, w, h);   // rotated by the CPU + cache write-back
+}
+static bool ppa_suits(int y1, uint32_t h) {     // sizes and positions the PPA is known to trip on: CPU
+#if PANEL_ROT == 1
+  const int ox = PANEL_W - (y1 + (int)h);
+#else
+  const int ox = y1;
+#endif
+  return h >= P4_ROWS && ox % 4 == 0;
+}
+
 void bd_display_flush(int x1, int y1, int x2, int y2, const uint16_t *px) {
   const uint32_t w = (uint32_t)(x2 - x1 + 1), h = (uint32_t)(y2 - y1 + 1);
+  if (!g_ppa_tried) ppa_setup();
+  const bool use_ppa = g_ppa && ppa_suits(y1, h);
   g_fl_x = x1, g_fl_y = y1, g_fl_w = (int)w, g_fl_h = (int)h;
-  g_fl_how = g_ppa && h >= P4_ROWS ? "PPA" : "CPU";
+  g_fl_how = use_ppa ? "PPA" : "CPU";
   g_fl_busy = true;
   const uint32_t t0 = micros();
-  if (!g_ppa_tried) ppa_setup();
-  // The PPA hangs now and then (about once in a few hundred to a few thousand copies) on rectangles 2-3 rows tall,
-  // and never finishes: the UI then waits forever (GET /ppatest; 1 row and 16-40 rows never hung). Thinner than
-  // P4_ROWS goes through the CPU. Its lines of the frame buffer are dropped from the cache first: the PPA wrote them
-  // behind the cache, and the CPU's write-back of a stale line would undo the PPA's pixels in it.
-  if (g_ppa && h < P4_ROWS) {
-    int ax, ay, bx, by;
-    pt_map(x1, y1, ax, ay);
-    pt_map(x1 + w - 1, y1 + h - 1, bx, by);
-    pt_sync(gfx->getFramebuffer(), (size_t)min(ay, by) * PANEL_W, (size_t)(max(ay, by) + 1) * PANEL_W, g_align,
-            ESP_CACHE_MSYNC_FLAG_DIR_M2C);
-    gfx->draw16bitRGBBitmap(x1, y1, (uint16_t *)px, w, h);
-    g_thin_flushes++;
-  } else if (!g_ppa || !ppa_flush(x1, y1, w, h, px)) {
-    if (g_ppa) {   // a PPA error: say so once and stay on the CPU path
-      g_disp_mode = "rotated by the CPU (a PPA copy failed)";
-      Serial.println("board: PPA rotation failed; rotating with the CPU from now on");
-      ppa_unregister_client(g_ppa);
-      g_ppa = NULL;
-    }
-    gfx->draw16bitRGBBitmap(x1, y1, (uint16_t *)px, w, h);   // rotated by the CPU + cache write-back
+  if (!use_ppa || !ppa_copy(x1, y1, w, h, px)) {
+    if (g_ppa) g_cpu_flushes++;
+    cpu_copy(x1, y1, w, h, px);
   }
   g_fl_busy = false;
   g_flush_us += micros() - t0;
@@ -340,7 +389,7 @@ const uint16_t *board_screen_rows(int y, int n) {
 
 const char *board_display_mode(void) {
   static char buf[120];
-  snprintf(buf, sizeof buf, "%s; %lu thin rectangles by the CPU", g_disp_mode, (unsigned long)g_thin_flushes);
+  snprintf(buf, sizeof buf, "%s; %lu thin or unaligned rectangles by the CPU", g_disp_mode, (unsigned long)g_cpu_flushes);
   return buf;
 }
 

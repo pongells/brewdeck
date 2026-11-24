@@ -166,6 +166,7 @@ it leaves a feature out on purpose: [Leaving features out](#leaving-features-out
 | X4 | No crash and no memory left behind | Required | Test | every scenario runs to its end; opening and closing each screen 20 times does not grow the memory in use |
 | X5 | No slow frames while live data is shown | Expected | Panel | `tools/frames.sh` after a shot or steam on a debug build: after the screen opening (1.5 s), no frame of 150 ms or more and at most 2 % of 40 ms or more (Brewdeck: most under 40 ms, full redraws ~50-150 ms) |
 | X6 | Touch targets big enough for a wet finger | Expected | Test | every shown object a tap acts on is at least 48 x 48 px, its extra click area included (about 5.7 mm on a 4.3" 800 x 480 panel), on each screen the scenarios open |
+| X7 | A firmware update arriving over Wi-Fi (debug builds, `BD_EV_UPDATE`) is shown above everything: progress, then installed or stopped | Optional | Test | `update`: `screen.update` with `value.update_progress` rising, then the restart closes it; `update stop`: `value.update_progress` says where it stopped, back to `screen.ready` after 5 s |
 
 ## How the checks work
 
@@ -184,6 +185,7 @@ Emulator commands for the checks (list in [development.md](development.md)): `ta
 case), `expect_cmd <text>`, `expect_no_cmd`, `tags`, `machine shot` / `machine steam` (the fake machine starts
 one without touching the screen), `machine link` / `readiness` / `temp` / `profile` (the fake machine unreachable,
 reporting a readiness or temperature, or picking a profile itself), `tap_under <tag>` (a tap where a covered object is), `type <tag> <text>` / `clear <tag>` (key events to an input),
+`update` / `update stop` (a firmware update arriving over Wi-Fi, installed or failing at 38 %),
 `expect_backlight <op> <pct>` and `fast <factor>` (the UI's clock runs faster, for the dim and screen-off times).
 `shot <caption>` saves the screen for the UI's contact sheet (`sheet.html` next to `status.md`), and every failed
 check saves one too.
@@ -202,8 +204,8 @@ Required features that are missing are listed first. The screenshots of every sc
 
 | Kind | Tags |
 |---|---|
-| Screens | `screen.ready`, `screen.brewing`, `screen.review`, `screen.steam`, `screen.offline`, `screen.profiles`, `screen.keypad`, `screen.history`, `screen.notices`, `screen.menu`, `screen.wifi`, `screen.wifi_details`, `screen.password`, `screen.machine_address`, `screen.scale`, `screen.display`, `screen.about`, `screen.idle`, `screen.originals` (a profile's original values) |
-| Values (a label, or an object whose first label child holds the text) | `value.state`, `value.boiler_temp`, `value.profile`, `value.pressure`, `value.scale`, `value.water`, `value.brew_temp`, `value.stop_weight`, `value.weight`, `value.shot_time`, `value.offline_reason`, `value.clock` |
+| Screens | `screen.ready`, `screen.brewing`, `screen.review`, `screen.steam`, `screen.offline`, `screen.profiles`, `screen.keypad`, `screen.history`, `screen.notices`, `screen.menu`, `screen.wifi`, `screen.wifi_details`, `screen.password`, `screen.machine_address`, `screen.scale`, `screen.display`, `screen.about`, `screen.idle`, `screen.originals` (a profile's original values), `screen.update` (a firmware update arriving) |
+| Values (a label, or an object whose first label child holds the text) | `value.state`, `value.boiler_temp`, `value.profile`, `value.pressure`, `value.scale`, `value.water`, `value.brew_temp`, `value.stop_weight`, `value.weight`, `value.shot_time`, `value.offline_reason`, `value.clock`, `value.update_title`, `value.update_progress` |
 | Warnings (checked visible / hidden) | `warn.pressure`, `warn.no_scale`, `warn.refill`, `warn.release` |
 | Information | `info.unofficial`, `info.notice`, `info.update`, `info.refusal`, `info.wifi_error` |
 | Actions | `action.temp_up`, `action.temp_down`, `action.weight_up`, `action.weight_down`, `action.done` (a keypad or editor), `action.reset`, `action.originals.<id>` (an edited profile's originals), `action.restore`, `action.keep`, `action.profiles`, `action.menu` (the menu or settings, from Ready), `action.notices`, `action.flush`, `action.close`, `action.back`, `action.join`, `action.forget`, `action.use`, `action.retry`, `action.wifi_settings`, `action.machine_address` |

@@ -238,6 +238,10 @@ void idle_hide(void);
 void on_idle_timer(lv_timer_t *t);
 void build_idle(lv_obj_t *scr);
 void build_blank(lv_obj_t *scr);
+void ui_screen_wake(void);      // lit and on the screen below: out of screen off and the dimmed clock
+
+// ---- screens/update.cpp: a firmware update arriving over Wi-Fi (BD_EV_UPDATE) ----------------------------------------
+void build_update(void);
 
 // ---- screens/notices.cpp: banner, pressure-release glow, notices list -----------------------------------------------
 extern char g_upd_rel[32];

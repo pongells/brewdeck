@@ -1,0 +1,18 @@
+# X7 a firmware update arriving over Wi-Fi is shown above everything: progress, then installed (the restart closes
+# it) or stopped (back to the screen below after 5 s).
+# checks: X7
+wait_for screen.ready 10000
+update
+expect_visible screen.update 1000
+expect_text value.update_progress MB 1000
+shot X7: update arriving
+wait_for screen.update 1000
+expect_text value.update_title installed 8000
+shot X7: update installed
+expect_hidden screen.update 5000
+update stop
+expect_text value.update_progress Stopped at 5000
+shot X7: update stopped
+expect_hidden screen.update 7000
+expect_visible screen.ready
+quit

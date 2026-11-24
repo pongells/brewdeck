@@ -3,6 +3,8 @@
 #   ./build.sh ui            build only
 #   ./build.sh ui --flash    build, then flash (encrypted or plain, as the chip needs; needs a 16 MB backup)
 #   ./build.sh ui-debug ...  the same plus the debug web server (docs/development.md: screenshots, recorder, ...)
+#   ./build.sh ui-p4-debug --ota   build, then send it over Wi-Fi to a screen running a debug build (kept only if it
+#                            runs properly for 60 s, else the screen goes back; HOST=name or address of the screen)
 #   ./build.sh ui-p4 ...     the Guition ESP32-P4 board (ui-p4-debug: with the debug web server)
 #   ./build.sh p4-c6-update --flash   P4 board: update its Wi-Fi chip's firmware (src/c6update), then flash ui-p4
 #   ./build.sh touchtest --flash      S3: raw touch test (src/touchtest)
@@ -15,13 +17,22 @@
 # (encrypted: Gaggiuino Gen 3 screen, backup required; plain: a Sunton board bought on its own). Never use
 # `pio run -t upload`: it ignores all this.
 set -euo pipefail
-TARGET="${1:-ui}"; FLASH=0
+TARGET="${1:-ui}"; FLASH=0; OTA=0
 CALLER="$PWD"
-case "${2:-}" in "") ;; --flash) FLASH=1 ;; *) echo "unknown option '$2' (only --flash)" >&2; exit 2 ;; esac
+case "${2:-}" in "") ;; --flash) FLASH=1 ;; --ota) OTA=1 ;; *) echo "unknown option '$2' (--flash or --ota)" >&2; exit 2 ;; esac
+if (( OTA )) && [[ "$TARGET" != *debug ]]; then
+  echo "--ota needs a debug build (ui-debug, ui-p4-debug): release builds have no web server" >&2; exit 2
+fi
 [[ "$TARGET" == -* ]] && { echo "first argument is the env (ui, ui-debug, ui-p4, ...), then --flash" >&2; exit 2; }
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$HERE"
 
+# the password a screen asks for firmware pushed over Wi-Fi (debug builds); made once, git-ignored, never printed
+if [[ ! -f include/ota_token.h ]]; then
+  printf '#pragma once\n#define OTA_TOKEN "%s"\n' "$(LC_ALL=C tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 32)" \
+    > include/ota_token.h
+  echo "Created include/ota_token.h (the password for --ota; a screen accepts it after one flash by USB)"
+fi
 if [[ ! -f include/wifi_config.h ]]; then
   cp include/wifi_config.example.h include/wifi_config.h
   echo "Created include/wifi_config.h: add your Wi-Fi there, or leave it and choose the network on the screen."
@@ -47,6 +58,31 @@ echo "Build OK: $BP"
 BOOT="$(find "$HOME/.platformio/packages" -path "*framework-arduinoespressif32*/tools/partitions/boot_app0.bin" 2>/dev/null | head -1)"
 [[ -f "$BOOT" ]] || { echo "boot_app0.bin not found under ~/.platformio/packages"; exit 1; }
 cp "$BOOT" "$BP/boot_app0.bin"
+if (( OTA )); then   # over Wi-Fi to the debug web server (src/core/ota.h)
+  case "$TARGET" in ui-p4*) DEF_HOST=brewdeck-p4.local ;; *) DEF_HOST=brewdeck.local ;; esac
+  HOST="${HOST:-$DEF_HOST}"
+  TOKEN="$(sed -n 's/^#define OTA_TOKEN "\(.*\)"/\1/p' include/ota_token.h)"
+  heap() { curl -4 -s -m 5 "http://$HOST/heap" 2>/dev/null || true; }   # no answer while it restarts: not an error
+  BEFORE="$(heap | sed -n 's/^firmware: //p')"
+  [[ -n "$BEFORE" ]] || { echo "no answer from $HOST (a debug build with OTA, flashed once by USB?)" >&2; exit 1; }
+  echo "Screen runs: $BEFORE"
+  echo "Sending $(wc -c < "$BP/firmware.bin" | tr -d ' ') bytes to $HOST ..."
+  ANS="$(curl -4 -sS -m 300 -H "Expect:" -H "X-OTA-Token: $TOKEN" -H "Content-Type: application/octet-stream" \
+         --data-binary @"$BP/firmware.bin" "http://$HOST/ota")" || { echo "the upload failed; nothing changed" >&2; exit 1; }
+  echo "Screen: $ANS"
+  [[ "$ANS" == installed* ]] || exit 1
+  echo "Waiting for it to restart and pass its 60 s trial ..."
+  for i in $(seq 1 60); do   # "(kept)" with the build from before = it went back
+    sleep 3
+    NOW="$(heap | sed -n 's/^firmware: //p')"
+    case "$NOW" in
+      *"(kept)"*) [[ "${NOW%, *}" == "${BEFORE%, *}" ]] && { echo "Went back to the previous firmware: $NOW (see /log/prev)" >&2; exit 1; }
+                  echo "Kept: $NOW"; exit 0 ;;
+      *"on trial"*) [[ -z "${SEEN:-}" ]] && { echo "Running on trial: $NOW"; SEEN=1; } ;;
+    esac
+  done
+  echo "No answer after 3 min; check http://$HOST/heap and the log" >&2; exit 1
+fi
 [[ $FLASH == 1 ]] || exit 0
 # the same flash script a release ships: asks the chip, needs the backup, never guesses
 # each board has its own backup of its original flash

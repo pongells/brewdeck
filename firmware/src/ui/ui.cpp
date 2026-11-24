@@ -28,6 +28,7 @@ void ui_init(void) {
   build_blank(scr);     // screen off: above everything
   build_notif();        // machine notifications: top layer, over all of it
   build_frame();        // pressure-release warning frame (top layer)
+  build_update();       // a firmware update arriving over Wi-Fi: top layer, above all of it
   refresh_value();
 }
 
