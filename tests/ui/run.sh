@@ -6,6 +6,7 @@
 # Usage: tests/ui/run.sh [ui]    ui: a folder under firmware/src (default: ui, Brewdeck's own) or a path to a UI folder
 #        SCENARIO=x1 tests/ui/run.sh    only the scenarios whose file name starts with x1
 #        UI_OUT=<folder>                where the results go (a UI's own repo: its checks/ folder)
+#        JOBS=<n>                       scenarios run side by side (default: two per CPU core; JOBS=1: one by one)
 set -euo pipefail
 UI="${1:-ui}"; UI="${UI%/}"
 [[ "$UI" == */* ]] && UI="$(cd "$UI" && pwd)"   # a path: absolute, the build runs from elsewhere

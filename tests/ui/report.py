@@ -8,7 +8,7 @@ Called by tests/ui/run.sh after it built the emulator for the UI. Reads:
 A scenario is skipped when every feature it checks is omitted or missing. Writes <out>/status.md and the logs.
 Exit 1 when a scenario failed or the exceptions file breaks the rules.
 """
-import argparse, html, os, re, shutil, struct, subprocess, sys, zlib
+import argparse, concurrent.futures, html, os, re, shutil, struct, subprocess, sys, zlib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STATUSES = ('omitted', 'partial', 'missing')
@@ -177,13 +177,28 @@ def main():
     any_fail = False
     sheet = []                        # (scenario, state, css class, shots) for sheet.html
     shutil.rmtree(os.path.join(a.out, 'shots'), ignore_errors=True)
+    # The scenarios are independent (each emulator has its own memory, settings and output files): run them side by
+    # side, JOBS at a time, then read the results in the scenario order. Default: two per CPU core (they mostly wait in
+    # real time, ~0.7 s of CPU per scenario; all 42 at once on 10 cores passed as reliably as one by one).
+    left_out = lambda ids: ids and all(exc.get(i, ('',))[0] in ('omitted', 'missing') for i in ids)
+    jobs = max(1, int(os.environ.get('JOBS') or 2 * (os.cpu_count() or 1)))
+    todo = [(name, path) for name, path, ids in scenarios if not left_out(ids)]
+    done_n = [0]
+    def run_one(item):
+        r = run_scenario(a.emu, item[1], a.out, item[0])
+        done_n[0] += 1
+        print('[%d/%d] %s' % (done_n[0], len(todo), item[0]), flush=True)   # progress, in the order they finish
+        return item[0], r
+    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+        out = dict(pool.map(run_one, todo))
+    print('%d scenarios, %d at a time' % (len(todo), jobs))
     for k, (name, path, ids) in enumerate(scenarios, 1):
-        at = '[%d/%d] ' % (k, len(scenarios))   # progress
-        if ids and all(exc.get(i, ('',))[0] in ('omitted', 'missing') for i in ids):
+        at = '[%d/%d] ' % (k, len(scenarios))
+        if left_out(ids):
             print(at + 'skip  %s (%s left out)' % (name, ', '.join(ids)))
             sheet.append((name, 'skipped: %s left out' % ', '.join(ids), 'skip', []))
             continue
-        r = run_scenario(a.emu, path, a.out, name)
+        r = out[name]
         ran = True
         sheet.append((name, 'ok' if r['ok'] else 'missing: no tag ' + ', '.join(r['missing']) if r['absent']
                       else 'FAILED', 'ok' if r['ok'] else 'skip' if r['absent'] else 'fail', r['shots']))

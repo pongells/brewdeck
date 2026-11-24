@@ -61,7 +61,8 @@ checked yet / by hand, with Required features that are missing or failing listed
 from `ui-features.txt` in its folder (format and rules: [Leaving features out](ui-features.md#leaving-features-out))
 and writes `status.md`, `sheet.html` (the screenshots each scenario takes with `shot <caption>`, plus one at every
 failed check, for the checks done by looking), the logs and the UI's commands to `tests/ui/out/<emulator>/`. Each scenario names what it
-checks in a `# checks: X1` line, and is skipped when all of those are omitted or missing. `SCENARIO=x1` runs only
+checks in a `# checks: X1` line, and is skipped when all of those are omitted or missing. The scenarios run side by
+side (`JOBS=<n>`, default two per CPU core; `JOBS=1` one by one): a full run takes about 2 minutes. `SCENARIO=x1` runs only
 the scenarios whose file name starts with `x1`. A full run takes ~4 min.
 
 ## Building the firmware
