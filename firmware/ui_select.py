@@ -8,6 +8,7 @@
 import os
 Import("env")
 
+only = env.GetProjectOption("custom_src_only", "")   # a standalone program under src/ (p4-c6-update): only it
 ui = os.environ.get("BREWDECK_UI", "").strip() or "ui"
 src = env.subst("$PROJECT_SRC_DIR")
 NOT_UIS = ("core", "board", "touchtest", "c6update", "ui_ext")   # the other folders under src/
@@ -27,14 +28,50 @@ if os.path.isabs(ui):
     print("Brewdeck UI: %s (linked as src/%s)" % (ui, EXT))
     ui = EXT
 else:
+    link = os.path.join(src, EXT)
+    if os.path.islink(link):   # left from building an outside UI: PlatformIO would also compile it as a library
+        os.remove(link)
     ui = ui.strip("/")
     if "/" in ui or ui.startswith(".") or ui in NOT_UIS or not os.path.isdir(os.path.join(src, ui)):
         raise SystemExit("BREWDECK_UI=%s: no such UI folder in %s (or give an absolute path)" % (ui, src))
+if only:
+    ui = only
 board = env.GetProjectOption("custom_board", "s3")
 if board not in ("s3", "p4"):
     raise SystemExit("custom_board=%s: expected s3 or p4" % board)
 env.Append(CPPPATH=[os.path.join(src, "core")])   # "brewdeck_core.h", "bd_lvgl9.h" from any UI folder
-env.Replace(SRC_FILTER=["-<*>", "+<board/common/>", "+<board/%s/>" % board, "+<core/>", "+<%s/>" % ui])
+if "espidf" in env.subst("$PIOFRAMEWORK"):
+    # an ESP-IDF build: src/CMakeLists.txt picks the sources (PlatformIO's source filter does not apply)
+    os.environ["BREWDECK_BOARD"] = board
+    os.environ["BREWDECK_SRC_UI"] = ui
+    os.environ["BREWDECK_SRC_ONLY"] = only
+    # the stock Arduino libraries' settings for the chip (CMakeLists.txt); .orig when an Arduino-only build with
+    # custom_sdkconfig replaced them
+    libs = env.PioPlatform().get_package_dir("framework-arduinoespressif32-libs") or ""
+    mcu = env.BoardConfig().get("build.mcu", "")
+    stock = os.path.join(libs, mcu, "sdkconfig")
+    if os.path.isfile(stock + ".orig"):
+        stock += ".orig"
+    if not os.path.isfile(stock):
+        raise SystemExit("no stock Arduino sdkconfig at %s" % stock)
+    os.environ["BREWDECK_STOCK_SDKCONFIG"] = stock
+    # CMake keeps the source list of its last configuration: another UI / board / program in the same build folder
+    # (UI=ui_minimal ./build.sh ui-p4) must configure again
+    bd = env.subst("$BUILD_DIR")
+    sel_file = os.path.join(bd, "brewdeck_selection.txt")
+    sel = "%s %s %s %s\n" % (board, ui, only, stock)
+    old = open(sel_file).read() if os.path.isfile(sel_file) else ""
+    if old != sel:
+        os.makedirs(bd, exist_ok=True)
+        cache = os.path.join(bd, "CMakeCache.txt")
+        if os.path.isfile(cache):
+            os.remove(cache)
+            print("Brewdeck: sources changed (%s): CMake configures again" % sel.strip().split(" ")[1])
+        open(sel_file, "w").write(sel)
+elif only:
+    env.Replace(SRC_FILTER=["-<*>", "+<%s/>" % only])
+else:
+    env.Replace(SRC_FILTER=["-<*>", "+<board/common/>", "+<board/%s/>" % board, "+<core/>", "+<%s/>" % ui])
 print("Brewdeck UI: src/%s, board %s" % (ui, board))
 
 # The firmware's version: the git tag ("v0.2.0" on a release), "v0.2.0-3-gabc1234" between releases (3 commits after

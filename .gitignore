@@ -19,6 +19,7 @@ firmware/.dummy/
 firmware/managed_components/
 firmware/sdkconfig.defaults
 firmware/sdkconfig.*
+!firmware/sdkconfig.brewdeck.*
 firmware/dependencies.lock
 .idea/
 # recorded WebSocket frames for host tests (no d_settings, see tools/ws_listen.py --raw)

@@ -76,7 +76,8 @@ jobs:
           ./build.sh touchtest
 
   firmware-p4:
-    # separate job and cache: the two boards need differently compiled Arduino libraries, and pioarduino keeps one copy
+    # an ESP-IDF project (framework = arduino, espidf): each env compiles ESP-IDF and the Arduino core from source in
+    # its own build folder, so those folders and the downloaded components are cached too
     name: Firmware, ESP32-P4 board (release and debug builds, the example UI)
     runs-on: ubuntu-latest
     steps:
@@ -84,9 +85,12 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2   # v10.3.3 (Node 24)
       - uses: actions/cache@v6
         with:
-          path: ~/.platformio
-          key: platformio-p4-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
-          restore-keys: platformio-p4-${{ runner.os }}-
+          path: |
+            ~/.platformio
+            firmware/.pio
+            firmware/managed_components
+          key: platformio-p4-idf-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini', 'firmware/CMakeLists.txt', 'firmware/sdkconfig.brewdeck.esp32p4', 'firmware/dependencies.lock.esp32p4') }}
+          restore-keys: platformio-p4-idf-${{ runner.os }}-
       - name: Build
         working-directory: firmware
         run: |

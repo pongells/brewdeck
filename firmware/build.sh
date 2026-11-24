@@ -20,7 +20,7 @@ set -euo pipefail
 TARGET="${1:-ui}"; FLASH=0; OTA=0
 CALLER="$PWD"
 case "${2:-}" in "") ;; --flash) FLASH=1 ;; --ota) OTA=1 ;; *) echo "unknown option '$2' (--flash or --ota)" >&2; exit 2 ;; esac
-if (( OTA )) && [[ "$TARGET" != *debug ]]; then
+if (( OTA )) && [[ "$TARGET" != *debug* ]]; then
   echo "--ota needs a debug build (ui-debug, ui-p4-debug): release builds have no web server" >&2; exit 2
 fi
 [[ "$TARGET" == -* ]] && { echo "first argument is the env (ui, ui-debug, ui-p4, ...), then --flash" >&2; exit 2; }
@@ -50,7 +50,16 @@ export BREWDECK_UI="$UI"
 # PlatformIO (SCons) recompiles by content, not by date, so remove the objects of the files that use them: they always
 # recompile and the date is this build's
 for f in $(grep -rl --include='*.c' --include='*.cpp' '__DATE__' src); do rm -f ".pio/build/$TARGET/$f.o"; done
-$PIO run -e "$TARGET"
+# ESP-IDF envs (framework = arduino, espidf): ESP-IDF applies the defaults (sdkconfig.brewdeck.<chip>) only to
+# settings missing from the generated sdkconfig.<env>, so a changed defaults file starts that file again
+for d in sdkconfig.brewdeck.*; do
+  [[ -f "$d" && -f "sdkconfig.$TARGET" && "$d" -nt "sdkconfig.$TARGET" ]] && { rm -f "sdkconfig.$TARGET"; echo "$d changed: sdkconfig.$TARGET made again"; break; }
+done
+$PIO run -e "$TARGET" || BUILD_FAILED=1
+# the S3's Arduino-only build recompiles the Arduino libraries through CMakeLists.txt and deletes it afterwards
+# (pioarduino's clean-up): put it back (the P4 builds need it)
+[[ -f CMakeLists.txt ]] || git -C "$HERE" checkout -q -- CMakeLists.txt 2>/dev/null || true
+[[ -z "${BUILD_FAILED:-}" ]] || exit 1
 BP="$HERE/.pio/build/$TARGET"
 echo "Build OK: $BP"
 
