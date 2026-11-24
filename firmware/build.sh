@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Main build (macOS / Linux): pioarduino with the custom sdkconfig in platformio.ini, then flash.
+# Main build (macOS / Linux): pioarduino (ESP-IDF projects, settings in sdkconfig.brewdeck.<chip>), then flash.
 #   ./build.sh ui            build only
 #   ./build.sh ui --flash    build, then flash (encrypted or plain, as the chip needs; needs a 16 MB backup)
 #   ./build.sh ui-debug ...  the same plus the debug web server (docs/development.md: screenshots, recorder, ...)
@@ -55,11 +55,7 @@ for f in $(grep -rl --include='*.c' --include='*.cpp' '__DATE__' src); do rm -f 
 for d in sdkconfig.brewdeck.*; do
   [[ -f "$d" && -f "sdkconfig.$TARGET" && "$d" -nt "sdkconfig.$TARGET" ]] && { rm -f "sdkconfig.$TARGET"; echo "$d changed: sdkconfig.$TARGET made again"; break; }
 done
-$PIO run -e "$TARGET" || BUILD_FAILED=1
-# the S3's Arduino-only build recompiles the Arduino libraries through CMakeLists.txt and deletes it afterwards
-# (pioarduino's clean-up): put it back (the P4 builds need it)
-[[ -f CMakeLists.txt ]] || git -C "$HERE" checkout -q -- CMakeLists.txt 2>/dev/null || true
-[[ -z "${BUILD_FAILED:-}" ]] || exit 1
+$PIO run -e "$TARGET"
 BP="$HERE/.pio/build/$TARGET"
 echo "Build OK: $BP"
 

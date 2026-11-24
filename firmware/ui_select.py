@@ -45,8 +45,8 @@ if "espidf" in env.subst("$PIOFRAMEWORK"):
     os.environ["BREWDECK_BOARD"] = board
     os.environ["BREWDECK_SRC_UI"] = ui
     os.environ["BREWDECK_SRC_ONLY"] = only
-    # the stock Arduino libraries' settings for the chip (CMakeLists.txt); .orig when an Arduino-only build with
-    # custom_sdkconfig replaced them
+    # the stock Arduino libraries' settings for the chip (CMakeLists.txt); .orig when a build with custom_sdkconfig
+    # (not used here, but pioarduino supports it) replaced them in the shared package
     libs = env.PioPlatform().get_package_dir("framework-arduinoespressif32-libs") or ""
     mcu = env.BoardConfig().get("build.mcu", "")
     stock = os.path.join(libs, mcu, "sdkconfig")

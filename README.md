@@ -184,12 +184,13 @@ Pins: [`firmware/src/board/p4/board.h`](firmware/src/board/p4/board.h).
 ## Building
 
 To build it yourself instead of using a release. The build uses
-[pioarduino](https://github.com/pioarduino/platform-espressif32) (PlatformIO). It recompiles the Arduino core with the
-`custom_sdkconfig` in [`firmware/platformio.ini`](firmware/platformio.ini) (code and data run from PSRAM, cache line
-64 B, an IRAM-safe panel interrupt), which keeps the picture steady while Wi-Fi is busy.
+[pioarduino](https://github.com/pioarduino/platform-espressif32) (PlatformIO). Each board is an ESP-IDF project with
+the Arduino core as a component, compiled from source with the settings in `firmware/sdkconfig.brewdeck.<chip>` (on
+the S3: code and data run from PSRAM, cache line 64 B, an IRAM-safe panel interrupt, which keeps the picture steady
+while Wi-Fi is busy).
 
 You need [uv](https://docs.astral.sh/uv/) (the script runs PlatformIO through `uvx --python 3.14`; pioarduino does
-not support newer Python yet), git and esptool. The first build downloads the toolchain and recompiles the core
+not support newer Python yet), git and esptool. The first build downloads the toolchain and compiles everything
 (several minutes); later builds take about 30 s. If PlatformIO then complains that its own `pioarduino` package is too
 old (`6.2.0.post1` does not satisfy `>=6.2.0`), pin it:
 `uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0`.

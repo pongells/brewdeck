@@ -9,9 +9,7 @@ if(NOT ui)
   set(ui ui)
 endif()
 set(d "${CMAKE_CURRENT_LIST_DIR}")
-if("$ENV{BREWDECK_STOCK_SDKCONFIG}" STREQUAL "")   # the S3's library recompile: it needs no sources from here
-  set(srcs "")
-elseif(NOT "$ENV{BREWDECK_SRC_ONLY}" STREQUAL "")   # a standalone program (p4-c6-update): only its folder
+if(NOT "$ENV{BREWDECK_SRC_ONLY}" STREQUAL "")   # a standalone program (p4-c6-update): only its folder
   file(GLOB_RECURSE srcs "${d}/$ENV{BREWDECK_SRC_ONLY}/*.c" "${d}/$ENV{BREWDECK_SRC_ONLY}/*.cpp")
 else()
 file(GLOB_RECURSE srcs FOLLOW_SYMLINKS

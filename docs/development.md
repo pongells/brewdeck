@@ -82,20 +82,20 @@ Prerequisites and the first build: README, [Building](../README.md#building). In
 `./build.sh <env>` builds, `--flash` flashes through `flash.sh`; `UI=<folder>` builds another UI folder (a folder name under `src/`, or a path to one outside the repository). Options are
 in the header of [`build.sh`](../firmware/build.sh).
 
-The two boards are built differently for now:
-- **P4: an ESP-IDF project** (`framework = arduino, espidf`). ESP-IDF, the Arduino core (one ESP-IDF component) and
-  every other component are compiled from source together, in the env's own build folder. Settings: the stock Arduino
-  libraries' settings for the chip, read from the installed package, plus `sdkconfig.brewdeck.esp32p4` (XIP from
-  PSRAM: writing flash, as an update does, otherwise paused the panel's reads and it flashed light blue). Component
-  versions are locked in `dependencies.lock.esp32p4` (commit it; delete it to take the newest allowed versions, then
-  test). `src/CMakeLists.txt` picks the sources (core, board, UI; `ui_select.py` passes the choice). `build.sh`
-  makes the generated `sdkconfig.<env>` again when `sdkconfig.brewdeck.*` changes. First build of each env: a few
-  minutes.
-- **S3: Arduino with recompiled libraries** (`custom_sdkconfig`, "hybrid compile"): pioarduino recompiles the
-  Arduino core's ESP-IDF libraries in its shared package, so switching from another board recompiles them again.
-  `pin_components.py` pins the recompiled components to the stock libraries' versions, whose headers the app is
-  compiled against. Moving the S3 to the ESP-IDF build waits for a check on its panel; until then the recompile goes
-  through `CMakeLists.txt` (which steps aside) and deletes it afterwards, and `build.sh` restores it.
+Both boards are **ESP-IDF projects** (`framework = arduino, espidf`). ESP-IDF, the Arduino core (one ESP-IDF
+component) and every other component are compiled from source together, in the env's own build folder; nothing in
+PlatformIO's shared packages is changed. Settings: the stock Arduino libraries' settings for the chip, read from the
+installed package, plus `sdkconfig.brewdeck.<chip>`:
+- **S3** (`sdkconfig.brewdeck.esp32s3`): octal PSRAM, and what keeps the RGB panel's picture steady while Wi-Fi is busy
+  (code and read-only data run from PSRAM, 64 B data cache line, an IRAM-safe panel interrupt, Wi-Fi / lwIP buffers in
+  internal RAM); heap and ring buffer code out of IRAM, for internal RAM.
+- **P4** (`sdkconfig.brewdeck.esp32p4`): XIP from PSRAM (writing flash, as an update does, otherwise paused the panel's
+  reads and it flashed light blue), ESP-Hosted receive double buffering off (internal RAM).
+
+Component versions are locked in `dependencies.lock.<chip>` (commit it; delete it to take the newest allowed versions,
+then test). `src/CMakeLists.txt` picks the sources (core, board, UI; `ui_select.py` passes the choice). `build.sh`
+makes the generated `sdkconfig.<env>` again when `sdkconfig.brewdeck.*` changes. First build of each env: a few
+minutes. The S3 touch test (`touchtest`) is a plain Arduino build on the stock prebuilt libraries.
 
 ### Over Wi-Fi (debug builds)
 
