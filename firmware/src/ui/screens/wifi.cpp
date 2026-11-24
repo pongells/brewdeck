@@ -139,7 +139,8 @@ static void pw_refresh(void) {
 }
 
 static void wifi_join_now(const char *ssid, const char *pass) {
-  snprintf(g_wj_ssid, sizeof g_wj_ssid, "%s", ssid);
+  // the Join button passes g_wj_ssid itself: copying a buffer onto itself with snprintf is undefined (glibc empties it)
+  if (ssid != g_wj_ssid) snprintf(g_wj_ssid, sizeof g_wj_ssid, "%s", ssid);
   g_wj_state = BD_JOIN_BUSY;
   bd_wifi_join(ssid, pass);
 }
