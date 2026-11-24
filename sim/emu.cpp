@@ -763,6 +763,28 @@ static void emu_stored(int id, float grams, int deg) {
     cs_take_profiles(&g_list);
   }
 }
+// a save as the device core does it (ws.cpp save_step): the whole active profile over the stored one, refused when a
+// value not changed on this screen differs from the stored one (an edit made elsewhere: "machine stopweight")
+static char g_chg_name[48];
+static bool g_chg_w = false, g_chg_t = false;
+static void emu_save(int id, const char *name, bool weight) {
+  if (strcmp(g_chg_name, name) != 0) { snprintf(g_chg_name, sizeof g_chg_name, "%s", name); g_chg_w = g_chg_t = false; }
+  (weight ? g_chg_w : g_chg_t) = true;
+  for (int i = 0; i < g_list.count; i++) {
+    if (g_list.p[i].id != id) continue;
+    const float aw = g_weights[id % 64] > 0 ? g_weights[id % 64] : g_list.p[i].weight;
+    const float at = g_temps[id % 64] > 0 ? g_temps[id % 64] : g_list.p[i].temp;
+    if (!cs_save_ok(g_chg_w, g_chg_t, aw, at, g_list.p[i].weight, g_list.p[i].temp)) {
+      printf("machine: save skipped, changed elsewhere (active %.1f g %.0f C, stored %.1f g %.0f C)\n", aw, at,
+             g_list.p[i].weight, g_list.p[i].temp);
+      cs_notice(NOTIF_WARN, CS_SAVE_NOTE);
+      return;
+    }
+    printf("machine <- save the active profile (c_save_act_prof)\n");
+    g_chg_w = g_chg_t = false;
+    emu_stored(id, aw, (int)(at + 0.5f));
+  }
+}
 // the device core's rules (core_state.cpp cs_cmd_*), then the fake machine instead of the network
 bd_result bd_select_profile(int id, bool save) {
   const char *name;
@@ -782,7 +804,7 @@ bd_result bd_set_stop_weight(int profile_id, float grams, bool save) {
   if (g_ignore) { printf("machine: ignores the weight (EMU_IGNORE)\n"); return BD_OK; }
   on_weight(name, w10);
   if (!save) printf("machine: (not saved, only for now)\n");
-  else emu_stored(profile_id, grams, -1);
+  else emu_save(profile_id, name, true);
   return BD_OK;
 }
 bd_result bd_set_brew_temp(int profile_id, int deg, bool save) {
@@ -793,7 +815,7 @@ bd_result bd_set_brew_temp(int profile_id, int deg, bool save) {
   if (g_ignore) { printf("machine: ignores the temperature (EMU_IGNORE)\n"); return BD_OK; }
   on_temp(name, deg);
   if (!save) printf("machine: (not saved, only for now)\n");
-  else emu_stored(profile_id, -1, deg);
+  else emu_save(profile_id, name, false);
   return BD_OK;
 }
 bd_result bd_flush_mode(bd_flush mode) {

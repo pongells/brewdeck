@@ -266,8 +266,9 @@ static void snap_build(void) {
   lv_obj_t *row = flex(c, LV_FLEX_FLOW_ROW, 10);
   lv_obj_set_style_pad_top(row, 8, 0);
   rs_button(row, "Cancel", false, [](lv_event_t *) { snap_close(); });
-  rs_button(row, "Keep current", false, on_rs_keep);
+  tag(rs_button(row, "Keep current", false, on_rs_keep), "action.keep");
   tag(rs_button(row, "Restore original", true, on_rs_restore), "action.restore");
+  tag(g_rs_back, "screen.originals");
   lv_obj_set_hidden(g_rs_back, true);
 }
 static void on_pick_hold(lv_event_t *e) {           // a long press on an edited row: its snapshot
@@ -405,7 +406,9 @@ static void add_row(lv_obj_t *list, const bd_profile *p) {
     lv_obj_align(bt, LV_ALIGN_LEFT_MID, PK_ACT_X - 12, 0);
     lv_obj_center(label(bt, "Restore", F_TEXT_B, COL_TEXT));
     lv_obj_add_event_cb(bt, on_pick_hold, LV_EVENT_CLICKED, (void *)(intptr_t)p->id);
-    tag(bt, "action.restore");                    // opens the panel with the originals
+    char tg[32];                                  // opens the panel with the originals
+    snprintf(tg, sizeof tg, "action.originals.%d", p->id);
+    lv_obj_set_name(bt, tg);                      // a copy (tag() keeps the pointer)
   } else if (sel) {
     lv_obj_t *ck = flex(row, LV_FLEX_FLOW_ROW, 0);
     lv_obj_align(ck, LV_ALIGN_RIGHT_MID, -12, 0);

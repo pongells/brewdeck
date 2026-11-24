@@ -7,6 +7,7 @@
 #include <math.h>
 #include <string.h>
 #include "net.h"
+#include "core_state.h"
 #include "net_ws.h"
 #include "pb.h"
 #include "stamp.h"
@@ -229,14 +230,14 @@ static void save_step(WiFiClient &c) {
       return;
     }
     const bool same_profile = !strcmp(g_chg_name, name);
-    const bool w_ok = (same_profile && g_chg_w) || fabsf(aw - sw) < 0.05f;
-    const bool t_ok = (same_profile && g_chg_t) || fabsf(at - st) < 0.05f;
-    if (!w_ok || !t_ok) {
+    if (!cs_save_ok(same_profile && g_chg_w, same_profile && g_chg_t, aw, at, sw, st)) {
+      const bool w_ok = (same_profile && g_chg_w) || fabsf(aw - sw) < 0.05f;   // for the log line only
+      const bool t_ok = (same_profile && g_chg_t) || fabsf(at - st) < 0.05f;
       g_save_due = 0;
       Log.printf("ws: save skipped: %s%s%s changed elsewhere, not saved (active %.1f g %.1f C, stored %.1f g %.1f C)\n",
                  w_ok ? "" : "stop weight", (!w_ok && !t_ok) ? " and " : "", t_ok ? "" : "brew temperature",
                  aw, at, sw, st);
-      save_note("Not saved: profile has other unsaved changes (web UI)");
+      save_note(CS_SAVE_NOTE);
       return;
     }
   }

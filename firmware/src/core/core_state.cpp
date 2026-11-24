@@ -311,6 +311,13 @@ bd_result cs_cmd_weight(int profile_id, float grams, int *w10, const char **name
   cs_watch_weight(*w10);
   return BD_OK;
 }
+bool cs_save_ok(bool changed_weight, bool changed_temp, float act_weight, float act_temp, float stored_weight,
+                float stored_temp) {
+  const bool w_ok = changed_weight || fabsf(act_weight - stored_weight) < 0.05f;
+  const bool t_ok = changed_temp || fabsf(act_temp - stored_temp) < 0.05f;
+  return w_ok && t_ok;
+}
+
 bd_result cs_cmd_temp(int profile_id, int deg, const char **name) {
   bd_result r = cs_check_idle();
   if (r != BD_OK) return r;

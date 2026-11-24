@@ -1,0 +1,19 @@
+# T8 a change on the screen is not saved when the profile has other unsaved changes made elsewhere (the web UI): the
+# machine would store those too. The screen says so ("Not saved: ..."); its own change still applies for now.
+# checks: T8
+wait 500
+wait_for screen.ready 10000
+expect_text value.brew_temp 91 3000
+machine stopweight 25
+expect_text value.stop_weight 25 3000
+if_hidden action.temp_up : tap_tag value.brew_temp
+wait 600
+tap_tag action.temp_up
+wait 300
+if_shown action.done : tap_tag action.done
+wait 3500
+expect_cmds 1 brew_temp profile=7 deg=92 save=1
+expect_text info.notice Not saved 2000
+shot T8: not saved
+expect_text value.brew_temp 92 1000
+quit

@@ -230,5 +230,12 @@ int main(void) {
   cs_notice(1, "Fill the water tank!");
   CHECK(n_notice == 1);
 
+  // saving: only when every value not changed here still matches the stored profile (feature T8)
+  CHECK(cs_save_ok(false, true, 21.0f, 92, 21.0f, 91));     // temperature changed here, weight as stored
+  CHECK(cs_save_ok(true, true, 25.0f, 92, 21.0f, 91));      // both changed here
+  CHECK(!cs_save_ok(false, true, 25.0f, 92, 21.0f, 91));    // weight changed elsewhere: would save it too
+  CHECK(!cs_save_ok(true, false, 21.0f, 93, 21.0f, 91));    // temperature changed elsewhere
+  CHECK(cs_save_ok(false, false, 21.02f, 91, 21.0f, 91));   // within the rounding of the stored values
+
   return report("core_state_test");
 }

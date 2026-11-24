@@ -31,6 +31,12 @@ bd_result cs_cmd_weight(int profile_id, float grams, int *w10, const char **name
 bd_result cs_cmd_temp(int profile_id, int deg, const char **name);
 bd_result cs_cmd_flush(bd_flush mode, int *pb_mode);                   // PB_MODE_FLUSH / FLUSH_AUTO / HOME
 bd_result cs_cmd_tare(void);
+// Saving (c_save_act_prof) writes the whole active profile over the stored one: only when each value not changed on
+// this screen still matches the stored profile, else an edit made elsewhere (the web UI) would be saved with it. The
+// screen then gets CS_SAVE_NOTE as a warning notice (feature T8).
+bool cs_save_ok(bool changed_weight, bool changed_temp, float act_weight, float act_temp, float stored_weight,
+                float stored_temp);
+#define CS_SAVE_NOTE "Not saved: profile has other unsaved changes (web UI)"
 // the parts they are made of (also used by the tests)
 bd_result cs_check_idle(void);                          // BD_OK, BD_ERR_OFFLINE, or BD_ERR_BUSY (not idle in HOME)
 bd_result cs_check_active(int profile_id);              // BD_ERR_PROFILE_CHANGED if another profile is active now

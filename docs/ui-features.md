@@ -64,7 +64,7 @@ it leaves a feature out on purpose: [Leaving features out](#leaving-features-out
 | T5 | A burst of taps sends one value, not one command per tap | Expected | Test | 5 taps within 2 s: at most 2 commands, the last one with the final value |
 | T6 | A change the machine did not take goes back to the machine's value | Required | Test | the fake machine ignores commands: within 8 s `value.brew_temp` / `value.stop_weight` show the machine's value again |
 | T7 | "Edited" mark and reset to the profile's original values | Optional | Tag | `action.reset` on the keypad or the profile row |
-| T8 | "Not saved: the profile has other unsaved changes" | Optional | Tag | |
+| T8 | "Not saved: the profile has other unsaved changes" | Optional | Test | an edit made elsewhere (`machine stopweight`), then a change on the screen: the change applies, the save is skipped and `info.notice` says "Not saved" |
 | T9 | A change asked for while the machine is busy is visibly refused, never silently ignored | Required | Test | during a shot or steam: the controls are hidden or disabled, or a tap shows `info.refusal`; no command reaches the machine |
 
 ## Profiles
@@ -74,7 +74,7 @@ it leaves a feature out on purpose: [Leaving features out](#leaving-features-out
 | P1 | List of the machine's profiles; a tap selects one (saved as the boot profile) | Required | Test | `action.profiles`, tap `row.profile.<id>`: the core receives a select of that id; once the machine reports it, `value.profile` shows its name |
 | P2 | Order: active first, recently used, then by name | Optional | Test | the shown `row.profile.<id>` rows top to bottom: active, recently used (fake shot history), then by name ignoring leading symbols |
 | P3 | Stop weight, brew temperature and last use per row | Optional | Test + Look | `row.profile.<id>` text holds its brew temperature and stop weight; the last use by looking |
-| P4 | Originals per profile: restore or keep the current values | Optional | Tag | `action.restore` |
+| P4 | Originals per profile: restore or keep the current values | Optional | Test | an edited profile's `action.originals.<id>` opens `screen.originals` with the original values; `action.restore`: the core receives them, saved; `action.keep`: no command, no longer edited |
 | P5 | Tapping the active profile just closes the list | Optional | Test | tap the active `row.profile.<id>`: `screen.profiles` hidden, Ready shown (selecting it again is harmless) |
 
 ## Shot
@@ -202,11 +202,11 @@ Required features that are missing are listed first. The screenshots of every sc
 
 | Kind | Tags |
 |---|---|
-| Screens | `screen.ready`, `screen.brewing`, `screen.review`, `screen.steam`, `screen.offline`, `screen.profiles`, `screen.keypad`, `screen.history`, `screen.notices`, `screen.menu`, `screen.wifi`, `screen.wifi_details`, `screen.password`, `screen.machine_address`, `screen.scale`, `screen.display`, `screen.about`, `screen.idle` |
+| Screens | `screen.ready`, `screen.brewing`, `screen.review`, `screen.steam`, `screen.offline`, `screen.profiles`, `screen.keypad`, `screen.history`, `screen.notices`, `screen.menu`, `screen.wifi`, `screen.wifi_details`, `screen.password`, `screen.machine_address`, `screen.scale`, `screen.display`, `screen.about`, `screen.idle`, `screen.originals` (a profile's original values) |
 | Values (a label, or an object whose first label child holds the text) | `value.state`, `value.boiler_temp`, `value.profile`, `value.pressure`, `value.scale`, `value.water`, `value.brew_temp`, `value.stop_weight`, `value.weight`, `value.shot_time`, `value.offline_reason`, `value.clock` |
 | Warnings (checked visible / hidden) | `warn.pressure`, `warn.no_scale`, `warn.refill`, `warn.release` |
 | Information | `info.unofficial`, `info.notice`, `info.update`, `info.refusal`, `info.wifi_error` |
-| Actions | `action.temp_up`, `action.temp_down`, `action.weight_up`, `action.weight_down`, `action.done` (a keypad or editor), `action.reset`, `action.restore`, `action.profiles`, `action.menu` (the menu or settings, from Ready), `action.notices`, `action.flush`, `action.close`, `action.back`, `action.join`, `action.forget`, `action.use`, `action.retry`, `action.wifi_settings`, `action.machine_address` |
+| Actions | `action.temp_up`, `action.temp_down`, `action.weight_up`, `action.weight_down`, `action.done` (a keypad or editor), `action.reset`, `action.originals.<id>` (an edited profile's originals), `action.restore`, `action.keep`, `action.profiles`, `action.menu` (the menu or settings, from Ready), `action.notices`, `action.flush`, `action.close`, `action.back`, `action.join`, `action.forget`, `action.use`, `action.retry`, `action.wifi_settings`, `action.machine_address` |
 | Rows and inputs | `row.profile.<id>`, `row.wifi.<name>`, `input.password`, `input.address` |
 
 A screen counts as shown when its tagged object is visible and nothing opaque covers it. A UI that puts several

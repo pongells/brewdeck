@@ -1,0 +1,42 @@
+# P4 each profile's original values are kept: an edited profile can go back to them (restore: the core receives them,
+# saved) or keep its current values as the new originals (keep: no command, no longer marked as edited).
+# checks: P4
+wait 500
+wait_for screen.ready 10000
+expect_text value.brew_temp 91 3000
+if_hidden action.temp_up : tap_tag value.brew_temp
+wait 600
+tap_tag action.temp_up
+wait 300
+if_shown action.done : tap_tag action.done
+wait 3500
+expect_cmds 1 brew_temp profile=7 deg=92 save=1
+tap_tag action.profiles
+expect_visible screen.profiles 2000
+expect_visible action.originals.7 2000
+tap_tag action.originals.7
+expect_visible screen.originals 1000
+expect_text screen.originals 91 1000
+shot P4: originals
+tap_tag action.restore
+wait 4000
+expect_cmds 2 brew_temp profile=7 deg=91 save=1
+back_to_ready
+expect_text value.brew_temp 91 3000
+if_hidden action.temp_up : tap_tag value.brew_temp
+wait 600
+tap_tag action.temp_up
+wait 300
+if_shown action.done : tap_tag action.done
+wait 3500
+expect_cmds 1 brew_temp profile=7 deg=92 save=1
+tap_tag action.profiles
+expect_visible action.originals.7 2000
+tap_tag action.originals.7
+expect_visible screen.originals 1000
+tap_tag action.keep
+wait 1500
+expect_no_cmd
+expect_hidden screen.originals 1000
+expect_hidden action.originals.7 2000
+quit
