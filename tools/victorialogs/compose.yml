@@ -1,23 +1,44 @@
 # VictoriaLogs for Brewdeck debug builds: keeps the screens' log lines (syslog over UDP) and shows them in a web page.
-#   docker compose up -d            (in this folder; data in ./data, kept 30 days)
+#   docker compose up -d            (in this folder, or paste it into Dockge / Portainer; data in ./data, kept 30 days)
 #   web page: http://<this computer>:9428/select/vmui   (query e.g.  hostname:brewdeck-p4 AND stalled)
 # Then point a screen at it once: curl -4 "http://brewdeck-p4.local/loghost?to=<this computer's address>"
 # Each line is stamped when it arrives (the screen's own time starts the text; lines sent late after a Wi-Fi drop
-# keep their real time there).
+# keep their real time there). Firewall: allow 5140/udp (ufw allow 5140/udp).
+# VictoriaLogs has no login: keep the web page on your own network (or behind your proxy's access rules).
 services:
   victorialogs:
+    restart: unless-stopped
     image: docker.io/victoriametrics/victoria-logs:v1.54.0
+    container_name: victorialogs
+    # user: 1000:1000             # run as your user: create ./data as that user first
     command:
       - -storageDataPath=/victoria-logs-data
       - -retentionPeriod=30d
       - -syslog.listenAddr.udp=:5140
       - -syslog.useLocalTimestamp.udp
-    ports:
-      - "9428:9428"        # web page and query API
-      - "5140:5140/udp"    # syslog from the screens
     volumes:
       - ./data:/victoria-logs-data
+    ports:
+      - "5140:5140/udp"    # syslog from the screens (always published: the screens send here directly)
+      - "9428:9428"        # web page and query API (drop this line when Traefik serves the page)
+    cpu_shares: 512
+    cpus: 0.5
     healthcheck:
       test: ["CMD", "/victoria-logs-prod", "-healthcheck"]
       interval: 30s
-    restart: unless-stopped
+    # Behind Traefik: uncomment the labels and the networks below, set your host name, entry point, certificate
+    # resolver, network and access middleware. "/" then opens the log page.
+    # networks:
+    #   - web
+    # labels:
+    #   - traefik.enable=true
+    #   - traefik.http.routers.victorialogs.rule=Host(`logs.example.com`)
+    #   - traefik.http.routers.victorialogs.entrypoints=websecure
+    #   - traefik.http.routers.victorialogs.tls.certresolver=letsencrypt
+    #   - traefik.http.routers.victorialogs.middlewares=victorialogs-home   # add your access middleware here
+    #   - traefik.http.services.victorialogs.loadbalancer.server.port=9428
+    #   - traefik.http.middlewares.victorialogs-home.redirectregex.regex=^(https?://[^/]+)/?$$
+    #   - traefik.http.middlewares.victorialogs-home.redirectregex.replacement=$${1}/select/vmui/
+# networks:
+#   web:
+#     external: true
