@@ -12,6 +12,7 @@
 #include "board_core.h"
 #include "net.h"
 #include "tlog.h"
+#include "logsend.h"
 #include "frames.h"
 
 static WiFiServer g_srv(80);
@@ -193,6 +194,43 @@ static void task(void *) {
       heap_caps_free(g_rec);
       g_rec = NULL; g_rec_cap = g_rec_len = 0; g_rec_n = 0;
       c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nfreed\n");
+    } else if (strncmp(line, "GET /log/prev ", 14) == 0) {   // the log tail from before a crash / watchdog restart
+      static char prev[3072];
+      const size_t n = log_before_restart(prev, sizeof prev);
+      c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n");
+      if (n) c.write((const uint8_t *)prev, n);
+      else c.print("(nothing kept: the last start was a power-on, a flash or a reset by USB)\n");
+    } else if (strncmp(line, "GET /log", 8) == 0 && (line[8] == ' ' || line[8] == '?')) {
+      // the memory log (last 256 KB); /log?from=N continues after an earlier read (X-Log-Next)
+      const char *pf = strstr(line, "from=");
+      uint32_t pos = pf ? (uint32_t)strtoul(pf + 5, NULL, 10) : 0;
+      const uint32_t end = log_written();
+      c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nX-Log-Next: %lu\r\nConnection: close\r\n\r\n",
+               (unsigned long)end);
+      static char chunk[1460];
+      while (pos < end && c.connected()) {
+        uint32_t next;
+        const size_t n = log_read(pos, chunk, sizeof chunk, &next);
+        if (!n) break;
+        if (next > end) {   // stop at the end seen in the header
+          c.write((const uint8_t *)chunk, n - (next - end));
+          break;
+        }
+        c.write((const uint8_t *)chunk, n);
+        pos = next;
+      }
+    } else if (strncmp(line, "GET /loghost", 12) == 0 && (line[12] == ' ' || line[12] == '?')) {
+      const char *pt = strstr(line, "to=");      // /loghost?to=192.168.1.10[:5140] sets it, /loghost?to= turns it off
+      if (pt) {
+        char to[64];
+        size_t k = 0;
+        for (pt += 3; *pt && *pt != ' ' && *pt != '&' && k < sizeof to - 1; pt++) to[k++] = *pt;
+        to[k] = 0;
+        logsend_set_target(to);
+      }
+      const char *t = logsend_target();
+      c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nlog server: %s\n",
+               t[0] ? t : "off");
     } else if (strncmp(line, "GET /heap ", 10) == 0) {   // memory and Wi-Fi link
       char ssid[33], ap[18];
       int8_t rssi;
@@ -259,7 +297,7 @@ static void task(void *) {
       if (pp) bd_set_backlight(atoi(pp + 4));
       c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nok\n");
     } else {
-      c.print("HTTP/1.0 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nGET /screen.bmp, /rec?every=ms[&max=n], /rec, /rec/stop, /rec.bin, /rec/free, /heap, /tasks, /flash, /roam, /i2c, /ppatest?n=&seed=&hmin=&hmax=, /touch?x=&y=&ms=, /bl?pct=&hz=\n");
+      c.print("HTTP/1.0 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nGET /screen.bmp, /rec?every=ms[&max=n], /rec, /rec/stop, /rec.bin, /rec/free, /heap, /tasks, /flash, /roam, /i2c, /ppatest?n=&seed=&hmin=&hmax=, /log[?from=], /log/prev, /loghost?to=, /touch?x=&y=&ms=, /bl?pct=&hz=\n");
     }
     c.stop();
   }

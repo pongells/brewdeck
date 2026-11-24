@@ -17,10 +17,19 @@ const bd_display_info *bd_display(void) { return &g_info; }
 // scrambled the picture on the panel: its writes to PSRAM compete with the panel's bounce-buffer reads from the same
 // frame buffer, and the panel lost sync.
 static uint32_t g_flush_us = 0, g_flush_px = 0;   // time spent copying into the frame buffer (bd_display_stats)
+static volatile int g_fl_x = 0, g_fl_y = 0, g_fl_w = 0, g_fl_h = 0;   // the last flush (board_flush_info)
+static volatile bool g_fl_busy = false;
+void board_flush_info(char *out, size_t cap) {
+  snprintf(out, cap, "last flush %d,%d %dx%d%s", g_fl_x, g_fl_y, g_fl_w, g_fl_h,
+           g_fl_busy ? ", STILL COPYING" : ", finished");
+}
 void bd_display_flush(int x1, int y1, int x2, int y2, const uint16_t *px) {
   const uint32_t w = (uint32_t)(x2 - x1 + 1), h = (uint32_t)(y2 - y1 + 1);
   const uint32_t t0 = micros();
+  g_fl_x = x1, g_fl_y = y1, g_fl_w = (int)w, g_fl_h = (int)h;
+  g_fl_busy = true;
   gfx->draw16bitRGBBitmap(x1, y1, (uint16_t *)px, w, h);
+  g_fl_busy = false;
   g_flush_us += micros() - t0;
   g_flush_px += w * h;
 }

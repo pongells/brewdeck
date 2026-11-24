@@ -20,6 +20,12 @@
 #include "core_state.h"
 #include "board_core.h"
 #include "tlog.h"
+#ifdef BREWDECK_DEBUG_HTTP
+#include "logsend.h"
+#define LOOP_MARK(where) loop_mark(where)   // the UI loop watch (logsend.h)
+#else
+#define LOOP_MARK(where) ((void)0)
+#endif
 #include "net.h"
 #include "ws.h"
 #include "debug_http.h"
@@ -192,6 +198,9 @@ static bd_reset reset_of(esp_reset_reason_t r) {
 
 void bd_core_setup(void) {
   board_serial_begin();   // the board's log port (src/board/<board>)
+#ifdef BREWDECK_DEBUG_HTTP
+  log_begin();            // memory log (GET /log), the tail kept over a crash
+#endif
   delay(200);
   const esp_reset_reason_t r = esp_reset_reason();
   cs_core_info(__DATE__ " " __TIME__, reset_of(r), BREWDECK_VERSION);
@@ -212,6 +221,7 @@ void bd_core_setup(void) {
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
 #ifdef BREWDECK_DEBUG_HTTP
   debug_http_begin();                     // debug web server (debug_http.cpp: screen.bmp, heap, tasks, flash, roam, touch, bl, the UI's route): env ui-debug only
+  logsend_begin();                        // log lines to a log server + the UI loop watch (logsend.h)
 #endif
   ws_begin();
   Log.printf("ui \"%s\" %s ready\n", BD_UI.name, BD_UI.version);
@@ -231,9 +241,11 @@ void bd_core_loop(void) {
   // shot must be in before the state that says it ended
   static uint32_t pf_n = 0, pf_max = 0, pf_sum = 0, pf_shots = 0, pf_t = 0;
   const uint32_t lp0 = millis();            // a slow pass is logged by section (the UI must keep answering touch)
+  LOOP_MARK("shot points");
   WsShot shot;
   while (net_get_shot(&shot)) { cs_shot_point(&shot); pf_shots++; }
   mem_watch("loop: shot points");
+  LOOP_MARK("network data");
   if (millis() - last_net > 150) {
     last_net = millis();
     LiveData d;
@@ -271,14 +283,18 @@ void bd_core_loop(void) {
   }
   mem_watch("loop: stored shots, notices");
   const uint32_t lp1 = millis();
+  LOOP_MARK("core tick");
   cs_tick(millis());
 #ifdef BREWDECK_DEBUG_HTTP
+  LOOP_MARK("debug job");
   debug_http_service();                   // a UI debug route asked for (bd_debug_route): answered here, on the UI task
 #endif
   const uint32_t lp2 = millis();
   bd_display_stats(NULL, NULL, true);
   const uint32_t t0 = millis();
+  LOOP_MARK("UI drawing");
   bd_ui_tick(t0);
+  LOOP_MARK("after drawing");
   const uint32_t dt = millis() - t0;
   mem_watch("loop: UI drawing");
   uint32_t fus, fpx;

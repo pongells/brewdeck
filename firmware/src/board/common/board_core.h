@@ -21,5 +21,7 @@ void board_backlight_hz(uint32_t hz);   // debug server (GET /bl): the backlight
 size_t board_i2c_scan(char *out, size_t cap);
 // debug server (GET /ppatest?n=&seed=&hmin=&hmax=): checks the display's rotated copies (P4 2D engine) on a spare buffer; text
 // into out, returns the length. Call on the UI task (no flush may run meanwhile). Boards without it say so.
+// debug (UI loop watch): the last rectangle sent to bd_display_flush and whether that copy is still running
+void board_flush_info(char *out, size_t cap);
 void board_ppa_test_args(int n, uint32_t seed, int hmin, int hmax);
 size_t board_ppa_test(char *out, size_t cap);

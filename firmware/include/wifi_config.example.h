@@ -10,3 +10,6 @@
 #define MACHINE_IP   ""
 // Leaving WIFI_SSID as "YOUR_WIFI_NAME" is fine too: the screen then starts on "No Wi-Fi set up" and you choose the
 // network on the screen (it is saved there).
+// ---- Optional, debug builds only: send the log to a log server (tools/logserver.py) on your network ----------
+// #define LOG_HOST "192.168.1.10"   // or set it later: http://<screen>.local/loghost?to=192.168.1.10
+// #define LOG_PORT 5140

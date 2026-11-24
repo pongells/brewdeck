@@ -121,8 +121,18 @@ static void pt_sync(uint16_t *fb, size_t a, size_t b, size_t align, int dir) {  
 }
 static uint32_t g_thin_flushes = 0;   // rectangles thinner than P4_ROWS, copied by the CPU
 static uint32_t g_flush_us = 0, g_flush_px = 0;   // time spent copying into the frame buffer (bd_display_stats)
+static volatile int g_fl_x = 0, g_fl_y = 0, g_fl_w = 0, g_fl_h = 0;   // the last flush (board_flush_info)
+static volatile bool g_fl_busy = false;
+static const char *volatile g_fl_how = "";
+void board_flush_info(char *out, size_t cap) {
+  snprintf(out, cap, "last flush %d,%d %dx%d by the %s%s", g_fl_x, g_fl_y, g_fl_w, g_fl_h, g_fl_how,
+           g_fl_busy ? ", STILL COPYING" : ", finished");
+}
 void bd_display_flush(int x1, int y1, int x2, int y2, const uint16_t *px) {
   const uint32_t w = (uint32_t)(x2 - x1 + 1), h = (uint32_t)(y2 - y1 + 1);
+  g_fl_x = x1, g_fl_y = y1, g_fl_w = (int)w, g_fl_h = (int)h;
+  g_fl_how = g_ppa && h >= P4_ROWS ? "PPA" : "CPU";
+  g_fl_busy = true;
   const uint32_t t0 = micros();
   if (!g_ppa_tried) ppa_setup();
   // The PPA hangs now and then (about once in a few hundred to a few thousand copies) on rectangles 2-3 rows tall,
@@ -146,6 +156,7 @@ void bd_display_flush(int x1, int y1, int x2, int y2, const uint16_t *px) {
     }
     gfx->draw16bitRGBBitmap(x1, y1, (uint16_t *)px, w, h);   // rotated by the CPU + cache write-back
   }
+  g_fl_busy = false;
   g_flush_us += micros() - t0;
   g_flush_px += w * h;
 }

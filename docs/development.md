@@ -92,6 +92,34 @@ libraries (2-3 minutes).
 Each line starts with the time (the clock once NTP has set it, else `up <seconds>`). The first lines say why the
 screen started (power-on, crash, watchdog) and which core and UI API versions it runs.
 
+### Without a cable (debug builds)
+
+Debug builds also keep the log in memory and can send it over the network, so a problem that happens while the
+screen is on the machine is still recorded:
+
+- `GET /log`: the last 256 KB of the log (`/log?from=N` continues where an earlier read ended: `X-Log-Next`).
+- `GET /log/prev`: the last 3 KB from before a crash or watchdog restart (kept in RTC memory; not over a power cut,
+  a flash or a reset by USB).
+- A log server: every line as a UDP datagram (syslog, RFC 5424). With Docker, VictoriaLogs keeps them and shows them
+  in a web page (30 days):
+
+  ```sh
+  cd tools/victorialogs && docker compose up -d   # then http://<computer>:9428/select/vmui
+  ```
+
+  Query e.g. `hostname:brewdeck-p4 AND stalled`, or from a shell:
+  `curl http://<computer>:9428/select/logsql/query -d 'query=_time:1h hostname:brewdeck-p4'`.
+  Without Docker, `python3 tools/logserver.py logs` writes one file per screen and day (rsyslog works too).
+
+  Then point the screen at it once: `curl -4 "http://brewdeck-p4.local/loghost?to=<computer's address>"` (saved on
+  the screen; `?to=` with nothing turns it off), or set `LOG_HOST` in `wifi_config.h`. Port 5140 unless given
+  (`to=host:port`). Lines written while Wi-Fi is down are sent when it is back; the log server stamps each line when
+  it arrives, the screen's own time starts the text.
+
+If the UI loop stops for 5 s, a line says where (`core: UI loop stalled for 5 s in "UI drawing"; last flush ...`),
+written from another task so it reaches the log server; another when it runs again. A loop pass of 250 ms or more is
+logged by section.
+
 ## Debug web server
 
 Debug builds (`ui-debug`, `ui-p4-debug`) run a small web server at `http://brewdeck.local` (P4: `brewdeck-p4.local`).
@@ -108,6 +136,7 @@ waits about 5 s for IPv6 over mDNS.
 | `/roam` | starts a Wi-Fi roaming check (result in the serial log) |
 | `/i2c` | every address that answers on the touch controller's I2C bus, with a guess at what it is (audio codec, ...) |
 | `/ppatest?n=300&seed=1&hmin=1&hmax=40` | P4: rotates `n` random rectangles (heights `hmin`..`hmax`) with the 2D engine into a spare buffer (same settings as the display) and checks each against the CPU's rotation; lists wrong or unfinished copies (a copy that never finishes switches the display to the CPU path). Blocks the UI while it runs |
+| `/log`, `/log/prev`, `/loghost?to=` | the memory log, the log from before a crash, the log server (see [Serial log](#serial-log)) |
 | `/bl?pct=&hz=` | sets the backlight level and PWM frequency |
 
 A UI can add one route of its own with `bd_debug_route` (Brewdeck's UI: `/bench`).

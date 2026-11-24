@@ -19,6 +19,14 @@ extern TsLog Log;
 // screenshot, from any task: what is named is where the drop was NOTICED (the cause ran just before, in that task or
 // another). Release builds: nothing.
 #ifdef BREWDECK_DEBUG_HTTP
+// Debug builds keep the log in memory too (GET /log, and sent to a log server, debug_http.cpp): the last 256 KB in
+// PSRAM, and the last 3 KB in RTC memory, which survives a crash or watchdog restart (not a power cut or USB flash).
+// Positions are bytes written since boot. log_read copies from position `from` (moved up to the oldest kept byte)
+// and returns the bytes copied; *next = where to continue.
+size_t log_read(uint32_t from, char *out, size_t cap, uint32_t *next);
+uint32_t log_written(void);
+size_t log_before_restart(char *out, size_t cap);   // the RTC tail from before this boot (0 = none)
+void log_begin(void);   // once, early in setup: keeps the RTC tail, catches ESP-IDF's own log lines
 void mem_watch(const char *where, const char *what = nullptr);
 #else
 static inline void mem_watch(const char *, const char * = nullptr) {}
