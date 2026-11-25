@@ -82,10 +82,11 @@ Prerequisites and the first build: README, [Building](../README.md#building). In
 `./build.sh <env>` builds, `--flash` flashes through `flash.sh`; `UI=<folder>` builds another UI folder (a folder name under `src/`, or a path to one outside the repository). Options are
 in the header of [`build.sh`](../firmware/build.sh).
 
-Both boards are **ESP-IDF projects** (`framework = arduino, espidf`). ESP-IDF, the Arduino core (one ESP-IDF
-component) and every other component are compiled from source together, in the env's own build folder; nothing in
-PlatformIO's shared packages is changed. Settings: the stock Arduino libraries' settings for the chip, read from the
-installed package, plus `sdkconfig.brewdeck.<chip>`:
+Both boards are **plain ESP-IDF projects** (`framework = espidf`). ESP-IDF and the components named in
+`src/idf_component.yml` (mDNS; on the P4 ESP-Hosted and esp_wifi_remote) are compiled from source together, in the env's
+own build folder. Two small tools are plain Arduino builds instead: `touchtest` and `p4-c6-update`. Settings:
+`sdkconfig.base.<chip>` (the settings the firmware ran on while it was built on the Arduino core, as the lines that
+differ from ESP-IDF's defaults; how it was made is in its header), plus `sdkconfig.brewdeck.<chip>`:
 - **S3** (`sdkconfig.brewdeck.esp32s3`): octal PSRAM, and what keeps the RGB panel's picture steady while Wi-Fi is busy
   (code and read-only data run from PSRAM, 64 B data cache line, an IRAM-safe panel interrupt, Wi-Fi / lwIP buffers in
   internal RAM); heap and ring buffer code out of IRAM, for internal RAM.

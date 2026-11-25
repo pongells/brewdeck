@@ -184,8 +184,8 @@ Pins: [`firmware/src/board/p4/board.h`](firmware/src/board/p4/board.h).
 ## Building
 
 To build it yourself instead of using a release. The build uses
-[pioarduino](https://github.com/pioarduino/platform-espressif32) (PlatformIO). Each board is an ESP-IDF project with
-the Arduino core as a component, compiled from source with the settings in `firmware/sdkconfig.brewdeck.<chip>` (on
+[pioarduino](https://github.com/pioarduino/platform-espressif32) (PlatformIO). Each board is a plain ESP-IDF project,
+compiled from source with the settings in `firmware/sdkconfig.base.<chip>` and `firmware/sdkconfig.brewdeck.<chip>` (on
 the S3: code and data run from PSRAM, cache line 64 B, an IRAM-safe panel interrupt, which keeps the picture steady
 while Wi-Fi is busy).
 
@@ -295,7 +295,7 @@ Not covered by Brewdeck's license:
   here only as test and demo data; they will be replaced if the Gaggiuino project asks.
 - The fonts in `firmware/src/ui/fonts/` are generated from [Inter Tight](https://github.com/rsms/inter-tight) and stay under
   the SIL Open Font License 1.1 ([OFL.txt](firmware/src/ui/fonts/OFL.txt)).
-- Libraries fetched at build time (LVGL, the Arduino core, ESP-IDF; Arduino_GFX for the touch test only) keep their own licenses. Release images
+- Libraries fetched at build time (LVGL, ESP-IDF and its components; the Arduino core and Arduino_GFX for two small tools only) keep their own licenses. Release images
   and the web demo contain them compiled in: their notices and license texts are in
   [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt), which every release package includes.
 

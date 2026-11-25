@@ -68,8 +68,8 @@ jobs:
             ~/.platformio
             firmware/.pio
             firmware/managed_components
-          key: platformio-s3-idf-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini', 'firmware/CMakeLists.txt', 'firmware/sdkconfig.brewdeck.esp32s3', 'firmware/dependencies.lock.esp32s3') }}
-          restore-keys: platformio-s3-idf-${{ runner.os }}-
+          key: platformio-s3-espidf-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini', 'firmware/CMakeLists.txt', 'firmware/src/idf_component.yml', 'firmware/sdkconfig.base.esp32s3', 'firmware/sdkconfig.brewdeck.esp32s3', 'firmware/dependencies.lock.esp32s3') }}
+          restore-keys: platformio-s3-espidf-${{ runner.os }}-
       - name: Build
         working-directory: firmware
         run: |
@@ -80,8 +80,8 @@ jobs:
           ./build.sh touchtest
 
   firmware-p4:
-    # an ESP-IDF project (framework = arduino, espidf): each env compiles ESP-IDF and the Arduino core from source in
-    # its own build folder, so those folders and the downloaded components are cached too
+    # an ESP-IDF project: each env compiles ESP-IDF from source in its own build folder, so those folders and the
+    # downloaded components are cached too; the C6 updater is a plain Arduino build
     name: Firmware, ESP32-P4 board (release and debug builds, the example UI)
     runs-on: ubuntu-latest
     steps:
@@ -93,8 +93,8 @@ jobs:
             ~/.platformio
             firmware/.pio
             firmware/managed_components
-          key: platformio-p4-idf-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini', 'firmware/CMakeLists.txt', 'firmware/sdkconfig.brewdeck.esp32p4', 'firmware/dependencies.lock.esp32p4') }}
-          restore-keys: platformio-p4-idf-${{ runner.os }}-
+          key: platformio-p4-espidf-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini', 'firmware/CMakeLists.txt', 'firmware/src/idf_component.yml', 'firmware/sdkconfig.base.esp32p4', 'firmware/sdkconfig.brewdeck.esp32p4', 'firmware/dependencies.lock.esp32p4') }}
+          restore-keys: platformio-p4-espidf-${{ runner.os }}-
       - name: Build
         working-directory: firmware
         run: |

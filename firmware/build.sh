@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Main build (macOS / Linux): pioarduino (ESP-IDF projects, settings in sdkconfig.brewdeck.<chip>), then flash.
+# Main build (macOS / Linux): pioarduino (ESP-IDF projects, settings in sdkconfig.base.<chip> + sdkconfig.brewdeck.<chip>), then flash.
 #   ./build.sh ui            build only
 #   ./build.sh ui --flash    build, then flash (encrypted or plain, as the chip needs; needs a 16 MB backup)
 #   ./build.sh ui-debug ...  the same plus the debug web server (docs/development.md: screenshots, recorder, ...)
@@ -50,18 +50,20 @@ export BREWDECK_UI="$UI"
 # PlatformIO (SCons) recompiles by content, not by date, so remove the objects of the files that use them: they always
 # recompile and the date is this build's
 for f in $(grep -rl --include='*.c' --include='*.cpp' '__DATE__' src); do rm -f ".pio/build/$TARGET/$f.o"; done
-# ESP-IDF envs (framework = arduino, espidf): ESP-IDF applies the defaults (sdkconfig.brewdeck.<chip>) only to
-# settings missing from the generated sdkconfig.<env>, so a changed defaults file starts that file again
-for d in sdkconfig.brewdeck.*; do
+# ESP-IDF envs: ESP-IDF applies the defaults (sdkconfig.base.<chip>, sdkconfig.brewdeck.<chip>) only to settings
+# missing from the generated sdkconfig.<env>, so a changed defaults file starts that file again
+for d in sdkconfig.base.* sdkconfig.brewdeck.*; do
   [[ -f "$d" && -f "sdkconfig.$TARGET" && "$d" -nt "sdkconfig.$TARGET" ]] && { rm -f "sdkconfig.$TARGET"; echo "$d changed: sdkconfig.$TARGET made again"; break; }
 done
 $PIO run -e "$TARGET"
 BP="$HERE/.pio/build/$TARGET"
 echo "Build OK: $BP"
 
-# boot_app0.bin (the OTA data partition's start state) comes with the Arduino core: next to the build's images
-BOOT="$(find "$HOME/.platformio/packages" -path "*framework-arduinoespressif32*/tools/partitions/boot_app0.bin" 2>/dev/null | head -1)"
-[[ -f "$BOOT" ]] || { echo "boot_app0.bin not found under ~/.platformio/packages"; exit 1; }
+# boot_app0.bin (the OTA data partition's start state, blank: boot app0) next to the build's images: ESP-IDF builds
+# make it (ota_data_initial.bin); the Arduino tools (touchtest, p4-c6-update) take the Arduino core's
+BOOT="$BP/ota_data_initial.bin"
+[[ -f "$BOOT" ]] || BOOT="$(find "$HOME/.platformio/packages" -path "*framework-arduinoespressif32*/tools/partitions/boot_app0.bin" 2>/dev/null | head -1)"
+[[ -f "$BOOT" ]] || { echo "boot_app0.bin not found (build folder, ~/.platformio/packages)"; exit 1; }
 cp "$BOOT" "$BP/boot_app0.bin"
 if (( OTA )); then   # over Wi-Fi to the debug web server (src/core/ota.h)
   case "$TARGET" in ui-p4*) DEF_HOST=brewdeck-p4.local ;; *) DEF_HOST=brewdeck.local ;; esac

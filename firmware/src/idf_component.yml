@@ -1,0 +1,13 @@
+# Components the firmware uses beyond ESP-IDF itself (the component manager fetches them; exact versions in
+# dependencies.lock.<chip>). Pinned to the versions the Arduino core brought until it was dropped; move them on
+# one at a time, each checked on the board.
+dependencies:
+  espressif/mdns: "==1.15.1"            # finding the machine by name, the screen's own name
+  espressif/esp_hosted:                 # P4: Wi-Fi through the ESP32-C6 (keep in step with the C6 updater, src/c6update)
+    version: "==2.13.1"
+    rules:
+      - if: "target == esp32p4"
+  espressif/esp_wifi_remote:            # P4: esp_wifi_* calls carried to the ESP32-C6
+    version: "==1.6.5"
+    rules:
+      - if: "target == esp32p4"

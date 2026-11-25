@@ -45,21 +45,11 @@ if "espidf" in env.subst("$PIOFRAMEWORK"):
     os.environ["BREWDECK_BOARD"] = board
     os.environ["BREWDECK_SRC_UI"] = ui
     os.environ["BREWDECK_SRC_ONLY"] = only
-    # the stock Arduino libraries' settings for the chip (CMakeLists.txt); .orig when a build with custom_sdkconfig
-    # (not used here, but pioarduino supports it) replaced them in the shared package
-    libs = env.PioPlatform().get_package_dir("framework-arduinoespressif32-libs") or ""
-    mcu = env.BoardConfig().get("build.mcu", "")
-    stock = os.path.join(libs, mcu, "sdkconfig")
-    if os.path.isfile(stock + ".orig"):
-        stock += ".orig"
-    if not os.path.isfile(stock):
-        raise SystemExit("no stock Arduino sdkconfig at %s" % stock)
-    os.environ["BREWDECK_STOCK_SDKCONFIG"] = stock
     # CMake keeps the source list of its last configuration: another UI / board / program in the same build folder
     # (UI=ui_minimal ./build.sh ui-p4) must configure again
     bd = env.subst("$BUILD_DIR")
     sel_file = os.path.join(bd, "brewdeck_selection.txt")
-    sel = "%s %s %s %s\n" % (board, ui, only, stock)
+    sel = "%s %s %s\n" % (board, ui, only)
     old = open(sel_file).read() if os.path.isfile(sel_file) else ""
     if old != sel:
         os.makedirs(bd, exist_ok=True)
