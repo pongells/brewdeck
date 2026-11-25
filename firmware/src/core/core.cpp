@@ -219,6 +219,7 @@ static bd_reset reset_of(esp_reset_reason_t r) {
 }
 
 void bd_core_setup(void) {
+  net_time_zone();        // before the first log line (tlog stamps in local time)
   board_serial_begin();   // the board's log port (src/board/<board>)
 #ifdef BREWDECK_DEBUG_HTTP
   log_begin();            // memory log (GET /log), the tail kept over a crash

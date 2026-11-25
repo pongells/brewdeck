@@ -6,6 +6,7 @@
 
 // Starts Wi-Fi and the background task (with no network set up, it waits for one chosen on the screen).
 // Call BEFORE board_begin(): Wi-Fi start touches NVS flash, which crashes if the RGB panel is already running.
+void net_time_zone(void);   // first thing at boot: local time for log stamps and the idle clock
 void net_begin(void);
 // Copies the latest data. Returns true when something changed since the last call.
 bool net_get(LiveData *out, int *link);

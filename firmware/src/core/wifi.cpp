@@ -569,13 +569,17 @@ static bool wifi_driver_start(void) {
   return true;
 }
 
+// the time zone, before the first log line: after a software restart the clock still runs, and without the zone the
+// first lines were stamped in UTC. Set GAGGI_TZ in wifi_config.h to override (POSIX TZ string).
+void net_time_zone(void) {
+  setenv("TZ", GAGGI_TZ, 1);
+  tzset();
+}
+
 void wifi_setup(void) {
   load_creds();
   if (!wifi_driver_start()) return;
-  // local time for the idle screen's clock (NTP from the internet, nothing to/from the machine). Time zone: set
-  // GAGGI_TZ in wifi_config.h to override (POSIX TZ string); default Central Europe with summer time.
-  setenv("TZ", GAGGI_TZ, 1);
-  tzset();
+  // local time for the idle screen's clock (NTP from the internet, nothing to/from the machine; time zone: net_time_zone)
   esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
   esp_sntp_setservername(0, "pool.ntp.org");
   esp_sntp_setservername(1, "time.google.com");
