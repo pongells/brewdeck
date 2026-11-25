@@ -39,3 +39,5 @@ CONFIG_FREERTOS_HZ=1000
 # mdns ~1.7 of 4 KB
 CONFIG_ESP_TIMER_TASK_STACK_SIZE=4096
 CONFIG_MDNS_TASK_STACK_SIZE=3072
+# Start from our app_main (src/core/main.cpp), not Arduino's setup() / loop()
+# CONFIG_AUTOSTART_ARDUINO is not set

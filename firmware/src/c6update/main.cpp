@@ -145,3 +145,16 @@ void setup() {
 }
 
 void loop() { delay(1000); }
+
+// The firmware's settings turn Arduino's own start-up off (Brewdeck starts from app_main, src/core/main.cpp): this tool
+// still uses Arduino (WiFi, HTTPClient, ESP-Hosted OTA), so it starts it the way Arduino would.
+#if !CONFIG_AUTOSTART_ARDUINO
+static void loop_task(void *) {
+  setup();
+  for (;;) loop();
+}
+extern "C" void app_main(void) {
+  initArduino();
+  xTaskCreatePinnedToCore(loop_task, "loopTask", 8192, NULL, 1, NULL, 1);
+}
+#endif

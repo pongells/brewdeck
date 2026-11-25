@@ -11,7 +11,7 @@
 //          with any graphics library (LVGL 9 through the small adapter bd_lvgl9.h, or none)
 //
 // Rules for a UI:
-//   - Everything runs on one task, the UI task (the Arduino loop). The core calls bd_ui_tick() once per pass and
+//   - Everything runs on one task, the UI task ("core", started by main.cpp). The core calls bd_ui_tick() once per pass and
 //     bd_ui_event() for each event; the UI calls bd_* functions only from inside those (or from LVGL callbacks,
 //     which run on the same task). No locking needed on the UI side.
 //   - Pointers the core returns are read-only and valid until the next bd_ui_tick() / until bd_ui_event() returns.

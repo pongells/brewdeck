@@ -18,9 +18,8 @@
 
 static const uint32_t KEEP_AFTER_MS = 60000, STALL_MS = 20000, WIFI_WITHIN_MS = 180000;
 
-// Arduino marks a new image as good as soon as it starts; here it is marked only after the checks in watch()
-// (needed while the Arduino core runs the start-up)
-extern "C" bool verifyRollbackLater() { return true; }
+// A new image stays "pending verify" until watch() marks it good (ESP-IDF never does by itself); restarted before that,
+// the bootloader goes back to the previous one.
 
 // what the UI shows (BD_EV_UPDATE): written by the receiving task, read by the UI loop (ota_poll)
 static portMUX_TYPE g_umux = portMUX_INITIALIZER_UNLOCKED;
