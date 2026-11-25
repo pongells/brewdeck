@@ -28,6 +28,8 @@ class TcpConn {
   // one line without its '\n' (a '\r' before it is kept), at most cap - 1 chars, 0-terminated; returns its length
   // (0 at the limit or end)
   size_t read_line(char *b, size_t cap);
+  // how many of the next n bytes have arrived (without waiting or taking them)
+  size_t ready(size_t n);
   bool connected();                // still open (the other side has not closed it)
   void peer_ip(char *out, size_t cap);   // "192.168.1.10"
   void close();

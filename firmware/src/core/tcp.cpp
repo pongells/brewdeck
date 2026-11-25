@@ -109,6 +109,12 @@ size_t TcpConn::read_line(char *b, size_t cap) {
   b[k] = 0;
   return k;
 }
+size_t TcpConn::ready(size_t n) {
+  char b[16];
+  if (fd_ < 0 || !n) return 0;
+  const int k = recv(fd_, b, n < sizeof b ? n : sizeof b, MSG_PEEK | MSG_DONTWAIT);
+  return k > 0 ? (size_t)k : 0;
+}
 bool TcpConn::connected() {
   if (fd_ < 0) return false;
   char c;

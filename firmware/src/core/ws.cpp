@@ -1,7 +1,8 @@
 // See ws.h. Minimal RFC 6455 client: handshake, unmasked server frames in; masked pong / close and the commands (ws.h)
 // out. Decoded values go to net_data.cpp (net_ws_*), which overlays them on the REST data while they are fresh.
 #include <Arduino.h>
-#include <WiFi.h>
+#include <WiFi.h>   // IPAddress (until the mDNS / Wi-Fi steps)
+#include "tcp.h"
 #include <esp_heap_caps.h>
 #include <esp_random.h>
 #include <math.h>
@@ -22,24 +23,10 @@ static int wifi_rssi(void) {   // the network task's reading: asking Wi-Fi from 
 
 static uint8_t g_rx[4096];   // one frame; bigger ones (shot history index ~2.2 KB is the largest seen) are skipped
 
-static bool read_n(WiFiClient &c, uint8_t *p, size_t n) {
-  size_t got = 0;
-  uint32_t t0 = millis();
-  while (got < n) {
-    if (!c.connected() && !c.available()) return false;
-    int a = c.available();
-    if (a <= 0) {
-      if (millis() - t0 > 3000) return false;
-      delay(2);
-      continue;
-    }
-    int r = c.read(p + got, n - got);
-    if (r > 0) got += r;
-  }
-  return true;
-}
+// all n bytes, each wait up to the connection's time limit (3 s, set after the handshake)
+static bool read_n(TcpConn &c, uint8_t *p, size_t n) { return c.read(p, n) == n; }
 
-static void send_ctrl(WiFiClient &c, uint8_t opcode, const uint8_t *p, size_t n) {   // pong / close only
+static void send_ctrl(TcpConn &c, uint8_t opcode, const uint8_t *p, size_t n) {   // pong / close only
   if (n > 125) n = 125;
   uint8_t f[2 + 4 + 125];
   const uint32_t m = esp_random();
@@ -50,7 +37,7 @@ static void send_ctrl(WiFiClient &c, uint8_t opcode, const uint8_t *p, size_t n)
   c.write(f, 6 + n);
 }
 
-static bool handshake(WiFiClient &c, const IPAddress &ip) {
+static bool handshake(TcpConn &c, const IPAddress &ip) {
   uint8_t k[16];
   for (int i = 0; i < 16; i += 4) { uint32_t r = esp_random(); memcpy(k + i, &r, 4); }
   static const char *B = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -67,13 +54,12 @@ static bool handshake(WiFiClient &c, const IPAddress &ip) {
   c.printf("GET /ws HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
            "Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n", ip.toString().c_str(), key);
   char line[128];
-  c.setTimeout(3000);   // milliseconds (Stream::setTimeout), not seconds
-  size_t n = c.readBytesUntil('\n', line, sizeof line - 1);
-  line[n] = 0;
+  c.set_timeout(3000);
+  size_t n = c.read_line(line, sizeof line);
   const bool ok = strstr(line, " 101") != NULL;
   if (!ok) Log.printf("ws: handshake refused: %s\n", line);   // e.g. 429 = all 3 slots in use
   while (c.connected()) {                           // rest of the response headers
-    n = c.readBytesUntil('\n', line, sizeof line - 1);
+    n = c.read_line(line, sizeof line);
     if (n <= 1) break;
   }
   return ok;
@@ -99,7 +85,7 @@ void ws_flush(int mode) { g_flush_mode = mode; g_flush_req = stamp_nz(millis());
 static bool tare_allowed(void) { return g_seen_scale && !g_seen_brew && g_seen_mode == PB_MODE_HOME; }
 
 // masked binary frame of any length (client -> server); small header on the stack, payload masked in chunks
-static void send_binary(WiFiClient &c, const uint8_t *p, size_t n) {
+static void send_binary(TcpConn &c, const uint8_t *p, size_t n) {
   uint8_t h[14];
   size_t k = 0;
   h[k++] = 0x80 | 2;
@@ -192,7 +178,7 @@ void ws_save_pick(const char *profile) {
   g_pick_req = now;
   portEXIT_CRITICAL(&g_req_mux);
 }
-static void save_step(WiFiClient &c) {
+static void save_step(TcpConn &c) {
   if (g_pick_req) {                                 // a pick older than 10 s (no session then) is not saved later
     char pick[sizeof g_pick_name];
     portENTER_CRITICAL(&g_req_mux);
@@ -248,7 +234,7 @@ static void save_step(WiFiClient &c) {
   net_profile_saved((int)id);                       // the profile list re-reads its stored values
 }
 
-static void weight_step(WiFiClient &c) {
+static void weight_step(TcpConn &c) {
   if (!g_w_req) return;
   char want[sizeof g_w_name];
   portENTER_CRITICAL(&g_req_mux);
@@ -298,7 +284,7 @@ void ws_set_temp(const char *profile, int deg, bool save) {
   portEXIT_CRITICAL(&g_req_mux);
 }
 
-static void temp_step(WiFiClient &c) {
+static void temp_step(TcpConn &c) {
   if (!g_t_req) return;
   char want[sizeof g_t_name];
   portENTER_CRITICAL(&g_req_mux);
@@ -332,7 +318,7 @@ static void temp_step(WiFiClient &c) {
   Log.printf("ws: brew temperature %.1f -> %.0f C sent (profile %u, %u B)\n", t0, t, (unsigned)id, (unsigned)n);
 }
 
-static void flush_step(WiFiClient &c) {
+static void flush_step(TcpConn &c) {
   const uint32_t r = g_flush_req;
   if (!r) return;
   g_flush_req = 0;
@@ -354,7 +340,7 @@ static void flush_step(WiFiClient &c) {
   Log.printf("ws: mode %s sent (was %s)\n", ws_mode_name(m), ws_mode_name(g_seen_mode));
 }
 
-static void tare_step(WiFiClient &c) {
+static void tare_step(TcpConn &c) {
   const uint32_t r = g_tare_req;
   if (!r) return;
   g_tare_req = 0;
@@ -464,7 +450,7 @@ static uint32_t g_frames, g_bytes, g_t_conn;   // per connection, logged on disc
 
 static IPAddress g_sess_ip;                         // address of the running session
 
-static void session(WiFiClient &c) {
+static void session(TcpConn &c) {
   uint32_t cnt[3] = {0, 0, 0}, t_log = millis(), t_rx = millis();
   g_frames = g_bytes = 0;
   g_t_conn = millis();
@@ -494,7 +480,7 @@ static void session(WiFiClient &c) {
     weight_step(c);
     temp_step(c);
     save_step(c);
-    if (c.available() < 2) {
+    if (c.ready(2) < 2) {
       delay(10);
       if (millis() - t_rx > SILENT_MS) {            // dead connection: free the machine's slot and reconnect
         Log.println("ws: no data for 5 s, reconnecting");
@@ -563,9 +549,9 @@ static void task(void *) {
   for (;;) {
     IPAddress ip;
     if (!net_wifi_up(NULL) || !net_machine_ip(&ip)) { delay(1000); continue; }
-    WiFiClient c;
-    if (c.connect(ip, 80, 3000) && handshake(c, ip)) {
-      c.setNoDelay(true);
+    TcpConn c;
+    if (c.connect((uint32_t)ip, 80, 3000) && handshake(c, ip)) {   // IPAddress converts to network order
+      c.set_nodelay(true);
       Log.println("ws: connected");
       backoff = 2000;
       g_sess_ip = ip;
@@ -575,7 +561,7 @@ static void task(void *) {
     } else {
       backoff = backoff < 30000 ? backoff * 2 : 30000;   // machine off, rebooting, or all slots taken
     }
-    c.stop();
+    c.close();
     net_ws_lost();
     delay(backoff);
   }
