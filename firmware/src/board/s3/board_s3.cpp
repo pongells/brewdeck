@@ -17,6 +17,7 @@ void board_serial_begin(void) {
 }
 void board_log_write(const char *b, size_t n) { uart_write_bytes(UART_NUM_0, b, n); }
 const char *board_hostname(void) { return "brewdeck"; }
+bool board_wifi_init(void) { return true; }   // the S3's own radio
 
 static const bd_display_info g_info = {SCREEN_W, SCREEN_H, BD_PIXEL_RGB565, 40};   // one 40-line strip: 64 KB internal RAM
 const bd_display_info *bd_display(void) { return &g_info; }

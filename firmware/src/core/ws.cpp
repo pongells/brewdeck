@@ -1,7 +1,6 @@
 // See ws.h. Minimal RFC 6455 client: handshake, unmasked server frames in; masked pong / close and the commands (ws.h)
 // out. Decoded values go to net_data.cpp (net_ws_*), which overlays them on the REST data while they are fresh.
 #include <Arduino.h>
-#include <WiFi.h>   // IPAddress (until the mDNS / Wi-Fi steps)
 #include "tcp.h"
 #include <esp_heap_caps.h>
 #include <esp_random.h>
@@ -37,7 +36,7 @@ static void send_ctrl(TcpConn &c, uint8_t opcode, const uint8_t *p, size_t n) { 
   c.write(f, 6 + n);
 }
 
-static bool handshake(TcpConn &c, const IPAddress &ip) {
+static bool handshake(TcpConn &c, uint32_t ip) {
   uint8_t k[16];
   for (int i = 0; i < 16; i += 4) { uint32_t r = esp_random(); memcpy(k + i, &r, 4); }
   static const char *B = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -51,8 +50,10 @@ static bool handshake(TcpConn &c, const IPAddress &ip) {
     key[o++] = i + 2 < 16 ? B[v & 63] : '=';
   }
   key[o] = 0;
+  char host[16];
+  ip_str(ip, host, sizeof host);
   c.printf("GET /ws HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-           "Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n", ip.toString().c_str(), key);
+           "Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n", host, key);
   char line[128];
   c.set_timeout(3000);
   size_t n = c.read_line(line, sizeof line);
@@ -448,7 +449,7 @@ static const uint32_t SILENT_MS = 5000;
 
 static uint32_t g_frames, g_bytes, g_t_conn;   // per connection, logged on disconnect (debug)
 
-static IPAddress g_sess_ip;                         // address of the running session
+static uint32_t g_sess_ip;                          // address of the running session
 
 static void session(TcpConn &c) {
   uint32_t cnt[3] = {0, 0, 0}, t_log = millis(), t_rx = millis();
@@ -467,7 +468,7 @@ static void session(TcpConn &c) {
       static uint32_t t_chk;                      // wrong address stays "online" on the old socket
       if (millis() - t_chk > 500) {
         t_chk = millis();
-        IPAddress cur;
+        uint32_t cur;
         if (!net_machine_ip(&cur) || cur != g_sess_ip) {
           Log.println("ws: machine address changed, reconnecting");
           send_ctrl(c, 8, (const uint8_t *)"\x03\xe8", 2);   // close, 1000 normal
@@ -547,10 +548,10 @@ static void session(TcpConn &c) {
 static void task(void *) {
   uint32_t backoff = 2000;
   for (;;) {
-    IPAddress ip;
+    uint32_t ip;
     if (!net_wifi_up(NULL) || !net_machine_ip(&ip)) { delay(1000); continue; }
     TcpConn c;
-    if (c.connect((uint32_t)ip, 80, 3000) && handshake(c, ip)) {   // IPAddress converts to network order
+    if (c.connect(ip, 80, 3000) && handshake(c, ip)) {
       c.set_nodelay(true);
       Log.println("ws: connected");
       backoff = 2000;

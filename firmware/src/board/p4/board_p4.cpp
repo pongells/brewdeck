@@ -10,6 +10,8 @@
 #include <driver/usb_serial_jtag_vfs.h>
 #include <freertos/semphr.h>
 #include <esp_cache.h>
+#include <esp_hosted.h>
+#include <esp_timer.h>
 #include <esp_private/esp_cache_private.h>   // esp_cache_get_alignment (what the PPA driver checks too)
 #include "soc/spi_mem_c_reg.h"
 #include "board.h"
@@ -17,6 +19,18 @@
 #include "board_core.h"
 
 const char *board_hostname(void) { return "brewdeck-p4"; }   // brewdeck-p4.local: the S3 screen keeps "brewdeck"
+
+// Wi-Fi is the ESP32-C6's, reached over SDIO through ESP-Hosted (esp_wifi_* calls become requests to it). The SDIO
+// pins come from the ESP-IDF settings (they match this board). ESP-Hosted's own start at boot is a constructor in an
+// object nothing references, so the linker leaves it out: start it here, then wait for the C6.
+bool board_wifi_init(void) {
+  const int64_t t0 = esp_timer_get_time();
+  esp_err_t e = esp_hosted_init();
+  if (e == ESP_OK) e = esp_hosted_connect_to_slave();
+  if (e != ESP_OK) printf("wifi: no link to the ESP32-C6 (%s)\n", esp_err_to_name(e));
+  else printf("wifi: ESP32-C6 link up in %d ms\n", (int)((esp_timer_get_time() - t0) / 1000));
+  return e == ESP_OK;
+}
 
 // The log goes to the chip's USB port (USB-Serial-JTAG). When the computer on the other end does not read it, a
 // waiting write stops every task that logs (seen with Arduino's driver: 30 s freezes), so the log never waits: what

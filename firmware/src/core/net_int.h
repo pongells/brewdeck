@@ -3,7 +3,6 @@
 // Wi-Fi) and net_data.cpp (what the network and WebSocket tasks hand to the core loop). Not for the UI or the rest
 // of the core: they use net.h / net_ws.h.
 #include <Arduino.h>
-#include <IPAddress.h>
 #include "live.h"
 #include "pb.h"
 
@@ -20,7 +19,7 @@ void net_wake(void);                 // net.cpp: wake the network task (a reques
 // net_data.cpp: published by the network task, taken by the core loop (net_get*)
 void data_init(void);                                // creates the lock: first thing in net_begin
 void data_publish(const LiveData *d, int link);      // d NULL: the link state only
-void data_set_why(int why, IPAddress ip);            // offline reason (WHY_*) and the address that did not answer
+void data_set_why(int why, uint32_t ip);             // offline reason (WHY_*) and the address that did not answer (0 = none)
 void data_publish_profiles(const ProfileList *l);
 void data_publish_shape(const bd_profile_shape *s);      // the core loop hears of it only when it changed
 bool data_index(WsShotIndex *out);                   // a copy of the shot history index; false = none yet
@@ -37,3 +36,4 @@ bool wifi_step(bool idle);
 void wifi_info_step(bool now = false);   // the link status for the UI: at most once a second unless now
 bool wifi_down_why(int *why);        // not connected: true and why (WHY_WIFI_*)
 bool wifi_screen_ip(char *out, size_t cap);   // the screen's own IP ("" and false without Wi-Fi)
+bool wifi_scan_running(void);       // a Wi-Fi scan is on (the radio is off its channel at times)

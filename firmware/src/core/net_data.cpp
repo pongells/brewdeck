@@ -9,6 +9,7 @@
 #include "net.h"
 #include "net_ws.h"
 #include "net_int.h"
+#include "tcp.h"   // ip_str
 
 SemaphoreHandle_t g_net_mtx = NULL;
 
@@ -58,10 +59,10 @@ void data_publish(const LiveData *d, int link) {
   xSemaphoreGive(g_net_mtx);
 }
 
-void data_set_why(int why, IPAddress ip) {
+void data_set_why(int why, uint32_t ip) {
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_why = why;
-  snprintf(g_why_ip, sizeof g_why_ip, "%s", (uint32_t)ip ? ip.toString().c_str() : "");
+  ip_str(ip, g_why_ip, sizeof g_why_ip);
   xSemaphoreGive(g_net_mtx);
 }
 

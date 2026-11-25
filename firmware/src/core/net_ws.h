@@ -1,9 +1,9 @@
 #pragma once
 // Internal: ws.cpp hands decoded WebSocket data to net_data.cpp (which keeps the merged LiveData under g_net_mtx).
-#include <IPAddress.h>
+#include <stdint.h>
 #include "pb.h"
 
-bool net_machine_ip(IPAddress *ip);       // the machine's address once the REST task has found it
+bool net_machine_ip(uint32_t *ip);        // the machine's address (network order) once the REST task has found it
 void net_ws_sensor(const WsSensor *s);
 void net_ws_system(const WsSystem *s);
 void net_ws_shot(const WsShot *s);

@@ -5,6 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// IPv4 addresses as a uint32_t in network byte order (as lwIP and ESP-IDF keep them); 0 = none
+bool ip_parse(const char *s, uint32_t *addr);   // "192.168.1.10" -> true; anything else (a name) -> false
+void ip_str(uint32_t addr, char *out, size_t cap);   // "192.168.1.10" ("" for 0)
+
 class TcpConn {
  public:
   explicit TcpConn(int fd = -1) : fd_(fd) {}

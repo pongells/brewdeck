@@ -8,6 +8,8 @@ void board_serial_begin(void);   // the log's serial port (before anything logs)
 // the log's bytes to that port; never waits for a computer that does not read it (bytes are dropped instead)
 void board_log_write(const char *b, size_t n);
 const char *board_hostname(void);   // the screen's network / mDNS name (each board has its own)
+// before esp_wifi_init: whatever the board's Wi-Fi needs first (the P4: the link to its ESP32-C6). false = no Wi-Fi
+bool board_wifi_init(void);
 bool board_begin(void);   // panel + touch; false if the touch controller was not found
 void board_fake_touch(int x, int y, int ms);   // debug server: a remote press at (x, y) for ms
 // debug server (screenshots): n rows of what is on the glass from row y, display width RGB565 pixels each, in the UI's

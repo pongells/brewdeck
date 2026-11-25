@@ -11,7 +11,6 @@
 #include <Arduino.h>
 #include "tlog.h"
 #include <esp_heap_caps.h>
-#include <WiFi.h>
 #include <mdns.h>
 #include <string.h>
 #include <stdlib.h>
@@ -30,7 +29,7 @@ static uint32_t g_select_ms = 0;      // when it was asked for: dropped after 5 
 static bool g_force_list = false;     // re-read the profile list on the next cycle (after a select)
 static volatile int g_redetail_id = 0; // a profile saved from this screen: re-read its stored values (net_profile_saved)
 static TaskHandle_t g_task = NULL;
-static IPAddress g_ip;                // machine address for the WebSocket task
+static uint32_t g_ip;                 // machine address for the WebSocket task (network order)
 static bool g_have_ip = false;
 // previous shot for the shot review (GET /api/shots/latest + /api/shots/<id>, sent only after a
 // shot while the machine is idle)
@@ -58,32 +57,32 @@ static uint32_t g_prev_seq = 0, g_prev_seen = 0;
 // machine address: an IP ("192.168.1.50") or a name ("gaggiuino" / "gaggiuino.local", found by mDNS). Set from the
 // menu (NVS "machine"/"host"), else MACHINE_IP / MACHINE_HOST from wifi_config.h.
 static char g_mhost[64];
-static IPAddress g_last_ip;            // last address that answered: kept when mDNS does not answer
+static uint32_t g_last_ip;             // last address that answered: kept when mDNS does not answer (0 = none)
 static bool g_mhost_req = false;
 static char g_mhost_new[64];
-static bool host_is_ip(const char *h) { IPAddress t; return t.fromString(h); }
+static bool host_is_ip(const char *h) { uint32_t t; return ip_parse(h, &t); }
 static void load_mhost(void) {
   if (kv_get_str("machine", "host", g_mhost, sizeof g_mhost) && g_mhost[0]) return;
   if (strlen(MACHINE_IP) > 0) snprintf(g_mhost, sizeof g_mhost, "%s", MACHINE_IP);
   else snprintf(g_mhost, sizeof g_mhost, "%s.local", MACHINE_HOST);
 }
-static bool resolve(IPAddress *ip) {
-  if (ip->fromString(g_mhost)) return true;
+static bool resolve(uint32_t *ip) {
+  if (ip_parse(g_mhost, ip)) return true;
   char name[64];
   snprintf(name, sizeof name, "%s", g_mhost);
   char *dot = strstr(name, ".local");
   if (dot && dot[6] == 0) *dot = 0;               // mDNS wants the bare name
   esp_ip4_addr_t a = {};
   if (mdns_query_a(name, 2000, &a) != ESP_OK || !a.addr) return false;   // ESP_ERR_NOT_FOUND: no answer in 2 s
-  *ip = IPAddress(a.addr);                          // both in network order
+  *ip = a.addr;                                     // network order
   return true;
 }
 
 // GET path; on success buf holds the body (NUL-terminated). A reply larger than cap is cut off (parsers detect it).
 // post: false = GET, true = POST with an empty body. No other method can be sent (see the header comment).
-static bool http(const IPAddress &ip, bool post, const char *path, char *buf, size_t cap) {
+static bool http(uint32_t ip, bool post, const char *path, char *buf, size_t cap) {
   TcpConn c;
-  if (!c.connect((uint32_t)ip, 80, 2000)) return false;   // IPAddress converts to the address in network order
+  if (!c.connect(ip, 80, 2000)) return false;
   c.set_timeout(200);                               // each wait; the whole reply gets 3 s (below)
   if (post) c.printf("POST %s HTTP/1.0\r\nHost: gaggiuino.local\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", path);
   else c.printf("GET %s HTTP/1.0\r\nHost: gaggiuino.local\r\nConnection: close\r\n\r\n", path);
@@ -116,7 +115,7 @@ static bool http(const IPAddress &ip, bool post, const char *path, char *buf, si
   memmove(buf, body + 4, strlen(body + 4) + 1);
   return buf[0] != 0;
 }
-static bool fetch(const IPAddress &ip, const char *path, char *buf, size_t cap) { return http(ip, false, path, buf, cap); }
+static bool fetch(uint32_t ip, const char *path, char *buf, size_t cap) { return http(ip, false, path, buf, cap); }
 
 static const char *selected_name(const ProfileList *l) {
   for (int i = 0; i < l->count; i++)
@@ -125,7 +124,7 @@ static const char *selected_name(const ProfileList *l) {
 }
 
 // One profile step per poll cycle, so the 1 s status updates never stall for long.
-static void profiles_step(const IPAddress &ip, char *buf, size_t cap, const LiveData *d) {
+static void profiles_step(uint32_t ip, char *buf, size_t cap, const LiveData *d) {
   static ProfileList cur, next;
   static bool have_list = false;
   static uint32_t last_list = 0;
@@ -206,7 +205,7 @@ static void prev_publish(int state) {
 // g_before_id (the shot just shown); until the machine has stored it and re-sent the index, retry on the next cycles.
 // If nothing new is stored by the last try, the machine did not keep the shot: take the newest of the profile.
 // A request that could not run for 2 min (machine busy or off) is dropped.
-static void prev_step(const IPAddress &ip, const LiveData *d) {
+static void prev_step(uint32_t ip, const LiveData *d) {
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const int tries = g_prev_tries;
   if (tries <= 0) { xSemaphoreGive(g_net_mtx); return; }   // nothing asked for: no copy of the index
@@ -292,7 +291,7 @@ static void hist_publish(int st, int pst) {
   g_hist_seq++;
   xSemaphoreGive(g_net_mtx);
 }
-static void hist_step(const IPAddress &ip, const LiveData *d) {
+static void hist_step(uint32_t ip, const LiveData *d) {
   static WsShotIndex *ixp = NULL;
   if (!ixp) ixp = (WsShotIndex *)heap_caps_malloc(sizeof *ixp, MALLOC_CAP_SPIRAM);
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
@@ -335,7 +334,7 @@ bool net_stored_profile(int id, float *weight, float *temp) {
   static char *buf;                                 // PSRAM: profiles are 0.7-3 KB (internal RAM is for Wi-Fi)
   const size_t cap = 6144;
   if (!buf) buf = (char *)heap_caps_malloc(cap, MALLOC_CAP_SPIRAM);
-  IPAddress ip;
+  uint32_t ip;
   if (!buf || id <= 0 || !net_machine_ip(&ip)) return false;
   char path[32];
   snprintf(path, sizeof path, "/api/profile/%d", id);
@@ -349,7 +348,7 @@ bool net_stored_profile(int id, float *weight, float *temp) {
 }
 
 // Sends a queued profile select, re-checking on the status just read that the machine is idle in HOME.
-static void select_step(const IPAddress &ip, char *buf, size_t cap, const LiveData *d) {
+static void select_step(uint32_t ip, char *buf, size_t cap, const LiveData *d) {
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const int id = g_select_req;
   const uint32_t at = g_select_ms;
@@ -385,7 +384,7 @@ void net_get_machine(char *out, size_t cap) {
 static struct {
   char buf[8192];                                   // a full profile is ~0.7-3 KB, the status ~1 KB
   LiveData d;                                       // the last status reply
-  IPAddress ip;
+  uint32_t ip;
   bool have_ip;
   int fails;                                        // status requests failed in a row
 } g_loop;
@@ -415,7 +414,7 @@ static void loop_machine_addr(void) {
   snprintf(g_mhost, sizeof g_mhost, "%s", nh);
   g_have_ip = false;
   xSemaphoreGive(g_net_mtx);
-  g_last_ip = IPAddress();
+  g_last_ip = 0;
   g_loop.have_ip = false;
   g_loop.fails = 0;
   Log.printf("net: machine address set to \"%s\" (saved)\n", nh);
@@ -426,7 +425,7 @@ static void loop_machine_addr(void) {
 static bool loop_wifi_down(void) {
   int why;
   if (!wifi_down_why(&why)) return false;
-  data_set_why(why, IPAddress());
+  data_set_why(why, 0);
   data_publish(NULL, BD_LINK_CONNECTING);
   g_loop.have_ip = false;
   delay(500);
@@ -441,10 +440,12 @@ static bool loop_find_machine(void) {
     mdns_up = mdns_init() == ESP_OK;
     if (mdns_up && mdns_hostname_set(board_hostname()) != ESP_OK) Log.println("net: mDNS name not set");
   }
-  IPAddress ip;
+  uint32_t ip = 0;
+  char is[16];
   bool found = resolve(&ip);
-  if (!found && (uint32_t)g_last_ip != 0) {
-    Log.printf("net: mDNS no answer, keeping %s\n", g_last_ip.toString().c_str());
+  if (!found && g_last_ip) {
+    ip_str(g_last_ip, is, sizeof is);
+    Log.printf("net: mDNS no answer, keeping %s\n", is);
     ip = g_last_ip;
     found = true;
   }
@@ -454,7 +455,7 @@ static bool loop_find_machine(void) {
       t_log = stamp_nz(millis());
       Log.printf("net: \"%s\" not found (mDNS), retrying\n", g_mhost);
     }
-    data_set_why(BD_WHY_NAME_UNKNOWN, IPAddress());
+    data_set_why(BD_WHY_NAME_UNKNOWN, 0);
     data_publish(NULL, BD_LINK_NO_MACHINE);
     delay(1500);
     return false;
@@ -462,7 +463,8 @@ static bool loop_find_machine(void) {
   g_loop.ip = ip;
   g_loop.have_ip = true;
   g_last_ip = ip;
-  Log.printf("machine at %s\n", ip.toString().c_str());
+  ip_str(ip, is, sizeof is);
+  Log.printf("machine at %s\n", is);
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_ip = ip;
   g_have_ip = true;
@@ -475,7 +477,7 @@ static bool loop_find_machine(void) {
 // true = waiting
 static bool loop_scan_wait(void) {
   static uint32_t scan_wait = 0;                    // at most 6 s: a scan that never ends must not stop the polling
-  if (WiFi.scanComplete() == WIFI_SCAN_RUNNING && (!scan_wait || millis() - scan_wait < 6000)) {
+  if (wifi_scan_running() && (!scan_wait || millis() - scan_wait < 6000)) {
     if (!scan_wait) scan_wait = stamp_nz(millis());
     delay(100);
     return true;
@@ -487,13 +489,13 @@ static bool loop_scan_wait(void) {
 // the status poll (~1 s) and what follows it: a pick, the previous shot, a history tap, the profiles
 static void loop_poll(void) {
   LiveData *d = &g_loop.d;
-  const IPAddress ip = g_loop.ip;
+  const uint32_t ip = g_loop.ip;
   // a shot-history tap first (it woke the task): judged on the last status (< ~1 s old, it must have succeeded),
   // so the shot is not delayed by this status request; the call after the status below covers the other case
   if (g_loop.fails == 0 && d->mode[0]) hist_step(ip, d);
   if (fetch(ip, "/api/system/status", g_loop.buf, sizeof g_loop.buf) && strchr(g_loop.buf, '{')) {
     parse_status(g_loop.buf, d);
-    data_set_why(BD_WHY_NONE, IPAddress());
+    data_set_why(BD_WHY_NONE, 0);
     data_publish(d, BD_LINK_ONLINE);
     g_loop.fails = 0;
     select_step(ip, g_loop.buf, sizeof g_loop.buf, d);
@@ -509,7 +511,9 @@ static void loop_poll(void) {
     ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(900));   // ~1 s poll; a profile tap wakes it at once
   } else {
     ++g_loop.fails;
-    Log.printf("net: status request %d failed (rssi %d)\n", g_loop.fails, WiFi.RSSI());
+    int8_t rssi = 0;
+    net_wifi_up(&rssi);
+    Log.printf("net: status request %d failed (rssi %d)\n", g_loop.fails, rssi);
     if (g_loop.fails >= 3) {
       Log.println("net: machine not answering, looking it up again");
       data_set_why(BD_WHY_NO_REPLY, ip);
@@ -545,8 +549,8 @@ void net_begin(void) {
 void net_addr_info(char *screen, size_t scap, char *machine, size_t mcap) {
   if (g_net_mtx) wifi_screen_ip(screen, scap);
   else snprintf(screen, scap, "%s", "");
-  IPAddress ip;
-  if (net_machine_ip(&ip)) { snprintf(machine, mcap, "%s", ip.toString().c_str()); return; }
+  uint32_t ip;
+  if (net_machine_ip(&ip)) { ip_str(ip, machine, mcap); return; }
   NetLock l;   // the network task rewrites the name when the address is changed
   snprintf(machine, mcap, "%s", g_mhost);
 }
@@ -561,7 +565,7 @@ void net_select_profile(int id) {
 }
 
 // ---- WebSocket hand-over (net_ws.h), called from the ws task ----
-bool net_machine_ip(IPAddress *ip) {
+bool net_machine_ip(uint32_t *ip) {
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const bool ok = g_have_ip;
   if (ok) *ip = g_ip;

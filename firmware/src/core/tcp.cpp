@@ -160,3 +160,18 @@ int TcpListener::accept(uint32_t ms) {
   if (select(fd_ + 1, &rd, NULL, NULL, &tv) <= 0) return -1;
   return ::accept(fd_, NULL, NULL);
 }
+
+bool ip_parse(const char *s, uint32_t *addr) {
+  struct in_addr a;
+  if (!s || inet_pton(AF_INET, s, &a) != 1) return false;
+  *addr = a.s_addr;
+  return true;
+}
+void ip_str(uint32_t addr, char *out, size_t cap) {
+  if (!cap) return;
+  out[0] = 0;
+  if (!addr) return;
+  struct in_addr a;
+  a.s_addr = addr;
+  inet_ntop(AF_INET, &a, out, cap);
+}
