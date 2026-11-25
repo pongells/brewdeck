@@ -1,14 +1,17 @@
 // One-off tool for the Guition ESP32-P4 board (env p4-c6-update): updates the board's ESP32-C6, the Wi-Fi chip the P4
-// talks to over SDIO (ESP-Hosted), to the ESP-Hosted version this Arduino core's host side expects. Boards ship with
-// older C6 firmware (seen: 2.3.2 against 2.12.13); with it the first Wi-Fi join dropped at every boot.
+// talks to over SDIO (ESP-Hosted), to the ESP-Hosted version Brewdeck's firmware runs (esp_hosted in
+// src/idf_component.yml), not the older one this Arduino tool's own host library expects. Boards ship with older C6
+// firmware (seen: 2.3.2); with it the first Wi-Fi join dropped at every boot. A C6 behind the host also logs "Version
+// mismatch ... Upgrade co-proc to avoid RPC timeouts" at every boot.
 //   ./build.sh p4-c6-update --flash, then read the log (the screen stays dark), then flash Brewdeck again:
 //   ./build.sh ui-p4 --flash
 // Wi-Fi: the network Brewdeck saved on the screen (NVS "wifi", read only), else the one in wifi_config.h.
 //
-// The image comes from Espressif (the URL the core names). Its size and SHA-256 are pinned below: the hash is computed
-// while the image is written to the C6, and the C6 is told to boot it only when both match. On a mismatch, a failed
-// download or a write error, the new image is never activated and the C6 keeps its current firmware. A newer core
-// expects another version: add its image's size and hash to IMAGES (sha256 of the downloaded .bin) first.
+// The image comes from Espressif (the folder the Arduino core downloads its C6 images from). Its size and SHA-256 are
+// pinned below: the hash is computed while the image is written to the C6, and the C6 is told to boot it only when
+// both match. On a mismatch, a failed download or a write error, the new image is never activated and the C6 keeps its
+// current firmware. When esp_hosted moves to another version, pin that version's image here (size and sha256 of the
+// downloaded .bin).
 // -DC6UPDATE_DRY_RUN (PLATFORMIO_BUILD_FLAGS): download and check the image even when the C6 is current, write nothing.
 #include <Arduino.h>
 #include <WiFi.h>
@@ -19,10 +22,10 @@
 #include "esp32-hal-hosted.h"
 #include "wifi_config.h"
 
-static const struct { const char *url; int size; const char *sha256; } IMAGES[] = {
-  {"https://espressif.github.io/arduino-esp32/hosted/esp32c6-v2.12.13.bin", 1226976,
-   "f8509949826c197a4fa3c7958943b4e8985cffdfdf4204c2847d8953905121c9"},
-};
+// = esp_hosted in src/idf_component.yml
+static const struct { uint32_t major, minor, patch; const char *url; int size; const char *sha256; } TARGET = {
+  2, 13, 1, "https://espressif.github.io/arduino-esp32/hosted/esp32c6-v2.13.1.bin", 1244160,
+  "2d8a98801680f1feccdc8c20ace05617c425d4f8f5041fd5b17cb8dc802c643f"};
 
 static void versions(const char *when) {
   uint32_t a, b, c, x, y, z;
@@ -124,24 +127,21 @@ void setup() {
   }
   memset(pass, 0, sizeof pass);
   if (WiFi.STA.status() != WL_CONNECTED) { Serial.println("c6update: could not join Wi-Fi, nothing done"); return; }
+  uint32_t x, y, z;
+  hostedGetSlaveVersion(&x, &y, &z);
+  const bool current = x == TARGET.major && y == TARGET.minor && z == TARGET.patch;
 #ifndef C6UPDATE_DRY_RUN
-  if (!hostedHasUpdate()) { versions("no update needed"); return; }
+  if (current) { versions("no update needed, the C6 runs the pinned version"); return; }
 #endif
-  const char *url = hostedGetUpdateURL();
-  if (!url) { Serial.println("c6update: no image address for this C6. Nothing written."); return; }
-  for (const auto &img : IMAGES) {
-    if (strcmp(url, img.url) != 0) continue;
-    Serial.printf("c6update: updating from %s\n", url);
-    const bool ok = update_c6(img.url, img.size, img.sha256);
+  Serial.printf("c6update: C6 %u.%u.%u -> %u.%u.%u, from %s\n", (unsigned)x, (unsigned)y, (unsigned)z,
+                (unsigned)TARGET.major, (unsigned)TARGET.minor, (unsigned)TARGET.patch, TARGET.url);
+  const bool ok = update_c6(TARGET.url, TARGET.size, TARGET.sha256);
 #ifdef C6UPDATE_DRY_RUN
-    Serial.println("c6update: dry run finished");
-    return;
+  Serial.println("c6update: dry run finished");
+  return;
 #endif
-    Serial.printf("c6update: update %s\n", ok ? "done, restarting to check" : "FAILED (the C6 keeps its old firmware)");
-    if (ok) { delay(1000); ESP.restart(); }
-    return;
-  }
-  Serial.printf("c6update: no pinned hash for %s: add its size and SHA-256 to IMAGES first. Nothing written.\n", url);
+  Serial.printf("c6update: update %s\n", ok ? "done, restarting to check" : "FAILED (the C6 keeps its old firmware)");
+  if (ok) { delay(1000); ESP.restart(); }
 }
 
 void loop() { delay(1000); }
