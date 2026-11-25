@@ -18,7 +18,7 @@ void board_init() {
   pinMode(PIN_BL, OUTPUT);
   digitalWrite(PIN_BL, LOW);   // keep dark until the first frame is drawn
   if (!gfx->begin()) {
-    Serial.println("gfx->begin() failed");
+    printf("gfx->begin() failed\n");
   }
   gfx->fillScreen(0x0000);
   digitalWrite(PIN_BL, HIGH);

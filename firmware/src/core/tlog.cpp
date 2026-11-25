@@ -1,8 +1,13 @@
 #include "tlog.h"
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
 #include <sys/time.h>
 #include <time.h>
+#include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
+#include "board_core.h"
 
 TsLog Log;
 
@@ -14,7 +19,7 @@ static void stamp(char *o, size_t n) {
     localtime_r(&tv.tv_sec, &tm);
     snprintf(o, n, "%02d:%02d:%02d.%03ld ", tm.tm_hour, tm.tm_min, tm.tm_sec, (long)(tv.tv_usec / 1000));
   } else {
-    const uint32_t ms = millis();
+    const uint32_t ms = (uint32_t)(esp_timer_get_time() / 1000);
     snprintf(o, n, "up %lu.%03lu ", (unsigned long)(ms / 1000), (unsigned long)(ms % 1000));
   }
 }
@@ -25,7 +30,7 @@ static void ring_put(const uint8_t *b, size_t n);
 static inline void ring_put(const uint8_t *, size_t) {}
 #endif
 
-size_t TsLog::write(const uint8_t *b, size_t n) {
+void TsLog::write(const char *b, size_t n) {
   static SemaphoreHandle_t mtx = xSemaphoreCreateMutex();   // UI loop, net task and WS task all log
   if (mtx) xSemaphoreTake(mtx, portMAX_DELAY);
   size_t i = 0;
@@ -33,19 +38,35 @@ size_t TsLog::write(const uint8_t *b, size_t n) {
     if (bol_) {
       char p[24];
       stamp(p, sizeof p);
-      Serial.write((const uint8_t *)p, strlen(p));
+      board_log_write(p, strlen(p));
       ring_put((const uint8_t *)p, strlen(p));
       bol_ = false;
     }
     size_t j = i;
     while (j < n && b[j] != '\n') j++;
     if (j < n) { j++; bol_ = true; }               // up to and including the '\n'
-    Serial.write(b + i, j - i);
-    ring_put(b + i, j - i);
+    board_log_write(b + i, j - i);
+    ring_put((const uint8_t *)b + i, j - i);
     i = j;
   }
   if (mtx) xSemaphoreGive(mtx);
-  return n;
+}
+void TsLog::printf(const char *fmt, ...) {
+  char buf[256];                                    // longer lines are cut (with "...")
+  va_list a;
+  va_start(a, fmt);
+  int n = vsnprintf(buf, sizeof buf, fmt, a);
+  va_end(a);
+  if (n < 0) return;
+  if ((size_t)n >= sizeof buf) {
+    n = sizeof buf - 1;
+    memcpy(buf + n - 4, "...\n", 4);
+  }
+  write(buf, (size_t)n);
+}
+void TsLog::println(const char *s) {
+  write(s, strlen(s));
+  write("\n", 1);
 }
 
 #ifdef BREWDECK_DEBUG_HTTP

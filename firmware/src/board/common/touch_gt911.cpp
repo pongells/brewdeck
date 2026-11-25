@@ -77,12 +77,12 @@ bool touch_begin() {
 
   uint8_t pid[4] = {0, 0, 0, 0};
   if (reg_read(0x8140, pid, 4)) {
-    Serial.printf("GT911 at 0x%02X, product id %c%c%c%c\n", g_addr, pid[0], pid[1], pid[2], pid[3]);
+    printf("GT911 at 0x%02X, product id %c%c%c%c\n", g_addr, pid[0], pid[1], pid[2], pid[3]);
   }
   uint8_t cfg[4];
   if (reg_read(0x8048, cfg, 4)) {
     int xm = cfg[0] | (cfg[1] << 8), ym = cfg[2] | (cfg[3] << 8);
-    Serial.printf("GT911 config range %d x %d\n", xm, ym);
+    printf("GT911 config range %d x %d\n", xm, ym);
     if (xm >= 100 && xm <= 4096 && ym >= 100 && ym <= 4096) { g_xmax = xm; g_ymax = ym; }
   }
   reg_write(0x814E, 0);

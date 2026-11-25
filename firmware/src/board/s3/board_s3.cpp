@@ -2,12 +2,20 @@
 // panel.cpp. The panel is driven by Arduino_GFX with its frame buffer in PSRAM and bounce buffers (see panel.cpp);
 // a flushed rectangle is copied into that frame buffer by the CPU. Touch, memory: src/board/common.
 #include <Arduino.h>
+#include <driver/uart.h>
+#include <driver/uart_vfs.h>
 #include "board.h"
 #include "soc/spi_mem_reg.h"
 #include "../../core/brewdeck_core.h"
 #include "board_core.h"
 
-void board_serial_begin(void) { Serial.begin(115200); }   // UART0 through the board's USB-serial chip
+// The log: UART0 through the board's USB-serial chip (115200 baud, set up by the ESP-IDF console). ESP-IDF's driver
+// with a 4 KB send buffer, so a line is queued instead of waited for; ESP-IDF's own lines go through it too (no lines
+// mixed into each other).
+void board_serial_begin(void) {
+  if (uart_driver_install(UART_NUM_0, 256, 4096, 0, NULL, 0) == ESP_OK) uart_vfs_dev_use_driver(UART_NUM_0);
+}
+void board_log_write(const char *b, size_t n) { uart_write_bytes(UART_NUM_0, b, n); }
 const char *board_hostname(void) { return "brewdeck"; }
 
 static const bd_display_info g_info = {SCREEN_W, SCREEN_H, BD_PIXEL_RGB565, 40};   // one 40-line strip: 64 KB internal RAM

@@ -21,7 +21,7 @@ void board_backlight(int pct) {
   }
   if (!g_bl_pwm) {
     if (!ledcAttach(PIN_BL, g_bl_hz, 10)) {
-      Serial.printf("backlight: PWM at %u Hz failed, staying fully on\n", (unsigned)g_bl_hz);
+      printf("backlight: PWM at %u Hz failed, staying fully on\n", (unsigned)g_bl_hz);
       pinMode(PIN_BL, OUTPUT);
       digitalWrite(PIN_BL, HIGH);
       return;
@@ -29,5 +29,5 @@ void board_backlight(int pct) {
     g_bl_pwm = true;
   }
   ledcWrite(PIN_BL, (uint32_t)(pct * 1023 / 100));
-  Serial.printf("backlight: %d %% at %u Hz\n", pct, (unsigned)g_bl_hz);
+  printf("backlight: %d %% at %u Hz\n", pct, (unsigned)g_bl_hz);
 }

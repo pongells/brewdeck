@@ -1,13 +1,15 @@
 #pragma once
-// Serial log with a time in front of every line: "14:02:43.512 " once NTP has set the clock (CET/CEST,
-// as the idle clock), "up 63.204 " (seconds since boot) before that. Use Log.printf / Log.println instead of Serial.
-// Lines of the Arduino core itself ("[2471610][E][...]") keep their own milliseconds-since-boot stamp.
-#include <Arduino.h>
+// The log, to the board's serial port (board_log_write) with a time in front of every line: "14:02:43.512 " once NTP
+// has set the clock (CET/CEST, as the idle clock), "up 63.204 " (seconds since boot) before that. Use Log.printf /
+// Log.println. Lines of ESP-IDF and the Arduino core keep their own stamps.
+#include <stddef.h>
+#include <stdint.h>
 
-class TsLog : public Print {
+class TsLog {
  public:
-  size_t write(uint8_t c) override { return write(&c, 1); }
-  size_t write(const uint8_t *b, size_t n) override;
+  void printf(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+  void println(const char *s);
+  void write(const char *b, size_t n);   // whole or partial lines
  private:
   bool bol_ = true;     // at the beginning of a line
 };

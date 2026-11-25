@@ -12,7 +12,7 @@ Arduino_DSI_Display *gfx = new Arduino_DSI_Display(PANEL_W, PANEL_H, bus, PANEL_
 void board_init() {
   pinMode(PIN_BL, OUTPUT);
   digitalWrite(PIN_BL, LOW);   // keep dark until the first frame is drawn
-  if (!gfx->begin()) Serial.println("gfx->begin() failed");
+  if (!gfx->begin()) printf("gfx->begin() failed\n");
   gfx->setRotation(PANEL_ROT);
   gfx->fillScreen(0x0000);
   delay(50);                   // ~3 frames of the black fill first: lit at once, the panel showed its blue for a frame

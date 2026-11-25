@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 void board_serial_begin(void);   // the log's serial port (before anything logs)
+// the log's bytes to that port; never waits for a computer that does not read it (bytes are dropped instead)
+void board_log_write(const char *b, size_t n);
 const char *board_hostname(void);   // the screen's network / mDNS name (each board has its own)
 bool board_begin(void);   // panel + touch; false if the touch controller was not found
 void board_fake_touch(int x, int y, int ms);   // debug server: a remote press at (x, y) for ms

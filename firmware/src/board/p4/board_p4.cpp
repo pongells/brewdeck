@@ -6,6 +6,8 @@
 #include <Arduino.h>
 #include <esp_heap_caps.h>
 #include <driver/ppa.h>
+#include <driver/usb_serial_jtag.h>
+#include <driver/usb_serial_jtag_vfs.h>
 #include <freertos/semphr.h>
 #include <esp_cache.h>
 #include <esp_private/esp_cache_private.h>   // esp_cache_get_alignment (what the PPA driver checks too)
@@ -16,15 +18,14 @@
 
 const char *board_hostname(void) { return "brewdeck-p4"; }   // brewdeck-p4.local: the S3 screen keeps "brewdeck"
 
-// Serial is the chip's USB port. When the computer on the other end does not read it, every write waits up to 20 x
-// the TX timeout (2 s at the default 100 ms), and the UI, network and WebSocket tasks all stop on the log (seen:
-// 30 s freezes). Timeout 0: lines nobody reads are dropped instead; a larger buffer for bursts.
-
+// The log goes to the chip's USB port (USB-Serial-JTAG). When the computer on the other end does not read it, a
+// waiting write stops every task that logs (seen with Arduino's driver: 30 s freezes), so the log never waits: what
+// does not fit in the 4 KB buffer is dropped. ESP-IDF's console (its own lines) uses the same driver.
 void board_serial_begin(void) {
-  Serial.setTxBufferSize(4096);
-  Serial.begin(115200);
-  Serial.setTxTimeoutMs(0);
+  usb_serial_jtag_driver_config_t c = {4096, 256};
+  if (usb_serial_jtag_driver_install(&c) == ESP_OK) usb_serial_jtag_vfs_use_driver();
 }
+void board_log_write(const char *b, size_t n) { usb_serial_jtag_write_bytes(b, n, 0); }
 
 // 48-row strips (75 KB internal RAM) and redrawn areas in whole 16-row bands: LVGL then flushes only rectangles that
 // are multiples of 16 rows tall, which the PPA copies safely (see bd_display_flush)
@@ -56,7 +57,7 @@ static void ppa_setup(void) {
     snprintf(why, sizeof why, "rotated by the CPU (frame buffer at %p, not on a %u-byte line for the PPA)", fb,
              (unsigned)align);
     g_disp_mode = why;
-    Serial.printf("board: PPA not used, %s\n", why);
+    printf("board: PPA not used, %s\n", why);
     return;
   }
   ppa_client_config_t cc = {};
@@ -65,14 +66,14 @@ static void ppa_setup(void) {
   if (ppa_register_client(&cc, &g_ppa) != ESP_OK) {
     g_ppa = NULL;
     g_disp_mode = "rotated by the CPU (PPA not available)";
-    Serial.println("board: PPA not available; rotating with the CPU");
+    printf("board: PPA not available; rotating with the CPU\n");
   } else if (!ppa_worker_start()) {
     ppa_unregister_client(g_ppa);
     g_ppa = NULL;
     g_disp_mode = "rotated by the CPU (no memory for the PPA task)";
   } else {
     g_disp_mode = "rotated by the PPA";
-    Serial.println("board: rotating with the PPA");
+    printf("board: rotating with the PPA\n");
   }
 }
 
