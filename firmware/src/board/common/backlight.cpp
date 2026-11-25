@@ -1,6 +1,9 @@
 // Backlight dimming, both boards: PWM on the board's PIN_BL at 1 kHz (20 kHz gives a black panel at 90 % on the S3
-// board). 100 % = the pin plain HIGH. Debug: GET /bl?pct=50&hz=1000 on the screen (board_backlight_hz).
+// board). Level 100 = the pin plain HIGH. Debug: GET /bl?pct=50&hz=1000 on the screen (board_backlight_hz).
+// Levels 20-100 are spaced evenly for the eye (geometric duty steps) from the board's dimmest useful duty
+// (BL_MIN_PERMILLE: panels differ a lot) to fully on; below 20 = level 20; 0 = off.
 #include <driver/ledc.h>
+#include <math.h>
 #include "board_pins.h"
 #include "board.h"
 #include "board_core.h"
@@ -35,6 +38,12 @@ void board_backlight_hz(uint32_t hz) {
   g_bl_hz = hz;
   if (g_bl_pwm) pwm_stop();
 }
+static uint32_t level_duty(int level) {            // 1..99 -> duty of 1023
+  const float lo = BL_MIN_PERMILLE / 1000.0f;
+  const float t = level <= 20 ? 0.0f : (level - 20) / 80.0f;
+  const uint32_t d = (uint32_t)lroundf(1023.0f * lo * powf(1.0f / lo, t));
+  return d < 1 ? 1 : d > 1023 ? 1023 : d;
+}
 void board_backlight(int pct) {
   if (pct < 0) pct = 0;
   if (pct >= 100) {
@@ -50,7 +59,8 @@ void board_backlight(int pct) {
     }
     g_bl_pwm = true;
   }
-  ledc_set_duty(BL_MODE, BL_CH, (uint32_t)(pct * 1023 / 100));
+  const uint32_t duty = pct ? level_duty(pct) : 0;
+  ledc_set_duty(BL_MODE, BL_CH, duty);
   ledc_update_duty(BL_MODE, BL_CH);
-  printf("backlight: %d %% at %u Hz\n", pct, (unsigned)g_bl_hz);
+  printf("backlight: level %d = duty %u / 1023 at %u Hz\n", pct, (unsigned)duty, (unsigned)g_bl_hz);
 }

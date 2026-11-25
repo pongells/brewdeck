@@ -222,7 +222,7 @@ void bd_wifi_join(const char *ssid, const char *pass);            // answer: BD_
 void bd_wifi_forget(void);
 void bd_wifi_retry(void);
 void bd_set_machine_address(const char *host);                    // name (mDNS, ".local" optional) or IP; saved, used at once
-void bd_set_backlight(int pct);                                   // 0-100 (the board may clamp; 0 = off)
+void bd_set_backlight(int pct);   // 0 = off, 20-100 = the panel's dimmest useful .. fully on (the board maps it)
 // key-value storage for the UI's own settings, in the UI's own namespace (flash, survives updates of the UI)
 int32_t bd_store_get_int(const char *key, int32_t def);
 void    bd_store_set_int(const char *key, int32_t v);

@@ -28,4 +28,6 @@
 
 extern Arduino_RGB_Display *gfx;
 void board_init();
-void board_backlight(int pct);          // 0-100 %; PWM on PIN_BL (100 = fully on, as after board_init)
+void board_backlight(int level);        // 0 = off, 20-100 = dimmest useful .. fully on (backlight.cpp)
+// the PWM duty at level 20, in 1/1000: 20 % is already very dim on this panel (seen on the panel)
+#define BL_MIN_PERMILLE 200

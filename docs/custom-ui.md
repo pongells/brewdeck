@@ -116,7 +116,7 @@ Live values are meaningful only while `link == BD_LINK_ONLINE`.
 - **Without a graphics library:** draw RGB565 pixels into your own buffer and hand finished rectangles to
   `bd_display_flush(x1, y1, x2, y2, px)`; read touches with `bd_touch_read(&x, &y)`. `bd_display()` gives the size
   (800 x 480, landscape) and how many rows of a strip fit in fast memory.
-- **Brightness:** `bd_set_backlight(0..100)`. Dimming and turning the screen off when idle are up to your UI;
+- **Brightness:** `bd_set_backlight(level)`: 0 = off, 20-100 = the panel's dimmest useful level up to fully on (the board maps levels onto its panel in steps that look even; below 20 = 20). Dimming and turning the screen off when idle are up to your UI;
   `bd_ui_wake` tells you when the core wants it on.
 
 ## Memory, settings, logs
