@@ -2,7 +2,7 @@
 // menu, scans, "Forget", roaming between the access points of one network, rejoining after a drop, and the link status
 // the UI shows. All of it runs on the network task (net.cpp calls wifi_step / wifi_info_step every pass); on the ESP32-P4
 // every Wi-Fi query is a request to its ESP32-C6 and can block, so the UI task never asks Wi-Fi itself.
-#include <Arduino.h>
+#include "systime.h"
 #include <esp_wifi.h>
 #include <esp_netif.h>
 #include <esp_event.h>
@@ -79,7 +79,7 @@ static void on_event(void *, esp_event_base_t base, int32_t id, void *data) {
     const uint8_t r = ((wifi_event_sta_disconnected_t *)data)->reason;
     g_up = false;
     g_disc_reason = r;
-    g_disc_ms = stamp_nz(millis());
+    g_disc_ms = stamp_nz(clock_ms());
     g_disc_new = true;
     if (r != WIFI_REASON_ASSOC_LEAVE && (g_first_try || reconnectable(r))) { g_first_try = false; g_reconnect = true; }
     net_wake();
@@ -267,7 +267,7 @@ static void log_ap(const char *what) {
 // leave the current AP and join again: any AP of the network (bssid NULL), or that one on its channel
 static void rejoin(const uint8_t *bssid, int ch) {
   sta_leave();
-  delay(100);
+  wait_ms(100);
   sta_join(g_ssid, g_pass, ch, bssid);
 }
 
@@ -366,7 +366,7 @@ static void roam_scan_done(void) {
     scan_clear();
     rejoin(bssid, ch);
     g_pinned = true;
-    g_down_ms = stamp_nz(millis());
+    g_down_ms = stamp_nz(clock_ms());
   } else {
     Log.printf("wifi: staying (best other AP %d dBm, this one %d)\n", best_rssi, cur_rssi);
     scan_clear();
@@ -375,7 +375,7 @@ static void roam_scan_done(void) {
 
 // called every pass of the net task; idle = nothing running on the machine and no review / lookup / user scan
 static void roam_step(bool idle) {
-  const uint32_t now = millis();
+  const uint32_t now = clock_ms();
   if (!sta_up()) { roam_down(now); return; }
   roam_signal(now);
   if (!g_roam_scanning) roam_scan_start(now, idle);
@@ -398,19 +398,19 @@ static bool wifi_join_step(void) {
   join_publish(BD_JOIN_BUSY);
   Log.printf("wifi: joining \"%s\" from the menu\n", ssid);
   sta_leave();
-  delay(200);
+  wait_ms(200);
   wifi_info_step(true);                              // the UI shows the old network as gone at once
   g_disc_reason = 0;
   sta_join(ssid, pass);
-  const uint32_t t0 = millis();
+  const uint32_t t0 = clock_ms();
   bool ok = false;
-  while (millis() - t0 < 20000) {
+  while (clock_ms() - t0 < 20000) {
     drop_step();
     if (sta_up()) { ok = true; break; }
     const uint8_t r = g_disc_reason;               // 15 4-way handshake timeout, 202 auth fail, 204 handshake timeout
-    if (millis() - t0 > 4000 && (r == 15 || r == 202 || r == 204)) break;
+    if (clock_ms() - t0 > 4000 && (r == 15 || r == 202 || r == 204)) break;
     wifi_info_step();                                // this loop holds the network task for up to 20 s
-    delay(200);
+    wait_ms(200);
   }
   g_down_ms = 0;                                     // the 15 s rejoin timer starts again from here
   if (ok) {
@@ -427,7 +427,7 @@ static bool wifi_join_step(void) {
   } else {
     Log.printf("wifi: could not join \"%s\" (reason %u), back to \"%s\"\n", ssid, (unsigned)g_disc_reason, g_ssid);
     sta_leave();
-    delay(200);
+    wait_ms(200);
     if (g_ssid[0]) sta_join(g_ssid, g_pass);
   }
   memset(pass, 0, sizeof pass);
@@ -466,7 +466,7 @@ bool wifi_step(bool idle) {
   if (wreq && g_ssid[0] && !sta_up()) {
     Log.printf("wifi: trying \"%s\" again (from the screen)\n", g_ssid);
     sta_leave();
-    delay(200);
+    wait_ms(200);
     g_pinned = false;
     sta_join(g_ssid, g_pass);
     g_down_ms = 0;
@@ -476,7 +476,7 @@ bool wifi_step(bool idle) {
   // a later drop (or a roaming move) is not a reason to switch networks
   static bool fell_back = false;
   if (g_saved_net && !g_no_builtin && !fell_back && !g_ever_joined && compiled_net() && !sta_up() &&
-      millis() - g_start_ms > 30000) {
+      clock_ms() - g_start_ms > 30000) {
     fell_back = true;
     Log.printf("wifi: saved network not joined, trying the built-in \"%s\"\n", WIFI_SSID);
     xSemaphoreTake(g_net_mtx, portMAX_DELAY);
@@ -490,7 +490,7 @@ bool wifi_step(bool idle) {
 }
 
 void wifi_start(void) {
-  g_start_ms = millis();
+  g_start_ms = clock_ms();
   if (g_ssid[0]) sta_join(g_ssid, g_pass);
   if (g_ssid[0]) Log.printf("wifi: joining \"%s\" (%s)\n", g_ssid, g_saved_net ? "saved on the screen" : "built in");
   else Log.println("wifi: no network set up: choose one on the screen");
@@ -605,9 +605,9 @@ bool net_get_wifi_join(int *state) {
 static struct { bool up; char ssid[33]; int8_t rssi; int channel; char ap[18]; char ip[16]; } g_winfo;
 void wifi_info_step(bool now) {   // now: read at once (a join started or ended), else at most once a second
   static uint32_t last = 0;
-  if (!now && last && millis() - last < 1000) return;
-  last = stamp_nz(millis());
-  const uint32_t t0 = millis();
+  if (!now && last && clock_ms() - last < 1000) return;
+  last = stamp_nz(clock_ms());
+  const uint32_t t0 = clock_ms();
   wifi_ap_record_t a;
   bool up = ap_now(&a);
   char ssid[33] = "", ap[18] = "", ip[16] = "";
@@ -620,10 +620,10 @@ void wifi_info_step(bool now) {   // now: read at once (a join started or ended)
     mac_str(a.bssid, ap, sizeof ap);
     ip_str(g_ip, ip, sizeof ip);
   }
-  const uint32_t took = millis() - t0;
+  const uint32_t took = clock_ms() - t0;
   static uint32_t last_log = 0;
-  if (took > 200 && (!last_log || millis() - last_log > 30000)) {
-    last_log = stamp_nz(millis());
+  if (took > 200 && (!last_log || clock_ms() - last_log > 30000)) {
+    last_log = stamp_nz(clock_ms());
     Log.printf("wifi: reading the link status took %u ms\n", (unsigned)took);
   }
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);

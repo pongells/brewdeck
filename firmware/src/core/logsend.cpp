@@ -1,5 +1,5 @@
 // Log lines to a log server + the UI-loop watch (see logsend.h). Debug builds only.
-#include <Arduino.h>
+#include "systime.h"
 #ifdef BREWDECK_DEBUG_HTTP
 #include <lwip/netdb.h>
 #include <lwip/sockets.h>
@@ -32,7 +32,7 @@ static volatile uint32_t g_sent = 0, g_send_err = 0, g_resolve_err = 0;   // GET
 uint32_t loop_last_ms(void) { return g_loop_ms; }
 void loop_mark(const char *where) {
   g_loop_at = where;
-  g_loop_ms = millis();
+  g_loop_ms = clock_ms();
 }
 
 static void parse_target(const char *to) {
@@ -69,7 +69,7 @@ void logsend_set_target(const char *to) {
 static void watch_loop(void) {
   static bool stalled = false;
   static uint32_t since = 0;
-  const uint32_t last = g_loop_ms, now = millis();
+  const uint32_t last = g_loop_ms, now = clock_ms();
   if (!last) return;                             // before the first pass
   if (!stalled && now - last >= STALL_MS) {
     stalled = true;
@@ -125,8 +125,8 @@ static void task(void *) {
       continue;
     }
     if (!net_wifi_up(NULL)) continue;            // keep pos: sent when Wi-Fi is back
-    if (!have_ip && (!resolved_at || millis() - resolved_at > 60000)) {
-      resolved_at = millis();
+    if (!have_ip && (!resolved_at || clock_ms() - resolved_at > 60000)) {
+      resolved_at = clock_ms();
       have_ip = resolve(host, port, &to);
       if (!have_ip) { g_resolve_err++; continue; }
     }

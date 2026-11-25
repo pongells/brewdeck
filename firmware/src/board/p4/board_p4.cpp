@@ -3,7 +3,8 @@
 // reads it by DMA). Each flushed rectangle is turned into it by the P4's 2D engine (PPA, rotate by 90 / 270 degrees);
 // if the PPA cannot be used, Arduino_GFX does the same with the CPU (rotation PANEL_ROT + cache write-back).
 // Build with -DP4_PPA=0 to compare the two. Touch, memory: src/board/common.
-#include <Arduino.h>
+#include <Arduino.h>   // first: Arduino_GFX (board.h) needs it, and its B0 / B1 macros must come before termios.h
+#include "../../core/systime.h"
 #include <esp_heap_caps.h>
 #include <driver/ppa.h>
 #include <driver/usb_serial_jtag.h>
@@ -215,13 +216,13 @@ void bd_display_flush(int x1, int y1, int x2, int y2, const uint16_t *px) {
   g_fl_x = x1, g_fl_y = y1, g_fl_w = (int)w, g_fl_h = (int)h;
   g_fl_how = use_ppa ? "PPA" : "CPU";
   g_fl_busy = true;
-  const uint32_t t0 = micros();
+  const uint32_t t0 = clock_us();
   if (!use_ppa || !ppa_copy(x1, y1, w, h, px)) {
     if (g_ppa) g_cpu_flushes++;
     cpu_copy(x1, y1, w, h, px);
   }
   g_fl_busy = false;
-  g_flush_us += micros() - t0;
+  g_flush_us += clock_us() - t0;
   g_flush_px += w * h;
 }
 // Debug (GET /ppatest): rotates random rectangles of the sizes LVGL flushes (up to 800 x draw_lines) with the PPA
@@ -302,19 +303,19 @@ size_t board_ppa_test(char *out, size_t cap) {
     static volatile bool fin;   // static: a late answer after a hang must not land on a stack frame
     fin = false;
     op.user_data = (void *)&fin;
-    const uint32_t t0 = micros();
+    const uint32_t t0 = clock_us();
     if (ppa_do_scale_rotate_mirror(cl, &op) != ESP_OK) {
       err++;
       if (listed++ < 8) PT_SAY("%d %d %lux%lu: refused by the driver\n", x1, y1, (unsigned long)w, (unsigned long)h);
       continue;
     }
-    while (!fin && micros() - t0 < 500000) delayMicroseconds(50);
+    while (!fin && clock_us() - t0 < 500000) wait_us(50);
     if (!fin) {
       hung = true;
       PT_SAY("%d %d %lux%lu: NO ANSWER after 500 ms, test stopped\n", x1, y1, (unsigned long)w, (unsigned long)h);
       break;
     }
-    us += micros() - t0;
+    us += clock_us() - t0;
 
     // the panel rows this rectangle can reach (+-2 for neighbours), read fresh from memory
     int ax, ay, bx, by;

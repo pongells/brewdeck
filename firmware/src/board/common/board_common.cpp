@@ -1,7 +1,7 @@
 // The part of the board layer (brewdeck_core.h) both boards share: start-up, touch (the GT911 driver next to this
 // file, plus the debug server's remote touch), the backlight call and memory. Each board's own folder (src/board/s3,
 // src/board/p4; ui_select.py builds one) has its panel, display functions and board.h (pins, touch orientation).
-#include <Arduino.h>
+#include "../../core/systime.h"
 #include <esp_heap_caps.h>
 #include <esp_system.h>
 #include "board.h"
@@ -26,10 +26,10 @@ static volatile uint32_t g_ft_until = 0;
 void board_fake_touch(int x, int y, int ms) {
   g_ft_x = x;
   g_ft_y = y;
-  g_ft_until = millis() + (uint32_t)(ms < 30 ? 30 : ms);
+  g_ft_until = clock_ms() + (uint32_t)(ms < 30 ? 30 : ms);
 }
 bool bd_touch_read(int *x, int *y) {
-  if (g_ft_until && (int32_t)(g_ft_until - millis()) > 0) { *x = g_ft_x; *y = g_ft_y; return true; }
+  if (g_ft_until && (int32_t)(g_ft_until - clock_ms()) > 0) { *x = g_ft_x; *y = g_ft_y; return true; }
   int16_t tx, ty;
   if (!touch_pressed(&tx, &ty)) return false;
   *x = tx;

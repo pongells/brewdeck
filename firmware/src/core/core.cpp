@@ -1,7 +1,9 @@
 // The Brewdeck core (brewdeck_core.h) on the device. It runs the firmware's setup and loop: Wi-Fi and the machine
 // (net.cpp, ws.cpp: polling, WebSocket, the command rules), settings storage, and the UI through bd_ui_*. The state,
 // events, notice filtering and command answers are in core_state.cpp (shared with the emulator).
-#include <Arduino.h>
+#include "systime.h"
+#include <string.h>
+#include <time.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
 #include <nvs.h>
@@ -46,14 +48,16 @@ static bool g_store_ok = false;
 
 const bd_core_info *bd_core(void) {
   bd_core_info *i = cs_info();
-  i->uptime_s = millis() / 1000;
+  i->uptime_s = clock_ms() / 1000;
   i->free_internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
   i->free_psram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
   return i;
 }
 bool bd_local_time(int *h, int *m, int *wday) {
+  const time_t now = time(NULL);
   struct tm tm;
-  if (!getLocalTime(&tm, 0) || tm.tm_year <= 120) return false;   // NTP not synced yet
+  localtime_r(&now, &tm);
+  if (tm.tm_year <= 120) return false;              // NTP not synced yet
   if (h) *h = tm.tm_hour;
   if (m) *m = tm.tm_min;
   if (wday) *wday = tm.tm_wday;
@@ -219,7 +223,7 @@ void bd_core_setup(void) {
 #ifdef BREWDECK_DEBUG_HTTP
   log_begin();            // memory log (GET /log), the tail kept over a crash
 #endif
-  delay(200);
+  wait_ms(200);
   const esp_reset_reason_t r = esp_reset_reason();
   cs_core_info(__DATE__ " " __TIME__, reset_of(r), BREWDECK_VERSION);
   Log.printf("boot: Brewdeck %s, built %s %s, started (reset reason %d)\n", BREWDECK_VERSION[0] ? BREWDECK_VERSION : "?",
@@ -259,21 +263,21 @@ void bd_core_loop(void) {
   // shot snapshots first, as soon as they are here (~7/s; polling at 150 ms made the chart jerky): the last points of a
   // shot must be in before the state that says it ended
   static uint32_t pf_n = 0, pf_max = 0, pf_sum = 0, pf_shots = 0, pf_t = 0;
-  const uint32_t lp0 = millis();            // a slow pass is logged by section (the UI must keep answering touch)
+  const uint32_t lp0 = clock_ms();            // a slow pass is logged by section (the UI must keep answering touch)
   LOOP_MARK("shot points");
 #if defined(BREWDECK_DEBUG_HTTP) && defined(OTA_TEST_FREEZE)
-  if (millis() > 15000) for (;;) delay(1000);   // test build only: a firmware that stops, to check the rollback (ota.h)
+  if (clock_ms() > 15000) for (;;) wait_ms(1000);   // test build only: a firmware that stops, to check the rollback (ota.h)
 #endif
   WsShot shot;
   while (net_get_shot(&shot)) { cs_shot_point(&shot); pf_shots++; }
   mem_watch("loop: shot points");
   LOOP_MARK("network data");
-  if (millis() - last_net > 150) {
-    last_net = millis();
+  if (clock_ms() - last_net > 150) {
+    last_net = clock_ms();
     LiveData d;
     int link;
     if (net_get(&d, &link)) cs_take_live(&d, link);
-    if (millis() - last_info > 1000) { last_info = millis(); take_network(); }
+    if (clock_ms() - last_info > 1000) { last_info = clock_ms(); take_network(); }
     {
       static bd_wifi_net nets[BD_MAX_NETS];
       int nn, js;
@@ -304,9 +308,9 @@ void bd_core_loop(void) {
     if (changed) cs_hist_loaded(st, g_buf.hs, g_buf.hsh, g_buf.hp, pst);
   }
   mem_watch("loop: stored shots, notices");
-  const uint32_t lp1 = millis();
+  const uint32_t lp1 = clock_ms();
   LOOP_MARK("core tick");
-  cs_tick(millis());
+  cs_tick(clock_ms());
 #ifdef BREWDECK_DEBUG_HTTP
 #ifdef BREWDECK_DEBUG_HTTP
   {
@@ -317,13 +321,13 @@ void bd_core_loop(void) {
   LOOP_MARK("debug job");
   debug_http_service();                   // a UI debug route asked for (bd_debug_route): answered here, on the UI task
 #endif
-  const uint32_t lp2 = millis();
+  const uint32_t lp2 = clock_ms();
   bd_display_stats(NULL, NULL, true);
-  const uint32_t t0 = millis();
+  const uint32_t t0 = clock_ms();
   LOOP_MARK("UI drawing");
   bd_ui_tick(t0);
   LOOP_MARK("after drawing");
-  const uint32_t dt = millis() - t0;
+  const uint32_t dt = clock_ms() - t0;
   mem_watch("loop: UI drawing");
   uint32_t fus, fpx;
   bd_display_stats(&fus, &fpx, false);
@@ -336,15 +340,15 @@ void bd_core_loop(void) {
     const bool on = m->link == BD_LINK_ONLINE;
     frames_add(t0, dt, on && m->brewing ? FR_SHOT : on && (m->steaming || !strcmp(m->mode, "STEAM")) ? FR_STEAM : FR_IDLE);
   }
-  if (millis() - pf_t > 5000) {     // render time while shot data arrives: one line per 5 s of a shot
+  if (clock_ms() - pf_t > 5000) {     // render time while shot data arrives: one line per 5 s of a shot
     if (pf_shots) Log.printf("ui: 5 s: %u shot points, bd_ui_tick avg %u ms max %u ms\n", (unsigned)pf_shots,
                              (unsigned)(pf_n ? pf_sum / pf_n : 0), (unsigned)pf_max);
     pf_n = pf_max = pf_sum = pf_shots = 0;
-    pf_t = millis();
+    pf_t = clock_ms();
   }
-  const uint32_t lp3 = millis();
+  const uint32_t lp3 = clock_ms();
   if (lp3 - lp0 >= 250)
     Log.printf("core: slow loop pass %u ms: network data %u, core + debug %u, UI %u, after %u\n", (unsigned)(lp3 - lp0),
                (unsigned)(lp1 - lp0), (unsigned)(lp2 - lp1), (unsigned)dt, (unsigned)(lp3 - lp2 - dt));
-  delay(5);
+  wait_ms(5);
 }

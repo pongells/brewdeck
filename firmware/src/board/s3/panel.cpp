@@ -1,6 +1,8 @@
 // Sunton ESP32-S3 panel: Arduino_GFX's RGB driver (frame buffer in PSRAM, bounce buffers) and the backlight. Used by
 // board_s3.cpp and the touch test.
 #include "board.h"
+#include "../../core/systime.h"
+#include "board_pins.h"
 
 static Arduino_ESP32RGBPanel *bus = new Arduino_ESP32RGBPanel(
     40 /* DE */, 41 /* VSYNC */, 39 /* HSYNC */, 42 /* PCLK */,
@@ -15,11 +17,10 @@ static Arduino_ESP32RGBPanel *bus = new Arduino_ESP32RGBPanel(
 Arduino_RGB_Display *gfx = new Arduino_RGB_Display(SCREEN_W, SCREEN_H, bus, 0 /* rotation */, true /* auto_flush */);
 
 void board_init() {
-  pinMode(PIN_BL, OUTPUT);
-  digitalWrite(PIN_BL, LOW);   // keep dark until the first frame is drawn
+  pin_output(PIN_BL, 0);   // keep dark until the first frame is drawn
   if (!gfx->begin()) {
     printf("gfx->begin() failed\n");
   }
   gfx->fillScreen(0x0000);
-  digitalWrite(PIN_BL, HIGH);
+  pin_set(PIN_BL, 1);
 }

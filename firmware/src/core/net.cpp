@@ -8,7 +8,7 @@
 // changed. DANGER: DELETE on the same URL deletes the profile, so http() can only emit GET or POST.
 // The screen's own Wi-Fi is wifi.cpp, what is handed to the core loop net_data.cpp (both called from this task).
 #include "stamp.h"
-#include <Arduino.h>
+#include "systime.h"
 #include "tlog.h"
 #include <esp_heap_caps.h>
 #include <mdns.h>
@@ -86,11 +86,11 @@ static bool http(uint32_t ip, bool post, const char *path, char *buf, size_t cap
   c.set_timeout(200);                               // each wait; the whole reply gets 3 s (below)
   if (post) c.printf("POST %s HTTP/1.0\r\nHost: gaggiuino.local\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", path);
   else c.printf("GET %s HTTP/1.0\r\nHost: gaggiuino.local\r\nConnection: close\r\n\r\n", path);
-  uint32_t t0 = millis();
+  uint32_t t0 = clock_ms();
   size_t n = 0, want = 0;                           // want: header + Content-Length, once the header is in
   // stop at Content-Length: the machine answers HTTP/1.1 and keeps the connection open after the body, so waiting for
   // the close always ran into the 3 s limit (every GET /api/shots/<id> took ~3.1 s instead of ~0.2 s)
-  while (millis() - t0 < 3000 && n + 1 < cap && (!want || n < want)) {
+  while (clock_ms() - t0 < 3000 && n + 1 < cap && (!want || n < want)) {
     const size_t r = c.read_some(buf + n, cap - 1 - n);
     if (!r) {
       if (!c.connected()) break;                    // closed by the machine (or failed)
@@ -132,7 +132,7 @@ static void profiles_step(uint32_t ip, char *buf, size_t cap, const LiveData *d)
   static bool stale[BD_MAX_PROFILES];                  // details to read again (saved from this screen)
   static int shape_id = 0;                          // profile id the published shape belongs to (0 = fetch again)
   static uint8_t shape_tries = 0;
-  uint32_t now = millis();
+  uint32_t now = clock_ms();
   bool changed_on_machine = have_list && d->profile[0] && strcmp(d->profile, selected_name(&cur)) != 0;
   const bool forced = g_force_list;
   if (!have_list || forced || now - last_list > 30000 || (changed_on_machine && now - last_list > 5000)) {
@@ -209,7 +209,7 @@ static void prev_step(uint32_t ip, const LiveData *d) {
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   const int tries = g_prev_tries;
   if (tries <= 0) { xSemaphoreGive(g_net_mtx); return; }   // nothing asked for: no copy of the index
-  if (millis() - g_prev_asked_ms > 120000) {
+  if (clock_ms() - g_prev_asked_ms > 120000) {
     g_prev_tries = 0;
     xSemaphoreGive(g_net_mtx);
     Log.println("previous shot: not found within 2 min, dropped");
@@ -275,10 +275,10 @@ static void prev_step(uint32_t ip, const LiveData *d) {
   if (prev < 0) { Log.printf("previous shot: none for this profile in the last %d\n", ix.n); prev_publish(PREV_MISSING); return; }
   char path[32];
   snprintf(path, sizeof path, "/api/shots/%u", (unsigned)ix.r[prev].id);
-  const uint32_t t0 = millis();
+  const uint32_t t0 = clock_ms();
   const bool ok = fetch(ip, path, buf, CAP) && parse_shot(buf, g_prev);
   Log.printf("previous shot %u: %s (%u points, %u ms)\n", (unsigned)ix.r[prev].id, ok ? "loaded" : "failed",
-                ok ? (unsigned)g_prev->n : 0u, (unsigned)(millis() - t0));
+                ok ? (unsigned)g_prev->n : 0u, (unsigned)(clock_ms() - t0));
   prev_publish(ok ? PREV_READY : PREV_FAILED);
 }
 
@@ -311,21 +311,21 @@ static void hist_step(uint32_t ip, const LiveData *d) {
   if (!g_shot_buf || !g_hist || !g_hist_prev || !g_hist_shape || !have_ix) { hist_publish(PREV_FAILED, PREV_NONE); return; }
   char path[32];
   snprintf(path, sizeof path, "/api/shots/%u", (unsigned)id);
-  uint32_t t0 = millis();
+  uint32_t t0 = clock_ms();
   const bool ok = fetch(ip, path, g_shot_buf, SHOT_BUF_CAP) && parse_shot(g_shot_buf, g_hist);
   if (ok && !parse_profile_shape(g_shot_buf, g_hist_shape)) memset(g_hist_shape, 0, sizeof *g_hist_shape);
   Log.printf("history: shot %u %s (%u points, %u ms)\n", (unsigned)id, ok ? "loaded" : "failed",
-                ok ? (unsigned)g_hist->n : 0u, (unsigned)(millis() - t0));
+                ok ? (unsigned)g_hist->n : 0u, (unsigned)(clock_ms() - t0));
   if (!ok) { hist_publish(PREV_FAILED, PREV_NONE); return; }
   int at = -1, prev = -1;
   for (int i = 0; i < ixp->n; i++) if (ixp->r[i].id == id) { at = i; break; }
   if (at >= 0) for (int i = at + 1; i < ixp->n; i++) if (ixp->r[i].name_hash == ixp->r[at].name_hash) { prev = i; break; }
   if (prev < 0) { hist_publish(PREV_READY, PREV_MISSING); return; }
   snprintf(path, sizeof path, "/api/shots/%u", (unsigned)ixp->r[prev].id);
-  t0 = millis();
+  t0 = clock_ms();
   const bool pok = fetch(ip, path, g_shot_buf, SHOT_BUF_CAP) && parse_shot(g_shot_buf, g_hist_prev);
   Log.printf("history: its previous shot %u %s (%u ms)\n", (unsigned)ixp->r[prev].id, pok ? "loaded" : "failed",
-                (unsigned)(millis() - t0));
+                (unsigned)(clock_ms() - t0));
   hist_publish(PREV_READY, pok ? PREV_READY : PREV_FAILED);
 }
 
@@ -355,7 +355,7 @@ static void select_step(uint32_t ip, char *buf, size_t cap, const LiveData *d) {
   g_select_req = 0;
   xSemaphoreGive(g_net_mtx);
   if (id <= 0) return;
-  if (millis() - at > 5000) { Log.printf("select %d dropped (request too old)\n", id); return; }
+  if (clock_ms() - at > 5000) { Log.printf("select %d dropped (request too old)\n", id); return; }
   const bool idle = !d->brew_active && !d->steam_active && !d->hot_water_active && strcmp(d->mode, "HOME") == 0;
   if (!idle) { Log.printf("select %d refused: machine busy (%s)\n", id, d->mode); return; }
   char path[40];
@@ -393,7 +393,7 @@ static struct {
 static bool loop_wifi(void) {
   static bool rest_idle = true;                     // from the last status reply
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
-  const bool idle = rest_idle && g_prev_tries <= 0 && millis() - data_last_shot_ms() > 90000;
+  const bool idle = rest_idle && g_prev_tries <= 0 && clock_ms() - data_last_shot_ms() > 90000;
   xSemaphoreGive(g_net_mtx);
   if (wifi_step(idle)) { g_loop.have_ip = false; g_loop.fails = 0; return true; }
   rest_idle = !g_loop.d.brew_active && !g_loop.d.steam_active && !g_loop.d.hot_water_active;
@@ -428,7 +428,7 @@ static bool loop_wifi_down(void) {
   data_set_why(why, 0);
   data_publish(NULL, BD_LINK_CONNECTING);
   g_loop.have_ip = false;
-  delay(500);
+  wait_ms(500);
   return true;
 }
 
@@ -451,13 +451,13 @@ static bool loop_find_machine(void) {
   }
   if (!found) {
     static uint32_t t_log;
-    if (!t_log || millis() - t_log > 30000) {        // every 30 s, so the log shows the task is still trying
-      t_log = stamp_nz(millis());
+    if (!t_log || clock_ms() - t_log > 30000) {        // every 30 s, so the log shows the task is still trying
+      t_log = stamp_nz(clock_ms());
       Log.printf("net: \"%s\" not found (mDNS), retrying\n", g_mhost);
     }
     data_set_why(BD_WHY_NAME_UNKNOWN, 0);
     data_publish(NULL, BD_LINK_NO_MACHINE);
-    delay(1500);
+    wait_ms(1500);
     return false;
   }
   g_loop.ip = ip;
@@ -477,9 +477,9 @@ static bool loop_find_machine(void) {
 // true = waiting
 static bool loop_scan_wait(void) {
   static uint32_t scan_wait = 0;                    // at most 6 s: a scan that never ends must not stop the polling
-  if (wifi_scan_running() && (!scan_wait || millis() - scan_wait < 6000)) {
-    if (!scan_wait) scan_wait = stamp_nz(millis());
-    delay(100);
+  if (wifi_scan_running() && (!scan_wait || clock_ms() - scan_wait < 6000)) {
+    if (!scan_wait) scan_wait = stamp_nz(clock_ms());
+    wait_ms(100);
     return true;
   }
   scan_wait = 0;
@@ -520,7 +520,7 @@ static void loop_poll(void) {
       data_publish(NULL, BD_LINK_NO_MACHINE);
       g_loop.have_ip = host_is_ip(g_mhost);
     }
-    delay(700);
+    wait_ms(700);
   }
 }
 
@@ -559,7 +559,7 @@ void net_select_profile(int id) {
   if (id <= 0) return;
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_select_req = id;
-  g_select_ms = millis();
+  g_select_ms = clock_ms();
   xSemaphoreGive(g_net_mtx);
   net_wake();
 }
@@ -577,7 +577,7 @@ void net_request_prev(const char *profile, int dur10) {
   g_prev_hash = shot_name_hash(profile, strlen(profile));
   g_prev_dur10 = dur10 < 0 ? 0 : (uint32_t)dur10;
   g_prev_tries = 8;                   // ~8 s for the machine to store the shot
-  g_prev_asked_ms = millis();
+  g_prev_asked_ms = clock_ms();
   g_prev_state = PREV_LOADING;
   g_prev_seq++;
   xSemaphoreGive(g_net_mtx);

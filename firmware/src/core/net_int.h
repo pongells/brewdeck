@@ -2,7 +2,7 @@
 // Internal to the network code: net.cpp (the network task: finding the machine, REST), wifi.cpp (the screen's own
 // Wi-Fi) and net_data.cpp (what the network and WebSocket tasks hand to the core loop). Not for the UI or the rest
 // of the core: they use net.h / net_ws.h.
-#include <Arduino.h>
+#include "systime.h"
 #include "live.h"
 #include "pb.h"
 
@@ -24,7 +24,7 @@ void data_publish_profiles(const ProfileList *l);
 void data_publish_shape(const bd_profile_shape *s);      // the core loop hears of it only when it changed
 bool data_index(WsShotIndex *out);                   // a copy of the shot history index; false = none yet
 uint32_t data_newest_shot(void);                     // newest stored shot id in the index, 0 = none
-uint32_t data_last_shot_ms(void);                    // millis() of the last shot snapshot
+uint32_t data_last_shot_ms(void);                    // clock_ms() of the last shot snapshot
 
 // wifi.cpp: network task only
 void wifi_setup(void);               // net_begin: credentials, Wi-Fi settings, events (before the panel starts)

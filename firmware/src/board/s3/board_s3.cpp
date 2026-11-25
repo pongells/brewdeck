@@ -1,7 +1,7 @@
 // Display part of the board layer (brewdeck_core.h) for the Sunton ESP32-S3 4.3" (800x480 RGB panel): on top of
 // panel.cpp. The panel is driven by Arduino_GFX with its frame buffer in PSRAM and bounce buffers (see panel.cpp);
 // a flushed rectangle is copied into that frame buffer by the CPU. Touch, memory: src/board/common.
-#include <Arduino.h>
+#include "../../core/systime.h"
 #include <driver/uart.h>
 #include <driver/uart_vfs.h>
 #include "board.h"
@@ -34,12 +34,12 @@ void board_flush_info(char *out, size_t cap) {
 }
 void bd_display_flush(int x1, int y1, int x2, int y2, const uint16_t *px) {
   const uint32_t w = (uint32_t)(x2 - x1 + 1), h = (uint32_t)(y2 - y1 + 1);
-  const uint32_t t0 = micros();
+  const uint32_t t0 = clock_us();
   g_fl_x = x1, g_fl_y = y1, g_fl_w = (int)w, g_fl_h = (int)h;
   g_fl_busy = true;
   gfx->draw16bitRGBBitmap(x1, y1, (uint16_t *)px, w, h);
   g_fl_busy = false;
-  g_flush_us += micros() - t0;
+  g_flush_us += clock_us() - t0;
   g_flush_px += w * h;
 }
 void bd_display_stats(uint32_t *us, uint32_t *px, bool reset) {

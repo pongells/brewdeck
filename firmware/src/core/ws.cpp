@@ -1,6 +1,6 @@
 // See ws.h. Minimal RFC 6455 client: handshake, unmasked server frames in; masked pong / close and the commands (ws.h)
 // out. Decoded values go to net_data.cpp (net_ws_*), which overlays them on the REST data while they are fresh.
-#include <Arduino.h>
+#include "systime.h"
 #include "tcp.h"
 #include <esp_heap_caps.h>
 #include <esp_random.h>
@@ -72,16 +72,16 @@ static bool handshake(TcpConn &c, uint32_t ip) {
 // is left out, as the web UI does (proto3 would decode it as 0 = BREW_AUTO; presumably the machine's tare handler
 // reads only tarePending, since the web UI's message is identical). Sent only on a tap of Tare, and only while this task's own latest data says: a
 // scale is connected, no shot / steam / hot water running, mode HOME. The request expires after 2 s.
-static volatile uint32_t g_tare_req;                // millis() of the tap, 0 = none
+static volatile uint32_t g_tare_req;                // clock_ms() of the tap, 0 = none
 static bool g_seen_brew = true, g_seen_scale = false;   // from the latest d_sensor_snap / d_sys_state
 static int  g_seen_mode = -1;
 
-void ws_tare(void) { g_tare_req = stamp_nz(millis()); }
+void ws_tare(void) { g_tare_req = stamp_nz(clock_ms()); }
 
 // flush: c_opmode FLUSH / FLUSH_AUTO only from HOME with nothing running, HOME only from a flush mode
-static volatile uint32_t g_flush_req;               // millis() of the tap / long press, 0 = none
+static volatile uint32_t g_flush_req;               // clock_ms() of the tap / long press, 0 = none
 static volatile int g_flush_mode;
-void ws_flush(int mode) { g_flush_mode = mode; g_flush_req = stamp_nz(millis()); }
+void ws_flush(int mode) { g_flush_mode = mode; g_flush_req = stamp_nz(clock_ms()); }
 
 static bool tare_allowed(void) { return g_seen_scale && !g_seen_brew && g_seen_mode == PB_MODE_HOME; }
 
@@ -115,13 +115,13 @@ static uint8_t *g_cmd;                              // command buffer, PSRAM
 static const size_t PROF_CAP = 4096, CMD_CAP = 4096 + 64;
 // requests come from the UI task, the WS task takes them: name and values are handed over under g_req_mux
 static portMUX_TYPE g_req_mux = portMUX_INITIALIZER_UNLOCKED;
-static volatile uint32_t g_w_req;                   // millis() of the request, 0 = none
+static volatile uint32_t g_w_req;                   // clock_ms() of the request, 0 = none
 static volatile int g_w_req10;
 static char g_w_name[48];
 static volatile bool g_w_save = true, g_t_save = true;
 
 void ws_set_weight(const char *profile, int weight10, bool save) {
-  const uint32_t now = stamp_nz(millis());
+  const uint32_t now = stamp_nz(clock_ms());
   portENTER_CRITICAL(&g_req_mux);
   strlcpy(g_w_name, profile, sizeof g_w_name);
   g_w_req10 = weight10;
@@ -145,7 +145,7 @@ static void keep_sent(size_t n) {
 // of -/+ taps), and after a profile picked on this screen once the machine reports it active (boot profile). Only
 // while idle in HOME and only while the active profile is the one changed / picked; a pick that the machine has not
 // taken within 10 s is dropped. Nothing is saved for changes made elsewhere (web UI, built-in screen).
-static uint32_t g_save_due;                         // millis() when to save, 0 = nothing pending (WS task only)
+static uint32_t g_save_due;                         // clock_ms() when to save, 0 = nothing pending (WS task only)
 static uint32_t g_save_set;                         // when it was asked for (expiry)
 static char g_save_name[48];
 static volatile uint32_t g_pick_req;                // profile picked on the screen (from the UI task)
@@ -169,11 +169,11 @@ static void save_note(const char *msg) {            // a banner on the screen (t
 static char g_pick_name[48];
 static void save_later(const char *profile, uint32_t delay_ms) {
   snprintf(g_save_name, sizeof g_save_name, "%s", profile);
-  g_save_set = millis();
+  g_save_set = clock_ms();
   g_save_due = stamp_nz(g_save_set + delay_ms);
 }
 void ws_save_pick(const char *profile) {
-  const uint32_t now = stamp_nz(millis());
+  const uint32_t now = stamp_nz(clock_ms());
   portENTER_CRITICAL(&g_req_mux);
   strlcpy(g_pick_name, profile, sizeof g_pick_name);
   g_pick_req = now;
@@ -187,16 +187,16 @@ static void save_step(TcpConn &c) {
     g_pick_req = 0;
     memcpy(pick, g_pick_name, sizeof pick);
     portEXIT_CRITICAL(&g_req_mux);
-    if (millis() - r < 10000) save_later(pick, 1000);
+    if (clock_ms() - r < 10000) save_later(pick, 1000);
     else Log.println("ws: pick save dropped (request too old)");
   }
-  if (!g_save_due || (int32_t)(millis() - g_save_due) < 0) return;
+  if (!g_save_due || (int32_t)(clock_ms() - g_save_due) < 0) return;
   uint32_t id = 0;
   char name[48] = "";
   float w0;
   const bool known = g_prof_n && pb_profile_info(g_prof, g_prof_n, &id, name, sizeof name, &w0);
   if (!known || strcmp(name, g_save_name) != 0) {   // a pick not taken yet: wait, up to 10 s
-    if (millis() - g_save_set > 10000) {
+    if (clock_ms() - g_save_set > 10000) {
       g_save_due = 0;
       Log.printf("ws: save dropped (active profile \"%s\", wanted \"%s\")\n", name, g_save_name);
     }
@@ -204,16 +204,16 @@ static void save_step(TcpConn &c) {
   }
   if (g_seen_brew || g_seen_mode != PB_MODE_HOME) {            // busy (a shot right after the change): save once idle again,
     // within 15 min (a change not saved is lost at the next machine restart)
-    if (millis() - g_save_set > 15u * 60u * 1000u) { g_save_due = 0; Log.println("ws: save dropped (machine busy)"); }
+    if (clock_ms() - g_save_set > 15u * 60u * 1000u) { g_save_due = 0; Log.println("ws: save dropped (machine busy)"); }
     return;
   }
   {   // fields not changed here must match the stored profile
     float sw, st, aw = w0, at = 0;
     pb_profile_temp(g_prof, g_prof_n, &at);
     if (!net_stored_profile((int)id, &sw, &st)) {   // no answer: try again in 5 s, within the same 15 min
-      if (millis() - g_save_set > 15u * 60u * 1000u) { g_save_due = 0; Log.println("ws: save dropped (stored profile not read)"); return; }
+      if (clock_ms() - g_save_set > 15u * 60u * 1000u) { g_save_due = 0; Log.println("ws: save dropped (stored profile not read)"); return; }
       Log.println("ws: save waits (stored profile not read)");
-      g_save_due = stamp_nz(millis() + 5000);
+      g_save_due = stamp_nz(clock_ms() + 5000);
       return;
     }
     const bool same_profile = !strcmp(g_chg_name, name);
@@ -245,7 +245,7 @@ static void weight_step(TcpConn &c) {
   g_w_req = 0;
   memcpy(want, g_w_name, sizeof want);
   portEXIT_CRITICAL(&g_req_mux);
-  if (millis() - r > 3000) { Log.println("ws: weight dropped (request too old)"); return; }
+  if (clock_ms() - r > 3000) { Log.println("ws: weight dropped (request too old)"); return; }
   uint32_t id;
   char name[48];
   float w0;
@@ -276,7 +276,7 @@ static volatile int g_t_req_deg;
 static char g_t_name[48];
 
 void ws_set_temp(const char *profile, int deg, bool save) {
-  const uint32_t now = stamp_nz(millis());
+  const uint32_t now = stamp_nz(clock_ms());
   portENTER_CRITICAL(&g_req_mux);
   strlcpy(g_t_name, profile, sizeof g_t_name);
   g_t_req_deg = deg;
@@ -295,7 +295,7 @@ static void temp_step(TcpConn &c) {
   g_t_req = 0;
   memcpy(want, g_t_name, sizeof want);
   portEXIT_CRITICAL(&g_req_mux);
-  if (millis() - r > 3000) { Log.println("ws: temperature dropped (request too old)"); return; }
+  if (clock_ms() - r > 3000) { Log.println("ws: temperature dropped (request too old)"); return; }
   uint32_t id;
   char name[48];
   float w0, t0;
@@ -324,7 +324,7 @@ static void flush_step(TcpConn &c) {
   if (!r) return;
   g_flush_req = 0;
   const int m = g_flush_mode;
-  if (millis() - r > 2000) { Log.println("ws: flush dropped (request too old)"); return; }
+  if (clock_ms() - r > 2000) { Log.println("ws: flush dropped (request too old)"); return; }
   const bool from_flush = g_seen_mode == PB_MODE_FLUSH || g_seen_mode == PB_MODE_FLUSH_AUTO;
   const bool ok = m == PB_MODE_HOME ? from_flush : (m == PB_MODE_FLUSH || m == PB_MODE_FLUSH_AUTO) &&
                                                        g_seen_mode == PB_MODE_HOME && !g_seen_brew;
@@ -335,8 +335,8 @@ static void flush_step(TcpConn &c) {
     return;
   }
   static uint32_t t_last;
-  if (t_last && millis() - t_last < 500) return;    // at most two per second
-  t_last = millis();
+  if (t_last && clock_ms() - t_last < 500) return;    // at most two per second
+  t_last = clock_ms();
   send_binary(c, b, n);
   Log.printf("ws: mode %s sent (was %s)\n", ws_mode_name(m), ws_mode_name(g_seen_mode));
 }
@@ -345,14 +345,14 @@ static void tare_step(TcpConn &c) {
   const uint32_t r = g_tare_req;
   if (!r) return;
   g_tare_req = 0;
-  if (millis() - r > 2000) { Log.println("ws: tare dropped (request too old)"); return; }
+  if (clock_ms() - r > 2000) { Log.println("ws: tare dropped (request too old)"); return; }
   if (!tare_allowed()) {
     Log.printf("ws: tare refused (scale %d, brewing/steam %d, mode %d)\n", g_seen_scale, g_seen_brew, g_seen_mode);
     return;
   }
   static uint32_t t_last;
-  if (t_last && millis() - t_last < 1000) return;   // one tare per second at most (the web UI debounces 250 ms)
-  t_last = millis();
+  if (t_last && clock_ms() - t_last < 1000) return;   // one tare per second at most (the web UI debounces 250 ms)
+  t_last = clock_ms();
   send_binary(c, PB_TARE_CMD, PB_TARE_CMD_LEN);
   Log.println("ws: tare sent");
 }
@@ -401,10 +401,10 @@ static void handle_frame(const uint8_t *f, size_t n, uint32_t *cnt) {
       net_ws_notif(&nt);
       static char last[64] = "";
       static uint32_t last_ms = 0;
-      if (strcmp(last, nt.msg) || millis() - last_ms > 60000) {   // each text once a minute (the tank one repeats ~1.4/s)
+      if (strcmp(last, nt.msg) || clock_ms() - last_ms > 60000) {   // each text once a minute (the tank one repeats ~1.4/s)
         Log.printf("ws: notification %d \"%s\"\n", nt.type, nt.msg);
         snprintf(last, sizeof last, "%s", nt.msg);
-        last_ms = millis();
+        last_ms = clock_ms();
       }
     }
   } else if (!strcmp(act, "d_act_prof")) {      // the active profile, kept for the weight / temperature commands and the save check
@@ -452,9 +452,9 @@ static uint32_t g_frames, g_bytes, g_t_conn;   // per connection, logged on disc
 static uint32_t g_sess_ip;                          // address of the running session
 
 static void session(TcpConn &c) {
-  uint32_t cnt[3] = {0, 0, 0}, t_log = millis(), t_rx = millis();
+  uint32_t cnt[3] = {0, 0, 0}, t_log = clock_ms(), t_rx = clock_ms();
   g_frames = g_bytes = 0;
-  g_t_conn = millis();
+  g_t_conn = clock_ms();
   size_t asm_n = 0;                                 // fragmented message being assembled in g_rx
   bool asm_drop = false;
   g_seen_brew = true;                               // nothing known on a new connection: no tare until data arrives
@@ -466,8 +466,8 @@ static void session(TcpConn &c) {
     if (!c.connected()) return;
     {   // machine address changed on the screen (or not known any more): leave the old machine and reconnect, else a
       static uint32_t t_chk;                      // wrong address stays "online" on the old socket
-      if (millis() - t_chk > 500) {
-        t_chk = millis();
+      if (clock_ms() - t_chk > 500) {
+        t_chk = clock_ms();
         uint32_t cur;
         if (!net_machine_ip(&cur) || cur != g_sess_ip) {
           Log.println("ws: machine address changed, reconnecting");
@@ -482,26 +482,26 @@ static void session(TcpConn &c) {
     temp_step(c);
     save_step(c);
     if (c.ready(2) < 2) {
-      delay(10);
-      if (millis() - t_rx > SILENT_MS) {            // dead connection: free the machine's slot and reconnect
+      wait_ms(10);
+      if (clock_ms() - t_rx > SILENT_MS) {            // dead connection: free the machine's slot and reconnect
         Log.println("ws: no data for 5 s, reconnecting");
         send_ctrl(c, 8, (const uint8_t *)"\x03\xe8", 2);   // close, 1000 normal
         return;
       }
-      if (millis() - t_log > 30000) {
+      if (clock_ms() - t_log > 30000) {
         Log.printf("ws: last 30 s: sensor %u, system %u, shot %u; internal RAM free %u, largest %u, lowest %u; rssi %d\n",
                       (unsigned)cnt[0], (unsigned)cnt[1], (unsigned)cnt[2],
                       (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
                       (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
                       (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL), wifi_rssi());
         cnt[0] = cnt[1] = cnt[2] = 0;
-        t_log = millis();
+        t_log = clock_ms();
       }
       continue;
     }
     uint8_t h[2];
     if (!read_n(c, h, 2)) return;
-    t_rx = millis();
+    t_rx = clock_ms();
     g_frames++;
     const bool fin = h[0] & 0x80, masked = h[1] & 0x80;
     const uint8_t op = h[0] & 0x0F;
@@ -549,7 +549,7 @@ static void task(void *) {
   uint32_t backoff = 2000;
   for (;;) {
     uint32_t ip;
-    if (!net_wifi_up(NULL) || !net_machine_ip(&ip)) { delay(1000); continue; }
+    if (!net_wifi_up(NULL) || !net_machine_ip(&ip)) { wait_ms(1000); continue; }
     TcpConn c;
     if (c.connect(ip, 80, 3000) && handshake(c, ip)) {
       c.set_nodelay(true);
@@ -557,7 +557,7 @@ static void task(void *) {
       backoff = 2000;
       g_sess_ip = ip;
       session(c);
-      Log.printf("ws: disconnected after %u ms, %u frames, %u bytes; rssi %d dBm\n", (unsigned)(millis() - g_t_conn),
+      Log.printf("ws: disconnected after %u ms, %u frames, %u bytes; rssi %d dBm\n", (unsigned)(clock_ms() - g_t_conn),
                     (unsigned)g_frames, (unsigned)g_bytes, wifi_rssi());
     } else {
       backoff = backoff < 30000 ? backoff * 2 : 30000;   // machine off, rebooting, or all slots taken
@@ -567,8 +567,8 @@ static void task(void *) {
     // wait out the backoff, but try again at once when the machine starts answering REST (it was off or rebooting):
     // commands need this session, and the screen shows them unavailable until it is up
     const bool was_online = net_rest_online();
-    for (uint32_t t0 = millis(); millis() - t0 < backoff;) {
-      delay(250);
+    for (uint32_t t0 = clock_ms(); clock_ms() - t0 < backoff;) {
+      wait_ms(250);
       if (!was_online && net_rest_online()) { backoff = 2000; break; }
     }
   }

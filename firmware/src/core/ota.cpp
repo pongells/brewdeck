@@ -1,5 +1,5 @@
 // Firmware updates pushed from the computer + keeping or rolling back a new image (see ota.h). Debug builds only.
-#include <Arduino.h>
+#include "systime.h"
 #ifdef BREWDECK_DEBUG_HTTP
 #include <esp_ota_ops.h>
 #include <esp_app_format.h>
@@ -48,9 +48,9 @@ bool ota_poll(bd_event *ev) {
   memcpy(from, g_up.from, sizeof from);
   portEXIT_CRITICAL(&g_umux);
   if (seq == seen) return false;
-  if (st == BD_UPDATE_RECEIVING && seen && millis() - sent_at < 250) return false;   // progress: 4 per second is plenty
+  if (st == BD_UPDATE_RECEIVING && seen && clock_ms() - sent_at < 250) return false;   // progress: 4 per second is plenty
   seen = seq;
-  sent_at = millis();
+  sent_at = clock_ms();
   ev->type = BD_EV_UPDATE;
   ev->u.update.state = st;
   ev->u.update.received = got;
@@ -92,14 +92,14 @@ bool ota_receive(TcpConn &c, size_t len, const char *token, char *msg, size_t ca
   if (machine_busy(msg, cap)) return false;
   if (run_state() == ESP_OTA_IMG_PENDING_VERIFY)   // the way back must lead to a firmware that passed its trial
     return snprintf(msg, cap, "refused: the running firmware is still on trial (%lu s left); try again then\n",
-                    (unsigned long)(millis() < KEEP_AFTER_MS ? (KEEP_AFTER_MS - millis()) / 1000 + 1 : 1)), false;
+                    (unsigned long)(clock_ms() < KEEP_AFTER_MS ? (KEEP_AFTER_MS - clock_ms()) / 1000 + 1 : 1)), false;
   const esp_partition_t *next = esp_ota_get_next_update_partition(NULL);
   if (!next || len < sizeof(esp_image_header_t) || len > next->size)
     return snprintf(msg, cap, "refused: image size %u (slot %u)\n", (unsigned)len, next ? (unsigned)next->size : 0), false;
 
   static uint8_t buf[2048];   // not on the stack: the debug server's task has ~1.8 KB to spare (it overflowed)
   size_t got = 0;
-  uint32_t t0 = millis(), last_log = 0;
+  uint32_t t0 = clock_ms(), last_log = 0;
   bool started = false;
   esp_ota_handle_t oh = 0;
   esp_err_t e = ESP_OK;
@@ -115,9 +115,9 @@ bool ota_receive(TcpConn &c, size_t len, const char *token, char *msg, size_t ca
                         n >= sizeof *h ? (unsigned)h->chip_id : 0, (unsigned)CONFIG_IDF_FIRMWARE_CHIP_ID), false;
       // the image's flash is erased here in one go, in 64 KB blocks where aligned (sector by sector as the data
       // arrives took ~twice as long); with flash encryption on, the chip encrypts what is written
-      const uint32_t e0 = millis();
+      const uint32_t e0 = clock_ms();
       e = esp_ota_begin(next, len, &oh);
-      flash_us += (millis() - e0) * 1000;
+      flash_us += (clock_ms() - e0) * 1000;
       if (e != ESP_OK) return snprintf(msg, cap, "failed to start: %s\n", esp_err_to_name(e)), false;
       char built[sizeof g_up.built], from[sizeof g_up.from];   // read outside the lock: peer_ip() waits on lwIP
       image_built(buf, n, built, sizeof built);
@@ -129,9 +129,9 @@ bool ota_receive(TcpConn &c, size_t len, const char *token, char *msg, size_t ca
       Log.printf("ota: receiving %u bytes into %s\n", (unsigned)len, next->label);
       started = true;
     }
-    const uint32_t w0 = micros();
+    const uint32_t w0 = clock_us();
     e = esp_ota_write(oh, buf, n);
-    flash_us += micros() - w0;
+    flash_us += clock_us() - w0;
     if (e != ESP_OK) {
       snprintf(msg, cap, "write failed at %u: %s\n", (unsigned)got, esp_err_to_name(e));
       esp_ota_abort(oh);
@@ -141,8 +141,8 @@ bool ota_receive(TcpConn &c, size_t len, const char *token, char *msg, size_t ca
     }
     got += n;
     up_set(BD_UPDATE_RECEIVING, got, len);
-    if (millis() - last_log > 5000) {
-      last_log = millis();
+    if (clock_ms() - last_log > 5000) {
+      last_log = clock_ms();
       Log.printf("ota: %u %%\n", (unsigned)(got * 100 / len));
     }
   }
@@ -155,10 +155,10 @@ bool ota_receive(TcpConn &c, size_t len, const char *token, char *msg, size_t ca
     Log.printf("ota: %s", msg);
     return false;
   }
-  const uint32_t c0 = millis();
+  const uint32_t c0 = clock_ms();
   e = esp_ota_end(oh);                                   // checks the whole image (segments, hash)
   if (e == ESP_OK) e = esp_ota_set_boot_partition(next);   // the next boot, on trial (rollback)
-  const uint32_t check_ms = millis() - c0;
+  const uint32_t check_ms = clock_ms() - c0;
   if (e != ESP_OK) {
     snprintf(msg, cap, "image check failed: %s; nothing changed\n", esp_err_to_name(e));
     up_set(BD_UPDATE_STOPPED, got, len);
@@ -167,14 +167,14 @@ bool ota_receive(TcpConn &c, size_t len, const char *token, char *msg, size_t ca
   }
   up_set(BD_UPDATE_INSTALLED, len, len);
   snprintf(msg, cap, "installed into %s (%u bytes in %.1f s: flash %.1f s, image check %.1f s); restarting, kept if "
-           "it runs properly for 60 s\n", next->label, (unsigned)len, (millis() - t0) / 1000.0f, flash_us / 1e6f,
+           "it runs properly for 60 s\n", next->label, (unsigned)len, (clock_ms() - t0) / 1000.0f, flash_us / 1e6f,
            check_ms / 1000.0f);
   Log.printf("ota: %s", msg);
   return true;
 }
 
 void ota_restart(void) {
-  delay(2500);   // the screen shows "Update installed" for ~2 s; the last lines reach the log server
+  wait_ms(2500);   // the screen shows "Update installed" for ~2 s; the last lines reach the log server
   esp_restart();
 }
 
@@ -194,13 +194,13 @@ const char *ota_slot(void) {
 static void watch(void *) {
   for (;;) {
     vTaskDelay(pdMS_TO_TICKS(1000));
-    const uint32_t now = millis(), loop = loop_last_ms();
+    const uint32_t now = clock_ms(), loop = loop_last_ms();
     const bool loop_ok = loop && now - loop < 5000, wifi = net_wifi_up(NULL);
     const char *bad = (!loop && now > STALL_MS) || (loop && now - loop >= STALL_MS) ? "the UI loop stopped"
                     : now >= WIFI_WITHIN_MS && !wifi ? "no Wi-Fi within 3 min" : NULL;
     if (bad) {
       Log.printf("ota: the new firmware does not run properly (%s): going back to the previous one\n", bad);
-      delay(1500);
+      wait_ms(1500);
       esp_ota_mark_app_invalid_rollback_and_reboot();
     }
     if (now >= KEEP_AFTER_MS && loop_ok && wifi) {

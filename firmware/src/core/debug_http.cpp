@@ -1,7 +1,7 @@
 // Debug web server (see debug_http.h), only in debug builds (-DBREWDECK_DEBUG_HTTP: no open port in release builds).
 // Screenshots and the recorder read the panel's frame buffer (board_screen_rows), i.e. exactly what is on the glass.
 // While a download runs (~1-3 s) the extra PSRAM reads may disturb the picture briefly: debug use only.
-#include <Arduino.h>
+#include "systime.h"
 #ifdef BREWDECK_DEBUG_HTTP
 #include "tcp.h"
 #include <esp_flash.h>
@@ -43,7 +43,7 @@ static bool route_match(const char *line) {      // "GET <path> " or "GET <path>
 // chunk (small: one write of 8 rows took ~10 KB at once), wait (up to 1 s) while less than this is free.
 static const size_t KEEP_FREE = 24 * 1024;
 static void wait_ram(void) {
-  for (int i = 0; i < 500 && heap_caps_get_free_size(MALLOC_CAP_INTERNAL) < KEEP_FREE; i++) delay(2);
+  for (int i = 0; i < 500 && heap_caps_get_free_size(MALLOC_CAP_INTERNAL) < KEEP_FREE; i++) wait_ms(2);
 }
 
 static void put16(uint8_t *p, uint16_t v) { p[0] = v; p[1] = v >> 8; }
@@ -76,10 +76,10 @@ static void send_bmp(TcpConn &c) {
     const uint8_t *chunk = (const uint8_t *)board_screen_rows(y, ROWS);
     if (!chunk) return;
     size_t sent = 0;
-    uint32_t t0 = millis();
-    while (sent < CH && c.connected() && millis() - t0 < 5000) {
+    uint32_t t0 = clock_ms();
+    while (sent < CH && c.connected() && clock_ms() - t0 < 5000) {
       size_t n = c.write(chunk + sent, CH - sent);
-      if (n == 0) delay(2); else sent += n;
+      if (n == 0) wait_ms(2); else sent += n;
     }
     if (sent < CH) return;
   }
@@ -116,13 +116,13 @@ static bool rec_start(uint32_t every, int max) {
   g_rec_len = 0; g_rec_n = 0; g_rec_us = 0;
   g_rec_every = every < 200 ? 200 : every;
   g_rec_max = max;
-  g_rec_t0 = g_rec_next = millis();
+  g_rec_t0 = g_rec_next = clock_ms();
   g_rec_on = true;
   Log.printf("rec: started, every %u ms, %u KB of PSRAM\n", (unsigned)g_rec_every, (unsigned)(g_rec_cap / 1024));
   return true;
 }
 static void rec_capture(void) {
-  const uint32_t t0 = micros(), now = millis();
+  const uint32_t t0 = clock_us(), now = clock_ms();
   const size_t HDR = 16;
   uint8_t *const base = g_rec + g_rec_len, *out = base + HDR, *const end = g_rec + g_rec_cap;
   if (out >= end) { rec_stop("memory full"); return; }
@@ -147,15 +147,15 @@ static void rec_capture(void) {
   put16(base + 12, (int)bd_display()->width); put16(base + 14, (int)bd_display()->height);
   g_rec_len = out - g_rec;
   g_rec_n++;
-  g_rec_us = micros() - t0;
+  g_rec_us = clock_us() - t0;
   if (g_rec_n % 30 == 0)
     Log.printf("rec: %d frames, %u KB, last copy %u ms\n", g_rec_n, (unsigned)(g_rec_len / 1024), (unsigned)(g_rec_us / 1000));
   if (g_rec_max && g_rec_n >= g_rec_max) rec_stop("frame limit");
 }
 static void rec_step(void) {
-  if (!g_rec_on || (int32_t)(millis() - g_rec_next) < 0) return;
+  if (!g_rec_on || (int32_t)(clock_ms() - g_rec_next) < 0) return;
   g_rec_next += g_rec_every;
-  if ((int32_t)(millis() - g_rec_next) >= 0) g_rec_next = millis() + g_rec_every;   // fell behind (a download ran)
+  if ((int32_t)(clock_ms() - g_rec_next) >= 0) g_rec_next = clock_ms() + g_rec_every;   // fell behind (a download ran)
   rec_capture();
 }
 static void send_rec(TcpConn &c) {
@@ -163,21 +163,21 @@ static void send_rec(TcpConn &c) {
   c.printf("HTTP/1.0 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %u\r\nCache-Control: no-store\r\n"
            "Connection: close\r\n\r\n", (unsigned)g_rec_len);
   size_t sent = 0;
-  uint32_t t0 = millis();
-  while (sent < g_rec_len && c.connected() && millis() - t0 < 10000) {
+  uint32_t t0 = clock_ms();
+  while (sent < g_rec_len && c.connected() && clock_ms() - t0 < 10000) {
     wait_ram();
     const size_t want = g_rec_len - sent < 4096 ? g_rec_len - sent : 4096;
     const size_t n = c.write(g_rec + sent, want);
-    if (n == 0) delay(2); else { sent += n; t0 = millis(); }
+    if (n == 0) wait_ms(2); else { sent += n; t0 = clock_ms(); }
   }
   Log.printf("rec: downloaded %u of %u bytes\n", (unsigned)sent, (unsigned)g_rec_len);
 }
 
 static void task(void *) {
   char ip[16] = "", machine[64];
-  while (!net_wifi_up(NULL)) delay(500);
+  while (!net_wifi_up(NULL)) wait_ms(500);
   net_addr_info(ip, sizeof ip, machine, sizeof machine);
-  while (!g_srv.begin(80)) delay(1000);
+  while (!g_srv.begin(80)) wait_ms(1000);
   Log.printf("screenshots: http://%s.local/screen.bmp (http://%s/screen.bmp)\n", board_hostname(), ip);
   for (;;) {
     const int fd = g_srv.accept(20);                // waits up to 20 ms for a request
@@ -210,10 +210,10 @@ static void task(void *) {
       if (ok) ota_restart();
       continue;
     } else if (strncmp(line, "GET /screen.bmp ", 16) == 0 && board_screen_rows(0, 1)) {
-      uint32_t t0 = millis();
+      uint32_t t0 = clock_ms();
       send_bmp(c);
       mem_watch("screenshot");
-      Log.printf("screenshot sent in %u ms\n", (unsigned)(millis() - t0));
+      Log.printf("screenshot sent in %u ms\n", (unsigned)(clock_ms() - t0));
     } else if (strncmp(line, "GET /rec?", 9) == 0) {   // recorder: /rec?every=2000[&max=frames]
       const char *pe = strstr(line, "every="), *pm = strstr(line, "max=");
       const bool ok = rec_start(pe ? (uint32_t)atoi(pe + 6) : 2000, pm ? atoi(pm + 4) : 0);
@@ -283,7 +283,7 @@ static void task(void *) {
                (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
                (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
                (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
-               (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), (int)rssi, ch, ap, (unsigned long)(millis() / 1000),
+               (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), (int)rssi, ch, ap, (unsigned long)(clock_ms() / 1000),
                (int)esp_reset_reason(), board_display_mode(), BREWDECK_VERSION[0] ? BREWDECK_VERSION : "?", __DATE__,
                __TIME__, ota_slot());
     } else if (strncmp(line, "GET /frames ", 12) == 0) {   // frame times per shot / steam session (tools/frames.sh)
@@ -296,9 +296,9 @@ static void task(void *) {
       const char *mode = board_flash_mode(&ctrl);   // chip-specific registers: the board layer reads them
       static uint8_t *buf;
       if (!buf) buf = (uint8_t *)heap_caps_malloc(4096, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-      const uint32_t N = 1024 * 1024, t0 = micros();
+      const uint32_t N = 1024 * 1024, t0 = clock_us();
       for (uint32_t o = 0; buf && o < N; o += 4096) esp_flash_read(NULL, buf, 0x10000 + o, 4096);   // raw, app area
-      const uint32_t us = micros() - t0;
+      const uint32_t us = clock_us() - t0;
       c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n"
                "flash read mode %s (SPI_MEM_CTRL 0x%08x)\n1 MB raw read in %u ms (%.1f MB/s)\n",
                mode, (unsigned)ctrl, (unsigned)(us / 1000), us ? 1e6f / us : 0.f);
@@ -325,13 +325,13 @@ static void task(void *) {
       static uint8_t wb[2048];
       memset(wb, 0xA5, sizeof wb);
       uint32_t n = 0, off = 0, worst = 0;
-      const uint32_t t0 = millis();
+      const uint32_t t0 = clock_ms();
       if (p) {
         if (!erase) esp_partition_erase_range(p, 0, pre ? 256 * 1024 : 64 * 1024);   // something to write into
-        if (pre) delay(5000);
-        const uint32_t t1 = millis();
-        while (millis() - t1 < ms) {
-          const uint32_t a0 = micros();
+        if (pre) wait_ms(5000);
+        const uint32_t t1 = clock_ms();
+        while (clock_ms() - t1 < ms) {
+          const uint32_t a0 = clock_us();
           if (erase) esp_partition_erase_range(p, off, 4096), off = (off + 4096) % (256 * 1024);
           else {
             const size_t cs = chunk < 1 ? 1 : chunk > sizeof wb ? sizeof wb : chunk;
@@ -342,14 +342,14 @@ static void task(void *) {
             }
             esp_partition_write(p, off, wb, cs), off += cs;
           }
-          const uint32_t d = micros() - a0;
+          const uint32_t d = clock_us() - a0;
           if (d > worst) worst = d;
           n++;
-          delay(1);
+          wait_ms(1);
         }
       }
       c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n%s: %lu in %lu ms, longest %lu us (%s)\n",
-               erase ? "4 KB erases" : pre ? "writes into erased flash" : "2 KB writes", (unsigned long)n, (unsigned long)(millis() - t0), (unsigned long)worst,
+               erase ? "4 KB erases" : pre ? "writes into erased flash" : "2 KB writes", (unsigned long)n, (unsigned long)(clock_ms() - t0), (unsigned long)worst,
                p ? p->label : "no free slot");
     } else if (strncmp(line, "GET /ppatest?stall=1", 20) == 0) {   // the next PPA copy hangs: the fallback takes over
       board_ppa_stall();
@@ -361,14 +361,14 @@ static void task(void *) {
                           ph1 ? atoi(ph1 + 5) : 0);
       g_rt_done = false;
       g_rt_job = board_ppa_test;
-      const uint32_t t0 = millis();
-      while (!g_rt_done && millis() - t0 < 60000) delay(20);
+      const uint32_t t0 = clock_ms();
+      while (!g_rt_done && clock_ms() - t0 < 60000) wait_ms(20);
       c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n%s", g_rt_done ? g_rt_out : "timeout\n");
     } else if (route_match(line) || strncmp(line, "GET /i2c ", 9) == 0) {   // run by the UI task: the UI's route
       g_rt_done = false;                             // (bd_debug_route) or the I2C scan (touch reads share the bus)
       g_rt_job = route_match(line) ? g_rt_fn : board_i2c_scan;
-      const uint32_t t0 = millis();
-      while (!g_rt_done && millis() - t0 < 30000) delay(20);
+      const uint32_t t0 = clock_ms();
+      while (!g_rt_done && clock_ms() - t0 < 30000) wait_ms(20);
       c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n%s", g_rt_done ? g_rt_out : "timeout\n");
     } else if (strncmp(line, "GET /touch?", 11) == 0) {   // remote touch (debug): /touch?x=400&y=240&ms=100
       const char *px = strstr(line, "x="), *py = strstr(line, "y="), *pm = strstr(line, "ms=");

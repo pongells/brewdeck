@@ -1,5 +1,7 @@
 // Guition JC4880P443 panel: Arduino_GFX's DSI driver (ST7701) and the backlight. Used by board_p4.cpp.
 #include "board.h"
+#include "../../core/systime.h"
+#include "board_pins.h"
 
 // panel timing from Arduino_GFX's JC4880P433 example
 static Arduino_ESP32DSIPanel *bus = new Arduino_ESP32DSIPanel(
@@ -10,12 +12,11 @@ Arduino_DSI_Display *gfx = new Arduino_DSI_Display(PANEL_W, PANEL_H, bus, PANEL_
     st7701_dsi_init_operations, sizeof(st7701_dsi_init_operations) / sizeof(lcd_init_cmd_t));
 
 void board_init() {
-  pinMode(PIN_BL, OUTPUT);
-  digitalWrite(PIN_BL, LOW);   // keep dark until the first frame is drawn
+  pin_output(PIN_BL, 0);   // keep dark until the first frame is drawn
   if (!gfx->begin()) printf("gfx->begin() failed\n");
   gfx->setRotation(PANEL_ROT);
   gfx->fillScreen(0x0000);
-  delay(50);                   // ~3 frames of the black fill first: lit at once, the panel showed its blue for a frame
-  digitalWrite(PIN_BL, HIGH);
+  wait_ms(50);                   // ~3 frames of the black fill first: lit at once, the panel showed its blue for a frame
+  pin_set(PIN_BL, 1);
 }
 

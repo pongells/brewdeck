@@ -1,4 +1,6 @@
 #include "touch_gt911.h"
+#include "../../core/systime.h"
+#include "board_pins.h"
 #include "board.h"
 #include <Wire.h>
 
@@ -58,11 +60,10 @@ void touch_cfg(int *xmax, int *ymax) { *xmax = g_xmax; *ymax = g_ymax; }
 bool touch_begin() {
   Wire.begin(PIN_TOUCH_SDA, PIN_TOUCH_SCL, 400000);
   if (PIN_TOUCH_RST >= 0) {
-    pinMode(PIN_TOUCH_RST, OUTPUT);
-    digitalWrite(PIN_TOUCH_RST, LOW);
-    delay(10);
-    digitalWrite(PIN_TOUCH_RST, HIGH);
-    delay(80);
+    pin_output(PIN_TOUCH_RST, 0);
+    wait_ms(10);
+    pin_set(PIN_TOUCH_RST, 1);
+    wait_ms(80);
   }
 
   const uint8_t candidates[2] = {0x5D, 0x14};
@@ -94,7 +95,7 @@ bool touch_raw(int16_t *rx, int16_t *ry) {
   uint8_t st = 0;
   if (reg_read(0x814E, &st, 1)) {
     if (st & 0x80) {
-      g_last_ready = millis();
+      g_last_ready = clock_ms();
       uint8_t n = st & 0x0F;
       if (n > 0 && n <= 5) {
         uint8_t p[8];
@@ -109,7 +110,7 @@ bool touch_raw(int16_t *rx, int16_t *ry) {
       reg_write(0x814E, 0);
     }
   }
-  if (g_down && millis() - g_last_ready > 120) g_down = false;   // no report for a while (or the bus failing): lifted
+  if (g_down && clock_ms() - g_last_ready > 120) g_down = false;   // no report for a while (or the bus failing): lifted
   if (g_down) {
     *rx = g_rx;
     *ry = g_ry;

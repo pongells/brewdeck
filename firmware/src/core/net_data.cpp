@@ -2,7 +2,7 @@
 // (REST, overlaid with fresher WebSocket values in net_get), the profile list and the active profile's phases, the shot
 // snapshots, notices and the shot history index. Each is copied in and out under the one lock (net_int.h); a sequence
 // number tells the core loop whether anything changed since it last looked.
-#include <Arduino.h>
+#include "systime.h"
 #include <esp_heap_caps.h>
 #include <string.h>
 #include "tlog.h"
@@ -108,7 +108,7 @@ bool net_get(LiveData *out, int *link) {
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   *out = g_data;
   *link = g_link;
-  const uint32_t now = millis();
+  const uint32_t now = clock_ms();
   // REST requests can time out while the machine is busy (seen at the start of a shot): fresh WebSocket data
   // alone keeps the machine "online" (with the last REST values for the rest)
   if (g_link != BD_LINK_ONLINE && g_wss_ok && now - g_wss_ms < WS_FRESH_MS && g_data.mode[0]) *link = BD_LINK_ONLINE;
@@ -160,8 +160,8 @@ bool net_get(LiveData *out, int *link) {
       if (out->pressure < pmin) pmin = out->pressure;
       if (out->pressure > pmax) pmax = out->pressure;
     }
-    if (millis() - pt > 60000) {
-      pt = millis();
+    if (clock_ms() - pt > 60000) {
+      pt = clock_ms();
       if (pmax >= pmin) Log.printf("net: idle pressure last min: %.2f - %.2f bar (now %.2f)\n", pmin, pmax, out->pressure);
       pmin = 1e9f;
       pmax = -1e9f;
@@ -219,7 +219,7 @@ bool net_get_index(WsShotIndex *out) {
 void net_ws_sensor(const WsSensor *s) {
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_wss = *s;
-  g_wss_ms = millis();
+  g_wss_ms = clock_ms();
   g_wss_ok = true;
   g_seq++;
   xSemaphoreGive(g_net_mtx);
@@ -227,7 +227,7 @@ void net_ws_sensor(const WsSensor *s) {
 void net_ws_system(const WsSystem *s) {
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_wsy = *s;
-  g_wsy_ms = millis();
+  g_wsy_ms = clock_ms();
   g_wsy_ok = true;
   g_seq++;
   xSemaphoreGive(g_net_mtx);
@@ -235,7 +235,7 @@ void net_ws_system(const WsSystem *s) {
 void net_ws_shot(const WsShot *s) {
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_shotq[g_shot_w++ % 32] = *s;
-  g_last_shot_ms = millis();
+  g_last_shot_ms = clock_ms();
   if (g_shot_w - g_shot_r > 32) g_shot_r = g_shot_w - 32;   // UI stalled: drop the oldest
   xSemaphoreGive(g_net_mtx);
 }
