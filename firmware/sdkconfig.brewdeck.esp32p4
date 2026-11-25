@@ -11,3 +11,6 @@ CONFIG_SPIRAM_XIP_FROM_PSRAM=y
 CONFIG_ESP_HOSTED_HOST_SDIO_RX_STAGING_SLOTS=1
 # Start from our app_main (src/core/main.cpp), not Arduino's setup() / loop()
 # CONFIG_AUTOSTART_ARDUINO is not set
+# The board's flash is a BOYA chip: name it (same generic functions either way; without it ESP-IDF warns at every boot
+# "Detected boya flash chip but using generic driver")
+CONFIG_SPI_FLASH_SUPPORT_BOYA_CHIP=y
