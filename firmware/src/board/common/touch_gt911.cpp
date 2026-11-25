@@ -2,8 +2,12 @@
 #include "../../core/systime.h"
 #include "board_pins.h"
 #include "board.h"
-#include <Wire.h>
+#include <driver/i2c_master.h>
 
+// I2C on ESP-IDF's master driver, as Arduino's Wire set it up: 400 kHz, internal pull-ups, 50 ms per transfer
+static const int I2C_MS = 50;
+static i2c_master_bus_handle_t g_bus;
+static i2c_master_dev_handle_t g_dev;
 static uint8_t g_addr = 0;
 static bool    g_down = false;
 static int16_t g_rx = 0, g_ry = 0;
@@ -11,23 +15,16 @@ static uint32_t g_last_ready = 0;
 static int g_xmax = SCREEN_W, g_ymax = SCREEN_H;   // from the chip's own config
 
 
+static bool probe(uint8_t a) { return g_bus && i2c_master_probe(g_bus, a, I2C_MS) == ESP_OK; }
+
 static bool reg_write(uint16_t reg, uint8_t val) {
-  Wire.beginTransmission(g_addr);
-  Wire.write((uint8_t)(reg >> 8));
-  Wire.write((uint8_t)(reg & 0xFF));
-  Wire.write(val);
-  return Wire.endTransmission() == 0;
+  const uint8_t b[3] = {(uint8_t)(reg >> 8), (uint8_t)(reg & 0xFF), val};
+  return g_dev && i2c_master_transmit(g_dev, b, sizeof b, I2C_MS) == ESP_OK;
 }
 
-static bool reg_read(uint16_t reg, uint8_t *buf, size_t n) {
-  Wire.beginTransmission(g_addr);
-  Wire.write((uint8_t)(reg >> 8));
-  Wire.write((uint8_t)(reg & 0xFF));
-  if (Wire.endTransmission(false) != 0) return false;
-  size_t got = Wire.requestFrom((int)g_addr, (int)n);
-  if (got != n) return false;
-  for (size_t i = 0; i < n; i++) buf[i] = Wire.read();
-  return true;
+static bool reg_read(uint16_t reg, uint8_t *buf, size_t n) {   // register address, then a repeated start and the read
+  const uint8_t r[2] = {(uint8_t)(reg >> 8), (uint8_t)(reg & 0xFF)};
+  return g_dev && i2c_master_transmit_receive(g_dev, r, sizeof r, buf, n, I2C_MS) == ESP_OK;
 }
 
 uint8_t touch_address() { return g_addr; }
@@ -46,8 +43,7 @@ size_t board_i2c_scan(char *out, size_t cap) {
   size_t n = 0;
   int found = 0;
   for (uint8_t a = 0x08; a < 0x78 && n + 48 < cap; a++) {
-    Wire.beginTransmission(a);
-    if (Wire.endTransmission() != 0) continue;
+    if (!probe(a)) continue;
     found++;
     n += snprintf(out + n, cap - n, "0x%02X %s\n", a, i2c_guess(a));
   }
@@ -58,7 +54,14 @@ size_t board_i2c_scan(char *out, size_t cap) {
 void touch_cfg(int *xmax, int *ymax) { *xmax = g_xmax; *ymax = g_ymax; }
 
 bool touch_begin() {
-  Wire.begin(PIN_TOUCH_SDA, PIN_TOUCH_SCL, 400000);
+  i2c_master_bus_config_t bc = {};
+  bc.i2c_port = -1;                                 // any free controller
+  bc.sda_io_num = (gpio_num_t)PIN_TOUCH_SDA;
+  bc.scl_io_num = (gpio_num_t)PIN_TOUCH_SCL;
+  bc.clk_source = I2C_CLK_SRC_DEFAULT;
+  bc.glitch_ignore_cnt = 7;
+  bc.flags.enable_internal_pullup = true;
+  if (i2c_new_master_bus(&bc, &g_bus) != ESP_OK) { g_bus = NULL; printf("touch: I2C bus not started\n"); return false; }
   if (PIN_TOUCH_RST >= 0) {
     pin_output(PIN_TOUCH_RST, 0);
     wait_ms(10);
@@ -68,13 +71,17 @@ bool touch_begin() {
 
   const uint8_t candidates[2] = {0x5D, 0x14};
   for (int i = 0; i < 2; i++) {
-    Wire.beginTransmission(candidates[i]);
-    if (Wire.endTransmission() == 0) {
+    if (probe(candidates[i])) {
       g_addr = candidates[i];
       break;
     }
   }
   if (g_addr == 0) return false;
+  i2c_device_config_t dc = {};
+  dc.dev_addr_length = I2C_ADDR_BIT_LEN_7;
+  dc.device_address = g_addr;
+  dc.scl_speed_hz = 400000;
+  if (i2c_master_bus_add_device(g_bus, &dc, &g_dev) != ESP_OK) { g_dev = NULL; g_addr = 0; return false; }
 
   uint8_t pid[4] = {0, 0, 0, 0};
   if (reg_read(0x8140, pid, 4)) {
