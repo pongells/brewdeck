@@ -489,8 +489,46 @@ bool wifi_step(bool idle) {
   return restarted;
 }
 
+#ifdef BREWDECK_DEBUG_HTTP
+// debug builds: the network's access points as one scan sees them just before the first join (~1.6 s, network task
+// only), strongest first, so the log shows whether the join took the strongest ("wifi: joined AP ..." follows)
+static void log_aps_before_join(void) {
+  wifi_scan_config_t c;
+  memset(&c, 0, sizeof c);
+  c.scan_type = WIFI_SCAN_TYPE_ACTIVE;
+  c.scan_time.active.min = 100;
+  c.scan_time.active.max = 120;
+  uint16_t n = SCAN_MAX;
+  if (!g_recs) g_recs = (wifi_ap_record_t *)heap_caps_malloc(SCAN_MAX * sizeof *g_recs, MALLOC_CAP_SPIRAM);
+  if (!g_recs || esp_wifi_scan_start(&c, true) != ESP_OK || esp_wifi_scan_get_ap_records(&n, g_recs) != ESP_OK) {
+    esp_wifi_clear_ap_list();
+    Log.println("wifi: scan before joining failed");
+    return;
+  }
+  char line[200];
+  int len = snprintf(line, sizeof line, "wifi: before joining:"), found = 0;
+  bool used[SCAN_MAX] = {};
+  for (;;) {                                        // ours, strongest first
+    int best = -1;
+    for (int i = 0; i < n; i++)
+      if (!used[i] && strcmp((const char *)g_recs[i].ssid, g_ssid) == 0 &&
+          (best < 0 || g_recs[i].rssi > g_recs[best].rssi)) best = i;
+    if (best < 0 || len >= (int)sizeof line - 40) break;
+    used[best] = true;
+    char m[18];
+    mac_str(g_recs[best].bssid, m, sizeof m);
+    len += snprintf(line + len, sizeof line - len, "%s %s ch %d %d dBm", found++ ? "," : "", m,
+                    (int)g_recs[best].primary, (int)g_recs[best].rssi);
+  }
+  Log.printf("%s%s\n", line, found ? "" : " network not seen");
+}
+#endif
+
 void wifi_start(void) {
   g_start_ms = clock_ms();
+#ifdef BREWDECK_DEBUG_HTTP
+  if (g_ssid[0]) log_aps_before_join();
+#endif
   if (g_ssid[0]) sta_join(g_ssid, g_pass);
   if (g_ssid[0]) Log.printf("wifi: joining \"%s\" (%s)\n", g_ssid, g_saved_net ? "saved on the screen" : "built in");
   else Log.println("wifi: no network set up: choose one on the screen");
