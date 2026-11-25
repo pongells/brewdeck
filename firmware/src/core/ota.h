@@ -7,10 +7,10 @@
 #include <stddef.h>
 #include "brewdeck_core.h"
 
-#include <WiFi.h>   // WiFiClient (a typedef in this core)
+#include "tcp.h"
 // Reads `len` bytes of image from c and installs it. true = installed (restart with ota_restart after answering);
 // msg says what happened either way.
-bool ota_receive(WiFiClient &c, size_t len, const char *token, char *msg, size_t cap);
+bool ota_receive(TcpConn &c, size_t len, const char *token, char *msg, size_t cap);
 void ota_restart(void);         // after the answer is sent: gives the log a moment to reach the log server
 void ota_begin(void);           // at boot: keeps or rolls back a new image (see above)
 const char *ota_slot(void);     // "app0 (kept)", "app1 (on trial)", ... for GET /heap

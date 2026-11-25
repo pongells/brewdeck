@@ -3,7 +3,7 @@
 // While a download runs (~1-3 s) the extra PSRAM reads may disturb the picture briefly: debug use only.
 #include <Arduino.h>
 #ifdef BREWDECK_DEBUG_HTTP
-#include <WiFi.h>
+#include "tcp.h"
 #include <esp_flash.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
@@ -24,7 +24,7 @@
 #endif
 #include "frames.h"
 
-static WiFiServer g_srv(80);
+static TcpListener g_srv;
 // the UI's own debug route (bd_debug_route)
 static char g_rt_path[24] = "";
 static bd_debug_fn g_rt_fn = NULL;
@@ -38,10 +38,18 @@ static bool route_match(const char *line) {      // "GET <path> " or "GET <path>
          (line[4 + n] == ' ' || line[4 + n] == '?');
 }
 
+// Big downloads (screenshot, recording, memory log) send faster than Wi-Fi drains, and the frames waiting to go out
+// sit in internal RAM, which Wi-Fi itself needs (seen on the S3: down to 3.6 KB after 3 screenshots). Before each
+// chunk (small: one write of 8 rows took ~10 KB at once), wait (up to 1 s) while less than this is free.
+static const size_t KEEP_FREE = 24 * 1024;
+static void wait_ram(void) {
+  for (int i = 0; i < 500 && heap_caps_get_free_size(MALLOC_CAP_INTERNAL) < KEEP_FREE; i++) delay(2);
+}
+
 static void put16(uint8_t *p, uint16_t v) { p[0] = v; p[1] = v >> 8; }
 static void put32(uint8_t *p, uint32_t v) { for (int i = 0; i < 4; i++) p[i] = v >> (8 * i); }
 
-static void send_bmp(WiFiClient &c) {
+static void send_bmp(TcpConn &c) {
   const uint32_t row = (int)bd_display()->width * 2, img = row * (int)bd_display()->height, off = 14 + 40 + 12;
   uint8_t h[off];
   memset(h, 0, sizeof h);
@@ -61,9 +69,11 @@ static void send_bmp(WiFiClient &c) {
   c.write(h, sizeof h);
   // from the board's frame buffer in PSRAM (S3: straight from it; lwIP copies into its own buffers): no internal-RAM
   // staging buffer
-  const size_t CH = (int)bd_display()->width * 2 * 8;               // 8 rows per write
-  for (int y = 0; y < (int)bd_display()->height; y += 8) {
-    const uint8_t *chunk = (const uint8_t *)board_screen_rows(y, 8);
+  const int ROWS = 2;                                               // rows per write
+  const size_t CH = (int)bd_display()->width * 2 * ROWS;
+  for (int y = 0; y < (int)bd_display()->height; y += ROWS) {
+    wait_ram();
+    const uint8_t *chunk = (const uint8_t *)board_screen_rows(y, ROWS);
     if (!chunk) return;
     size_t sent = 0;
     uint32_t t0 = millis();
@@ -148,14 +158,15 @@ static void rec_step(void) {
   if ((int32_t)(millis() - g_rec_next) >= 0) g_rec_next = millis() + g_rec_every;   // fell behind (a download ran)
   rec_capture();
 }
-static void send_rec(WiFiClient &c) {
+static void send_rec(TcpConn &c) {
   rec_stop("download");
   c.printf("HTTP/1.0 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %u\r\nCache-Control: no-store\r\n"
            "Connection: close\r\n\r\n", (unsigned)g_rec_len);
   size_t sent = 0;
   uint32_t t0 = millis();
   while (sent < g_rec_len && c.connected() && millis() - t0 < 10000) {
-    const size_t want = g_rec_len - sent < 8192 ? g_rec_len - sent : 8192;
+    wait_ram();
+    const size_t want = g_rec_len - sent < 4096 ? g_rec_len - sent : 4096;
     const size_t n = c.write(g_rec + sent, want);
     if (n == 0) delay(2); else { sent += n; t0 = millis(); }
   }
@@ -166,23 +177,22 @@ static void task(void *) {
   char ip[16] = "", machine[64];
   while (!net_wifi_up(NULL)) delay(500);
   net_addr_info(ip, sizeof ip, machine, sizeof machine);
-  g_srv.begin();
+  while (!g_srv.begin(80)) delay(1000);
   Log.printf("screenshots: http://%s.local/screen.bmp (http://%s/screen.bmp)\n", board_hostname(), ip);
   for (;;) {
-    WiFiClient c = g_srv.available();
-    if (!c) { rec_step(); delay(20); continue; }
-    c.setTimeout(2000);   // milliseconds (Stream::setTimeout), not seconds
-    c.setNoDelay(true);   // no Nagle: with the small lwIP send buffer it stalls on the receiver's delayed ACKs
-    char line[96] = "";
-    size_t n = c.readBytesUntil('\n', line, sizeof line - 1);
-    line[n] = 0;
+    const int fd = g_srv.accept(20);                // waits up to 20 ms for a request
+    if (fd < 0) { rec_step(); continue; }
+    TcpConn c(fd);
+    c.set_timeout(2000);
+    c.set_nodelay(true);  // no Nagle: with the small lwIP send buffer it stalls on the receiver's delayed ACKs
+    char line[96];
+    c.read_line(line, sizeof line);
     size_t clen = 0;                                // request headers: only these two are used (POST /ota)
     char token[48] = "";
     while (c.connected()) {
       char hb[128];
-      size_t m = c.readBytesUntil('\n', hb, sizeof hb - 1);
+      const size_t m = c.read_line(hb, sizeof hb);
       if (m <= 1) break;
-      hb[m] = 0;
       if (hb[m - 1] == '\r') hb[m - 1] = 0;
       if (!strncasecmp(hb, "Content-Length:", 15)) clen = (size_t)strtoul(hb + 15, NULL, 10);
       else if (!strncasecmp(hb, "X-OTA-Token:", 12)) {
@@ -193,10 +203,10 @@ static void task(void *) {
     }
     if (strncmp(line, "POST /ota ", 10) == 0) {   // firmware pushed by build.sh --ota (ota.h)
       static char msg[200];
-      c.setTimeout(10000);
+      c.set_timeout(10000);
       const bool ok = ota_receive(c, clen, token, msg, sizeof msg);
       c.printf("HTTP/1.0 %s\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n%s", ok ? "200 OK" : "409 Conflict", msg);
-      c.stop();
+      c.close();
       if (ok) ota_restart();
       continue;
     } else if (strncmp(line, "GET /screen.bmp ", 16) == 0 && board_screen_rows(0, 1)) {
@@ -236,6 +246,7 @@ static void task(void *) {
                (unsigned long)end);
       static char chunk[1460];
       while (pos < end && c.connected()) {
+        wait_ram();
         uint32_t next;
         const size_t n = log_read(pos, chunk, sizeof chunk, &next);
         if (!n) break;
@@ -371,7 +382,7 @@ static void task(void *) {
     } else {
       c.print("HTTP/1.0 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nGET /screen.bmp, /rec?every=ms[&max=n], /rec, /rec/stop, /rec.bin, /rec/free, /heap, /tasks, /flash, /roam, /i2c, /ppatest?n=&seed=&hmin=&hmax=, /log[?from=], /log/prev, /loghost?to=, POST /ota, /touch?x=&y=&ms=, /bl?pct=&hz=\n");
     }
-    c.stop();
+    c.close();
   }
 }
 

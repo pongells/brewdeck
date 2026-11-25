@@ -1,7 +1,6 @@
 // Firmware updates pushed from the computer + keeping or rolling back a new image (see ota.h). Debug builds only.
 #include <Arduino.h>
 #ifdef BREWDECK_DEBUG_HTTP
-#include <WiFi.h>
 #include <esp_ota_ops.h>
 #include <esp_app_format.h>
 #include <string.h>
@@ -84,7 +83,7 @@ static bool machine_busy(char *why, size_t cap) {
   return w != NULL;
 }
 
-bool ota_receive(WiFiClient &c, size_t len, const char *token, char *msg, size_t cap) {
+bool ota_receive(TcpConn &c, size_t len, const char *token, char *msg, size_t cap) {
   if (!OTA_TOKEN[0]) return snprintf(msg, cap, "refused: this build has no OTA_TOKEN (build.sh makes it)\n"), false;
   if (!token || strcmp(token, OTA_TOKEN) != 0) {
     Log.println("ota: refused a push with a wrong password");
@@ -107,7 +106,7 @@ bool ota_receive(WiFiClient &c, size_t len, const char *token, char *msg, size_t
   uint32_t flash_us = 0;   // time spent erasing + writing flash (the rest is the network)
   while (got < len) {
     const size_t want = len - got < sizeof buf ? len - got : sizeof buf;
-    const size_t n = c.readBytes(buf, want);
+    const size_t n = c.read(buf, want);
     if (!n) break;
     if (!started) {   // the image header: an app image for this chip
       const esp_image_header_t *h = (const esp_image_header_t *)buf;
@@ -120,9 +119,9 @@ bool ota_receive(WiFiClient &c, size_t len, const char *token, char *msg, size_t
       e = esp_ota_begin(next, len, &oh);
       flash_us += (millis() - e0) * 1000;
       if (e != ESP_OK) return snprintf(msg, cap, "failed to start: %s\n", esp_err_to_name(e)), false;
-      char built[sizeof g_up.built], from[sizeof g_up.from];   // read outside the lock: remoteIP() waits on lwIP
+      char built[sizeof g_up.built], from[sizeof g_up.from];   // read outside the lock: peer_ip() waits on lwIP
       image_built(buf, n, built, sizeof built);
-      snprintf(from, sizeof from, "%s", c.remoteIP().toString().c_str());
+      c.peer_ip(from, sizeof from);
       portENTER_CRITICAL(&g_umux);                // only copies inside (interrupts are off here)
       memcpy(g_up.built, built, sizeof built);
       memcpy(g_up.from, from, sizeof from);
