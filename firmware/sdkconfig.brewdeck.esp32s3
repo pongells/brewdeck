@@ -41,3 +41,7 @@ CONFIG_ESP_TIMER_TASK_STACK_SIZE=4096
 CONFIG_MDNS_TASK_STACK_SIZE=3072
 # Start from our app_main (src/core/main.cpp), not Arduino's setup() / loop()
 # CONFIG_AUTOSTART_ARDUINO is not set
+# The flush writes the frame buffer back with esp_cache_msync (board_s3.cpp), which masks interrupts while it works:
+# in 8 KB chunks, so the panel's bounce-buffer refill (~0.5 ms per buffer) is never held off long enough to jump
+CONFIG_ESP_MM_CACHE_MSYNC_C2M_CHUNKED_OPS=y
+CONFIG_ESP_MM_CACHE_MSYNC_C2M_CHUNKED_OPS_MAX_LEN=0x2000
