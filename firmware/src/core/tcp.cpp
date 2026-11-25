@@ -5,7 +5,37 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
 #include <lwip/sockets.h>
+
+bool TcpConn::connect(uint32_t addr, uint16_t port, uint32_t ms) {
+  close();
+  const int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (fd < 0) return false;
+  const int fl = fcntl(fd, F_GETFL, 0);
+  fcntl(fd, F_SETFL, fl | O_NONBLOCK);              // connect in the background, wait for it below
+  struct sockaddr_in a = {};
+  a.sin_family = AF_INET;
+  a.sin_port = htons(port);
+  a.sin_addr.s_addr = addr;
+  int r = ::connect(fd, (struct sockaddr *)&a, sizeof a);
+  if (r != 0 && errno == EINPROGRESS) {
+    fd_set w;
+    FD_ZERO(&w);
+    FD_SET(fd, &w);
+    struct timeval tv = {(time_t)(ms / 1000), (suseconds_t)((ms % 1000) * 1000)};
+    int err = 0;
+    socklen_t l = sizeof err;
+    r = select(fd + 1, NULL, &w, NULL, &tv) == 1 && getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &l) == 0 && !err ? 0 : -1;
+  }
+  if (r != 0) {
+    ::close(fd);
+    return false;
+  }
+  fcntl(fd, F_SETFL, fl);                           // blocking again (with the time limits of set_timeout)
+  fd_ = fd;
+  return true;
+}
 
 void TcpConn::set_timeout(uint32_t ms) {
   if (fd_ < 0) return;
@@ -56,6 +86,15 @@ size_t TcpConn::read(void *b, size_t n) {
     else break;                                     // the limit, the other side closed (0), or an error
   }
   return done;
+}
+size_t TcpConn::read_some(void *b, size_t n) {
+  for (;;) {
+    if (fd_ < 0 || !n) return 0;
+    const int k = recv(fd_, (char *)b, n, 0);
+    if (k > 0) return (size_t)k;
+    if (k < 0 && errno == EINTR) continue;
+    return 0;
+  }
 }
 size_t TcpConn::read_line(char *b, size_t cap) {
   size_t k = 0;

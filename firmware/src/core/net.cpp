@@ -22,6 +22,7 @@
 #include "parse.h"
 #include "net_int.h"
 #include "kv.h"
+#include "tcp.h"
 
 static int g_select_req = 0;          // profile id to select (0 = none), set by the UI task
 static uint32_t g_select_ms = 0;      // when it was asked for: dropped after 5 s (the core answers
@@ -81,20 +82,21 @@ static bool resolve(IPAddress *ip) {
 // GET path; on success buf holds the body (NUL-terminated). A reply larger than cap is cut off (parsers detect it).
 // post: false = GET, true = POST with an empty body. No other method can be sent (see the header comment).
 static bool http(const IPAddress &ip, bool post, const char *path, char *buf, size_t cap) {
-  WiFiClient c;
-  c.setTimeout(2000);   // milliseconds (Stream::setTimeout), not seconds
-  if (!c.connect(ip, 80, 2000)) return false;
+  TcpConn c;
+  if (!c.connect((uint32_t)ip, 80, 2000)) return false;   // IPAddress converts to the address in network order
+  c.set_timeout(200);                               // each wait; the whole reply gets 3 s (below)
   if (post) c.printf("POST %s HTTP/1.0\r\nHost: gaggiuino.local\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", path);
   else c.printf("GET %s HTTP/1.0\r\nHost: gaggiuino.local\r\nConnection: close\r\n\r\n", path);
   uint32_t t0 = millis();
   size_t n = 0, want = 0;                           // want: header + Content-Length, once the header is in
   // stop at Content-Length: the machine answers HTTP/1.1 and keeps the connection open after the body, so waiting for
   // the close always ran into the 3 s limit (every GET /api/shots/<id> took ~3.1 s instead of ~0.2 s)
-  while ((c.connected() || c.available()) && millis() - t0 < 3000 && n + 1 < cap && (!want || n < want)) {
-    int a = c.available();
-    if (a <= 0) { delay(2); continue; }
-    int r = c.read((uint8_t *)buf + n, min((size_t)a, cap - 1 - n));
-    if (r <= 0) continue;
+  while (millis() - t0 < 3000 && n + 1 < cap && (!want || n < want)) {
+    const size_t r = c.read_some(buf + n, cap - 1 - n);
+    if (!r) {
+      if (!c.connected()) break;                    // closed by the machine (or failed)
+      continue;                                     // nothing within 200 ms: wait again
+    }
     n += r;
     if (!want) {
       buf[n] = 0;
@@ -106,7 +108,7 @@ static bool http(const IPAddress &ip, bool post, const char *path, char *buf, si
     }
   }
   buf[n] = 0;
-  c.stop();
+  c.close();
   mem_watch(post ? "http POST" : "http GET", path);
   if (strncmp(buf, "HTTP/1.", 7) != 0 || strncmp(buf + 8, " 200", 4) != 0) return false;   // the status line only
   char *body = strstr(buf, "\r\n\r\n");

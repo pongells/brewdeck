@@ -12,6 +12,8 @@ class TcpConn {
   TcpConn(const TcpConn &) = delete;
   TcpConn &operator=(const TcpConn &) = delete;
 
+  // opens a connection to an IPv4 address (network byte order), waiting up to ms; closes any earlier one
+  bool connect(uint32_t addr, uint16_t port, uint32_t ms);
   bool valid() const { return fd_ >= 0; }
   void set_timeout(uint32_t ms);   // for each read / write call from now on (default: lwIP's, i.e. none)
   void set_nodelay(bool on);       // no Nagle: small writes go out at once
@@ -21,6 +23,8 @@ class TcpConn {
   size_t printf(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
   // up to n bytes, waiting up to the time limit for each part; returns fewer at the limit, end or an error
   size_t read(void *b, size_t n);
+  // what has arrived, up to n bytes, waiting up to the time limit for the first; 0 at the limit, end or an error
+  size_t read_some(void *b, size_t n);
   // one line without its '\n' (a '\r' before it is kept), at most cap - 1 chars, 0-terminated; returns its length
   // (0 at the limit or end)
   size_t read_line(char *b, size_t cap);
