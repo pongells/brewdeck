@@ -40,6 +40,9 @@ fi
 
 # pioarduino needs Python <= 3.14 (Homebrew's platformio runs on 3.15): run PlatformIO in an isolated uv env
 PIO="${PIO:-uvx --python 3.14 --from platformio pio}"
+# PlatformIO's own folder (platforms, packages, its Python env): one for Brewdeck alone, so another tool on the same
+# computer using PlatformIO (ESPHome did) cannot replace pioarduino's packages under it
+export PLATFORMIO_CORE_DIR="${PLATFORMIO_CORE_DIR:-$HOME/.platformio-brewdeck}"
 # which UI folder under src/ is built with the core (ui_select.py): Brewdeck's own by default
 UI="${UI:-ui}"
 if [[ "${UI%/}" == */* ]]; then   # a path, not a folder name under src/: resolve it from where build.sh was called
@@ -62,8 +65,8 @@ echo "Build OK: $BP"
 # boot_app0.bin (the OTA data partition's start state, blank: boot app0) next to the build's images: ESP-IDF builds
 # make it (ota_data_initial.bin); the Arduino tools (touchtest, p4-c6-update) take the Arduino core's
 BOOT="$BP/ota_data_initial.bin"
-[[ -f "$BOOT" ]] || BOOT="$(find "$HOME/.platformio/packages" -path "*framework-arduinoespressif32*/tools/partitions/boot_app0.bin" 2>/dev/null | head -1)"
-[[ -f "$BOOT" ]] || { echo "boot_app0.bin not found (build folder, ~/.platformio/packages)"; exit 1; }
+[[ -f "$BOOT" ]] || BOOT="$(find "$PLATFORMIO_CORE_DIR/packages" -path "*framework-arduinoespressif32*/tools/partitions/boot_app0.bin" 2>/dev/null | head -1)"
+[[ -f "$BOOT" ]] || { echo "boot_app0.bin not found (build folder, $PLATFORMIO_CORE_DIR/packages)"; exit 1; }
 cp "$BOOT" "$BP/boot_app0.bin"
 if (( OTA )); then   # over Wi-Fi to the debug web server (src/core/ota.h)
   case "$TARGET" in ui-p4*) DEF_HOST=brewdeck-p4.local ;; *) DEF_HOST=brewdeck.local ;; esac

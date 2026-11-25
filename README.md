@@ -193,7 +193,7 @@ You need [uv](https://docs.astral.sh/uv/) (the script runs PlatformIO through `u
 not support newer Python yet), git and esptool. The first build downloads the toolchain and compiles everything
 (several minutes); later builds take about 30 s. If PlatformIO then complains that its own `pioarduino` package is too
 old (`6.2.0.post1` does not satisfy `>=6.2.0`), pin it:
-`uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0`.
+`uv pip install --python ~/.platformio-brewdeck/penv/bin/python pioarduino==6.2.0`.
 
 Make the backup first (step 3 above, into `backup/` at the repository root), then:
 

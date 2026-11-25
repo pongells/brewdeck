@@ -65,7 +65,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: |
-            ~/.platformio
+            ~/.platformio-brewdeck
             firmware/.pio
             firmware/managed_components
           key: platformio-s3-espidf-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini', 'firmware/CMakeLists.txt', 'firmware/src/idf_component.yml', 'firmware/sdkconfig.base.esp32s3', 'firmware/sdkconfig.brewdeck.esp32s3', 'firmware/dependencies.lock.esp32s3') }}
@@ -74,7 +74,7 @@ jobs:
         working-directory: firmware
         run: |
           # pioarduino can install a pioarduino package its own version check rejects (6.2.0.post1 vs >=6.2.0)
-          ./build.sh ui || { uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0 && ./build.sh ui; }
+          ./build.sh ui || { uv pip install --python ~/.platformio-brewdeck/penv/bin/python pioarduino==6.2.0 && ./build.sh ui; }
           ./build.sh ui-debug
           UI=ui_minimal ./build.sh ui   # the example UI: proves a UI builds on the core API alone
           ./build.sh touchtest
@@ -90,7 +90,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: |
-            ~/.platformio
+            ~/.platformio-brewdeck
             firmware/.pio
             firmware/managed_components
           key: platformio-p4-espidf-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini', 'firmware/CMakeLists.txt', 'firmware/src/idf_component.yml', 'firmware/sdkconfig.base.esp32p4', 'firmware/sdkconfig.brewdeck.esp32p4', 'firmware/dependencies.lock.esp32p4') }}
@@ -98,7 +98,7 @@ jobs:
       - name: Build
         working-directory: firmware
         run: |
-          ./build.sh ui-p4 || { uv pip install --python ~/.platformio/penv/bin/python pioarduino==6.2.0 && ./build.sh ui-p4; }
+          ./build.sh ui-p4 || { uv pip install --python ~/.platformio-brewdeck/penv/bin/python pioarduino==6.2.0 && ./build.sh ui-p4; }
           ./build.sh ui-p4-debug
           UI=ui_minimal ./build.sh ui-p4
           ./build.sh p4-c6-update

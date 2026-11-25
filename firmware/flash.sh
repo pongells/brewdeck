@@ -35,7 +35,8 @@ esac
 # esptool: one on PATH (e.g. brew install esptool, the latest) first, else PlatformIO's bundled copy
 if command -v esptool >/dev/null; then ESP=(esptool)
 elif command -v esptool.py >/dev/null; then ESP=(esptool.py)
-elif [[ -f "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" ]]; then ESP=("$HOME/.platformio/penv/bin/python" "$HOME/.platformio/packages/tool-esptoolpy/esptool.py")
+elif PIOD="${PLATFORMIO_CORE_DIR:-$HOME/.platformio-brewdeck}"; [[ -f "$PIOD/packages/tool-esptoolpy/esptool.py" ]]; then
+  ESP=("$PIOD/penv/bin/python" "$PIOD/packages/tool-esptoolpy/esptool.py")
 else echo "esptool not found (brew install esptool, or pip install esptool)"; exit 1; fi
 VER="$("${ESP[@]}" version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 || true)"
 if [[ "${VER%%.*}" -ge 5 ]] 2>/dev/null; then W=write-flash; FM=--flash-mode; FF=--flash-freq; FS=--flash-size; SI=get-security-info
