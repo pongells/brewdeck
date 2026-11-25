@@ -77,6 +77,8 @@ static bool live_link(int link) {
   g_can_select = false;
   g_can_tare = false;
   if (link != BD_LINK_ONLINE) {
+    g_cmd_ready = g_can_change = false;
+    steppers_paint();
     g_fl_idle = false;
     g_fl_mode = FL_UNKNOWN;
     g_fl_want = FL_UNKNOWN;
@@ -150,7 +152,7 @@ static void live_flush(const bd_machine *d, bool busy) {
   const int fm = !strcmp(d->mode, "FLUSH") ? BD_FLUSH_ON : !strcmp(d->mode, "FLUSH_AUTO") ? BD_FLUSH_TIMED
                : !strcmp(d->mode, "HOME") ? BD_FLUSH_OFF : FL_UNKNOWN;
   g_fl_mode = fm;
-  g_fl_idle = fm == BD_FLUSH_OFF && !busy;
+  g_fl_idle = fm == BD_FLUSH_OFF && !busy && d->commands_ready;
   if (g_fl_want == fm) g_fl_want = FL_UNKNOWN;          // reported: follow the machine again
   fl_show();
   // flush mode left on with no water running does not keep the screen awake (only a running pump counts)
@@ -196,7 +198,7 @@ static void live_state(const bd_machine *d, const LiveHeat *h, bool busy, const 
   g_idle_word = h->heating ? 1 : h->cooling ? 2 : 0;
   g_idle_state = g_press_warn ? 3 : g_idle_word;
   snprintf(g_idle_temp, sizeof g_idle_temp, "%.1f", d->temperature);
-  g_can_tare = g_can_select && d->scale_present;
+  g_can_tare = g_can_change && d->scale_present;
   set_tc(g_tare_lbl, g_can_tare ? COL_TEXT : COL_OUTLINE);
   if (busy) set_pill(COL_BLUE_BG, COL_BLUE, COL_BLUE, state);
   else if (h->heating)
@@ -338,6 +340,9 @@ void ui_set_live(const bd_machine *d) {
   const char *state = live_activity(d, &busy);
   st_update(d, (d->steaming || strcmp(d->mode, "STEAM") == 0) && !d->brewing);
   g_can_select = !busy && strcmp(d->mode, "HOME") == 0;
+  g_cmd_ready = d->commands_ready;
+  g_can_change = g_can_select && g_cmd_ready;
+  steppers_paint();
   live_flush(d, busy);
   live_pressure(d, busy);
   live_state(d, &h, busy, state);

@@ -58,7 +58,7 @@ int main(int argc, char **argv) {
   snprintf(path, sizeof path, "%s/editor_temp_93.raw", dir); dump(path);
   ui_test_cancel();
   {
-    bd_machine d; memset(&d, 0, sizeof d); d.readiness = BD_RD_UNKNOWN;
+    bd_machine d; memset(&d, 0, sizeof d); d.readiness = BD_RD_UNKNOWN; d.commands_ready = true;
     d.temperature = 90.509f; d.target_temp = 90; d.water_level = 30;
     strcpy(d.profile_name, "Leva 9 SINGLE v0.9 (community)"); strcpy(d.mode, "HOME");
     d.link = BD_LINK_ONLINE; ui_set_live(&d);
@@ -126,7 +126,7 @@ int main(int argc, char **argv) {
       p->id = P[i].id; strcpy(p->name, P[i].name); p->active = P[i].id == 8;
       p->detail = P[i].id != 3; p->phases = P[i].ph; p->stop_weight = P[i].w; p->brew_temp = P[i].t;
     }
-    bd_machine d; memset(&d, 0, sizeof d); d.readiness = BD_RD_UNKNOWN;
+    bd_machine d; memset(&d, 0, sizeof d); d.readiness = BD_RD_UNKNOWN; d.commands_ready = true;
     d.temperature = 90.1f; d.target_temp = 90; d.water_level = 18;
     strcpy(d.profile_name, "Leva 9 SINGLE v0.9 (community)"); strcpy(d.mode, "HOME");
     d.link = BD_LINK_ONLINE; ui_set_live(&d);
@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
   {
     // profile preview + target weight from real profiles (sim/data, GET /api/profile/<id>)
     static const int ids[] = {8, 1, 4, 5, 7};
-    bd_machine d; memset(&d, 0, sizeof d); d.readiness = BD_RD_UNKNOWN;
+    bd_machine d; memset(&d, 0, sizeof d); d.readiness = BD_RD_UNKNOWN; d.commands_ready = true;
     d.temperature = 90.1f; d.target_temp = 90; d.water_level = 18; strcpy(d.mode, "HOME");
     for (int id : ids) {
       char jp[256]; snprintf(jp, sizeof jp, "%s/data/profile_%d.json", SIM_DIR, id);
@@ -170,7 +170,7 @@ int main(int argc, char **argv) {
     char bp[256]; snprintf(bp, sizeof bp, "%s/data/ws_demo_shot.bin", SIM_DIR);
     FILE *f = fopen(bp, "rb"); if (!f) { printf("missing %s\n", bp); return 1; }
     static uint8_t b[1 << 20]; size_t n = fread(b, 1, sizeof b, f); fclose(f);
-    bd_machine d; memset(&d, 0, sizeof d); d.readiness = BD_RD_UNKNOWN;
+    bd_machine d; memset(&d, 0, sizeof d); d.readiness = BD_RD_UNKNOWN; d.commands_ready = true;
     d.target_temp = 91; d.water_level = 20; strcpy(d.profile_name, "LMD Single v1.1 (community)"); strcpy(d.mode, "HOME");
     static const int at[] = {50, 120, 200}; int next = 0; uint32_t last_t = 0;
     // the core's shot start / end rule (core_state.cpp): end 0.3 s after brewing off with no new point, or after 3 s

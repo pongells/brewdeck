@@ -53,7 +53,7 @@ extern "C" {
 // ---- results ------------------------------------------------------------------------------------------------------
 typedef enum {
   BD_OK = 0,                // queued (the machine's answer: BD_EV_COMMAND)
-  BD_ERR_OFFLINE,           // no link to the machine
+  BD_ERR_OFFLINE,           // no link to the machine (or, for WebSocket commands, not commands_ready yet)
   BD_ERR_BUSY,              // the machine is not idle in HOME (shot, steam, hot water, flush, another mode)
   BD_ERR_RANGE,             // value outside the allowed range (brew temp 1-105 degC, stop weight 0-200 g)
   BD_ERR_PROFILE_CHANGED,   // the active profile is no longer the one named in the request
@@ -94,6 +94,10 @@ typedef struct {
   // the active profile as the machine runs it (d_act_prof): its values may differ from the stored profile after a
   // change made on a screen, and right after a switch it can already name the new profile before the status does
   struct { char name[48]; float stop_weight, brew_temp; } running;   // 0 = none / not known
+  // the machine can take commands now (stop weight, brew temp, flush, tare): its WebSocket session is up and it has
+  // reported its active profile. False for a few seconds up to ~30 s after the machine comes back online; profile
+  // picks need only the link. Show those controls as unavailable while false.
+  bool  commands_ready;
   bool  update_available;         // the machine reported a firmware update (install it in its web UI)
   char  update[32];               // its release name ("" = not given)
   // versions (Menu > About); "" = not known

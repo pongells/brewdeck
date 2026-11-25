@@ -36,6 +36,7 @@ static uint32_t g_index_seq = 0, g_index_seen = 0;
 
 static float g_act_w, g_act_t;          // active profile (d_act_prof): stop weight, brew temperature, name
 static char g_act_name[48];
+static bool g_act_session = false;   // d_act_prof received in the current WebSocket session
 static char g_front_ver[28], g_static_ver[28];   // pb_versions: kept across reconnects
 static uint32_t g_steam_set = 0;   // steam set point (pb_steam_set), 0 = not known yet
 static WsScaleCfg g_scfg;   // the 3 scale flags only (see pb_scale_cfg; set by the WS task); kept across reconnects
@@ -129,6 +130,7 @@ bool net_get(LiveData *out, int *link) {
   out->act_weight = g_act_w;
   out->act_temp = g_act_t;
   snprintf(out->act_profile, sizeof out->act_profile, "%s", g_act_name);
+  out->commands_ready = g_act_session;
   out->steam_set = (int)g_steam_set;
   snprintf(out->front_ver, sizeof out->front_ver, "%s", g_front_ver);
   snprintf(out->static_ver, sizeof out->static_ver, "%s", g_static_ver);
@@ -242,6 +244,8 @@ void net_ws_act_profile(const char *name, float weight, float temp) {
   g_act_w = weight;
   g_act_t = temp;
   snprintf(g_act_name, sizeof g_act_name, "%s", name);
+  if (!g_act_session) g_seq++;
+  g_act_session = true;
   xSemaphoreGive(g_net_mtx);
 }
 void net_ws_versions(const char *front, const char *stat) {
@@ -278,9 +282,16 @@ bool net_get_notif(WsNotif *out) {
   xSemaphoreGive(g_net_mtx);
   return ch;
 }
+bool net_rest_online(void) {
+  xSemaphoreTake(g_net_mtx, portMAX_DELAY);
+  const bool on = g_link == BD_LINK_ONLINE;
+  xSemaphoreGive(g_net_mtx);
+  return on;
+}
 void net_ws_lost(void) {
   xSemaphoreTake(g_net_mtx, portMAX_DELAY);
   g_wss_ok = g_wsy_ok = false;
+  g_act_session = false;
   g_seq++;
   xSemaphoreGive(g_net_mtx);
 }

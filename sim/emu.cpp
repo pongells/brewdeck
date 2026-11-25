@@ -105,6 +105,7 @@ void bd_log(const char *fmt, ...) {
 // ---- fake machine -----------------------------------------------------------------------------
 static LiveData g_m;                      // what the "machine" reports
 static int g_link = BD_LINK_ONLINE;
+static bool g_no_cmds = false;            // "machine commands off": bd_machine.commands_ready false
 static bool g_offline = false, g_nowifi = false;
 static ProfileList g_list;
 static int g_active_id = 7;                 // LMD Single: the recorded shot's profile
@@ -983,6 +984,7 @@ static bool run_named(const char *name) {
 // Tags (docs/ui-features.md): the names a UI gives the objects that matter (lv_obj_set_name_static).
 //   machine shot 10 / machine steam 10   the fake machine starts the recorded shot / steam (speed 1 or 10), the
 //                           screen is left as it is (the panel buttons first go back to Ready)
+//   machine commands off / on   online, but it takes no commands yet (the WebSocket is not back after a restart)
 //   machine link off / on   the machine unreachable (Wi-Fi drop) while it goes on brewing / steaming; the panel's
 //                           "Machine on/off" switches it off (its shot / steam stop)
 //   machine readiness 4     the fake machine reports this readiness (-1: its own again); machine temp 85.5 holds the
@@ -1317,6 +1319,8 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
     pend_start(PEND_HOME, "screen.ready", NULL, 12000, now);
   } else if (!strncmp(l, "machine link ", 13)) {   // off: unreachable, but it goes on with its shot / steam
     g_offline = !strncmp(l + 13, "off", 3);
+  } else if (!strncmp(l, "machine commands ", 17)) {   // off: online, but no WebSocket session yet (just came back)
+    g_no_cmds = !strncmp(l + 17, "off", 3);
   } else if (!strncmp(l, "machine mode ", 13)) {   // machine mode FLUSH / DESCALE / HOME: the mode it reports
     snprintf(g_m.mode, sizeof g_m.mode, "%s", l + 13);
   } else if (!strncmp(l, "machine hotwater ", 17)) {   // on / off: hot water running
@@ -1543,6 +1547,7 @@ static void emu_step(uint32_t now) {
     last_live = now;
     g_link = g_nowifi || g_no_cfg ? BD_LINK_CONNECTING : g_offline || !host_ok() ? BD_LINK_NO_MACHINE : BD_LINK_ONLINE;
     LiveData d = g_m;
+    d.commands_ready = !g_no_cmds;
     if (!g_shot_on && !g_heating) d.temperature = g_m.temperature + 0.1f * sinf(now / 4000.0f);
     // the machine's readiness (dashboardReadinessState, names of its web UI): a guess of when it switches
     d.readiness = g_m.steam_active ? 5 : g_m.warmup_remaining > 0 ? 1 : d.temperature < d.target - 3.0f ? 2 : 3;

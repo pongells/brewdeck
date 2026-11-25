@@ -10,7 +10,9 @@ static const lv_point_t FL_DROP[] = {{12, 6}, {13, 6}, {14, 8}, {16, 11}, {16, 1
 // ---- state ----------------------------------------------------------------------------------------------------------
 int g_weight10 = 210;                      // stop weight in tenths of a gram (0 = none)
 char g_cur_profile[48] = "";               // machine's active profile (raw name from the status)
-bool g_can_select = false;                 // online, idle, mode HOME (set by ui_set_live)
+bool g_can_select = false;                 // online, idle, mode HOME (set by ui_set_live): a profile pick
+bool g_cmd_ready = false;                  // the machine takes commands now (bd_machine.commands_ready)
+bool g_can_change = false;                 // g_can_select and g_cmd_ready: stop weight, brew temp, tare
 int g_tset = -1;                           // shown brew temperature, -1 = not known yet
 int g_act_temp = -1;                       // last active-profile temperature taken over
 lv_timer_t *g_temp_tm;                     // user data 1 while a change waits to be sent
@@ -87,7 +89,7 @@ void weight_commit(lv_timer_t *t) {
   if (g_weight_tm) { lv_timer_pause(g_weight_tm); lv_timer_set_user_data(g_weight_tm, NULL); }
   // sent: keep it (the machine reports it ~1 s later). Refused by the core (offline, range, unknown profile) or not
   // sendable (busy / offline): back to the machine's value, else the screen shows a stop weight the machine never got
-  if (g_can_select && g_cur_profile[0] &&
+  if (g_can_change && g_cur_profile[0] &&
       bd_set_stop_weight(prof_id(g_cur_profile), g_weight10 / 10.0f, true) == BD_OK) {
     orig_note();
   } else if (g_act_weight10 >= 0 && g_weight10 != g_act_weight10) {
@@ -104,7 +106,7 @@ static void weight_changed(bool now) {
 }
 
 void step_weight(int delta10) {
-  if (!g_can_select) return;            // like step_temp: nothing to change while busy / offline
+  if (!g_can_change) return;            // like step_temp: nothing to change while busy / offline
   if (g_weight10 <= 0 && delta10 < 0) return;      // no stop weight: nothing below it
   int v = g_weight10 <= 0 ? W_MIN10 : g_weight10 + delta10;
   if (v < W_MIN10) v = W_MIN10;
@@ -130,7 +132,7 @@ void temp_commit(lv_timer_t *t) {
   (void)t;
   if (g_temp_tm) { lv_timer_pause(g_temp_tm); lv_timer_set_user_data(g_temp_tm, NULL); }
   // not sent / refused: back to the machine's value, else the screen shows a temperature the machine never got
-  if (g_can_select && g_cur_profile[0] && g_tset >= T_MIN &&
+  if (g_can_change && g_cur_profile[0] && g_tset >= T_MIN &&
       bd_set_brew_temp(prof_id(g_cur_profile), g_tset, true) == BD_OK) {
     orig_note();
   } else if (g_act_temp > 0 && g_tset != g_act_temp) {
@@ -139,7 +141,7 @@ void temp_commit(lv_timer_t *t) {
   }
 }
 static void step_temp(int delta) {
-  if (!g_can_select) return;            // nothing to change while busy / offline
+  if (!g_can_change) return;            // nothing to change while busy / offline / before the machine takes commands
   int v = g_tset < T_MIN ? T_START : g_tset + delta;   // unknown: start at T_START, not at T_MIN
   if (v < T_MIN) v = T_MIN;
   if (v > T_MAX) v = T_MAX;
@@ -283,8 +285,8 @@ static void on_reset(lv_event_t *e) {
   else format_weight(g_entry, sizeof g_entry, g_orig_w10);
   editor_done();
 }
-static void on_open_editor(lv_event_t *e) { (void)e; editor_open(false); }
-static void on_open_temp_editor(lv_event_t *e) { (void)e; editor_open(true); }
+static void on_open_editor(lv_event_t *e) { (void)e; if (g_can_change) editor_open(false); }
+static void on_open_temp_editor(lv_event_t *e) { (void)e; if (g_can_change) editor_open(true); }
 static void on_cancel(lv_event_t *e)      { (void)e; editor_close(); }
 static void on_done(lv_event_t *e)        { (void)e; editor_done(); }
 static void on_key(lv_event_t *e)         { editor_key((char)(intptr_t)lv_event_get_user_data(e)); }
@@ -371,7 +373,7 @@ static int fl_cur(void) { return g_fl_want != FL_UNKNOWN ? g_fl_want : g_fl_mode
 void fl_show(void) {
   if (!g_fl_btn) return;
   const int m = fl_cur();
-  const bool on = m == BD_FLUSH_ON, aut = m == BD_FLUSH_TIMED, usable = on || aut || g_fl_idle;
+  const bool on = m == BD_FLUSH_ON, aut = m == BD_FLUSH_TIMED, usable = ((on || aut) && g_cmd_ready) || g_fl_idle;
   if (aut && !g_fl_auto_ms) g_fl_auto_ms = stamp_nz(lv_tick_get());
   if (!aut) g_fl_auto_ms = 0;
   char t[24];
@@ -410,7 +412,7 @@ static void on_flush_press(lv_event_t *e) {
 static void on_flush_tap(lv_event_t *e) {          // SHORT_CLICKED: not sent after a long press
   (void)e;
   const int m = fl_cur();
-  if (m == BD_FLUSH_ON || m == BD_FLUSH_TIMED) fl_ask(BD_FLUSH_OFF);
+  if (m == BD_FLUSH_ON || m == BD_FLUSH_TIMED) { if (g_cmd_ready) fl_ask(BD_FLUSH_OFF); }
   else if (g_fl_idle) fl_ask(BD_FLUSH_ON);
 }
 static void on_flush_hold(lv_event_t *e) {
@@ -440,6 +442,23 @@ void stepper_part(lv_obj_t *o) {
   lv_obj_set_style_bg_opa(o, LV_OPA_COVER, LV_STATE_PRESSED);
 }
 
+// the steppers' -/+ buttons and value boxes: usable only while g_can_change, else grey icons and no press
+static lv_obj_t *g_step_btn[4], *g_step_ic[4], *g_step_val[2];
+static int g_step_n, g_step_paint = -1;
+static void set_clickable(lv_obj_t *o, bool on) {
+  if (lv_obj_is_clickable(o) != on) lv_obj_set_clickable(o, on);
+}
+void steppers_paint(void) {
+  if (g_step_paint == (int)g_can_change) return;
+  g_step_paint = g_can_change;
+  for (int i = 0; i < g_step_n; i++) {
+    set_clickable(g_step_btn[i], g_can_change);
+    for (uint32_t j = 0; j < lv_obj_get_child_count(g_step_ic[i]); j++)
+      set_line_c(lv_obj_get_child(g_step_ic[i], (int32_t)j), g_can_change ? COL_TEXT : COL_OUTLINE);
+  }
+  for (int i = 0; i < 2; i++) if (g_step_val[i]) set_clickable(g_step_val[i], g_can_change);
+}
+
 // a - or + button of a stepper (the card behind it: stepper_card); held, it repeats
 static void stepper_btn(lv_obj_t *scr, int x, bool plus, lv_event_cb_t cb, const char *tg) {
   lv_obj_t *b = box(scr, x, 304, 64, 64, COL_CARD, RAD_CTRL);
@@ -449,6 +468,7 @@ static void stepper_btn(lv_obj_t *scr, int x, bool plus, lv_event_cb_t cb, const
   lv_obj_center(ic);
   if (plus) icon_plus(ic, COL_TEXT);
   else icon_minus(ic, COL_TEXT);
+  if (g_step_n < 4) { g_step_btn[g_step_n] = b; g_step_ic[g_step_n++] = lv_obj_get_child(ic, 0); }
   lv_obj_add_event_cb(b, cb, LV_EVENT_SHORT_CLICKED, NULL);
   lv_obj_add_event_cb(b, cb, LV_EVENT_LONG_PRESSED_REPEAT, NULL);
   tag(b, tg);
@@ -541,6 +561,7 @@ static void ready_brew_temp(lv_obj_t *scr) {
   tag(g_tset_lbl, "value.brew_temp");
   lv_obj_set_style_pad_bottom(label(tval, "\xC2\xB0" "C", F_ROW, COL_MUTED), base_pad(F_VALUE, F_ROW), 0);
   lv_obj_add_event_cb(tvb, on_open_temp_editor, LV_EVENT_CLICKED, NULL);
+  g_step_val[0] = tvb;
 }
 
 // right, bottom: stop weight
@@ -566,6 +587,7 @@ static void ready_stop_weight(lv_obj_t *scr) {
   g_value_unit = unit;
   lv_obj_set_style_pad_bottom(unit, base_pad(F_VALUE, F_ROW), 0);
   lv_obj_add_event_cb(val, on_open_editor, LV_EVENT_CLICKED, NULL);
+  g_step_val[1] = val;
 }
 
 // right, top: profile preview, with a colour key (for every chart): what blue and gold mean

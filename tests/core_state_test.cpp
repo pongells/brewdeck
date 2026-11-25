@@ -38,6 +38,7 @@ static LiveData live(bool brewing) {
   snprintf(d.act_profile, sizeof d.act_profile, "%s", "Test");
   d.act_weight = 21.0f;
   d.act_temp = 91.0f;
+  d.commands_ready = true;
   return d;
 }
 static void point(uint32_t t10) {
@@ -189,6 +190,16 @@ int main(void) {
     d = live(true); cs_take_live(&d, BD_LINK_ONLINE);
     CHECK(cs_cmd_temp(7, 93, &nm) == BD_ERR_BUSY);
     CHECK(cs_cmd_flush(BD_FLUSH_ON, &pm) == BD_ERR_BUSY);
+    // online by REST but no WebSocket session yet (the machine just came back): the WebSocket commands are refused,
+    // a profile pick (REST) is not
+    d = live(false); d.commands_ready = false; cs_take_live(&d, BD_LINK_ONLINE);
+    CHECK(cs_cmd_temp(7, 93, &nm) == BD_ERR_OFFLINE);
+    CHECK(cs_cmd_weight(7, 21.5f, &w10, &nm) == BD_ERR_OFFLINE);
+    CHECK(cs_cmd_flush(BD_FLUSH_ON, &pm) == BD_ERR_OFFLINE);
+    CHECK(cs_cmd_flush(BD_FLUSH_OFF, &pm) == BD_ERR_OFFLINE);
+    CHECK(cs_cmd_tare() == BD_ERR_OFFLINE);
+    CHECK(cs_check_idle() == BD_OK);
+    CHECK(!bd_machine_state()->commands_ready);
   }
 
   // 8. profile pick: unknown id, one at a time, answered NOT_TAKEN when the machine never reports it (5 s)

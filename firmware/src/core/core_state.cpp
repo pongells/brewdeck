@@ -110,6 +110,7 @@ void cs_take_live(const LiveData *d, int link) {
   cpy(g_m.running.name, sizeof g_m.running.name, d->act_profile);
   g_m.running.stop_weight = d->act_weight;
   g_m.running.brew_temp = d->act_temp;
+  g_m.commands_ready = link == BD_LINK_ONLINE && d->commands_ready;
   cpy(g_m.core_version, sizeof g_m.core_version, d->core_ver);
   cpy(g_m.core_board, sizeof g_m.core_board, d->core_type);
   cpy(g_m.screen_version, sizeof g_m.screen_version, d->front_ver);
@@ -283,8 +284,12 @@ bd_result cs_check_active(int profile_id) {       // as the WebSocket code check
   if (!name) return BD_ERR_UNKNOWN_ID;
   return g_m.running.name[0] && strcmp(g_m.running.name, name) ? BD_ERR_PROFILE_CHANGED : BD_OK;
 }
+static bd_result check_ready(void) {               // WebSocket commands: also the session (bd_machine.commands_ready)
+  const bd_result r = cs_check_idle();
+  return r == BD_OK && !g_m.commands_ready ? BD_ERR_OFFLINE : r;
+}
 bd_result cs_check_flush(bd_flush mode) {
-  if (g_m.link != BD_LINK_ONLINE) return BD_ERR_OFFLINE;
+  if (g_m.link != BD_LINK_ONLINE || !g_m.commands_ready) return BD_ERR_OFFLINE;
   if (mode == BD_FLUSH_OFF) return !strncmp(g_m.mode, "FLUSH", 5) || idle_home() ? BD_OK : BD_ERR_BUSY;
   return idle_home() ? BD_OK : BD_ERR_BUSY;
 }
@@ -302,7 +307,7 @@ bd_result cs_cmd_select(int id, const char **name) {
   return BD_OK;
 }
 bd_result cs_cmd_weight(int profile_id, float grams, int *w10, const char **name) {
-  bd_result r = cs_check_idle();
+  bd_result r = check_ready();
   if (r != BD_OK) return r;
   if (!(grams >= 0.0f && grams <= BD_STOP_WEIGHT_MAX)) return BD_ERR_RANGE;   // 0 = no stop weight
   if ((r = cs_check_active(profile_id)) != BD_OK) return r;
@@ -319,7 +324,7 @@ bool cs_save_ok(bool changed_weight, bool changed_temp, float act_weight, float 
 }
 
 bd_result cs_cmd_temp(int profile_id, int deg, const char **name) {
-  bd_result r = cs_check_idle();
+  bd_result r = check_ready();
   if (r != BD_OK) return r;
   if (deg < BD_BREW_TEMP_MIN || deg > BD_BREW_TEMP_MAX) return BD_ERR_RANGE;   // 0 = heater off: never
   if ((r = cs_check_active(profile_id)) != BD_OK) return r;
@@ -335,7 +340,7 @@ bd_result cs_cmd_flush(bd_flush mode, int *pb_mode) {
   return BD_OK;
 }
 bd_result cs_cmd_tare(void) {
-  const bd_result r = cs_check_idle();
+  const bd_result r = check_ready();
   if (r != BD_OK) return r;
   if (!g_m.scale_present) return BD_ERR_NO_SCALE;
   cs_watch_tare();

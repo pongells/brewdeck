@@ -563,7 +563,13 @@ static void task(void *) {
     }
     c.close();
     net_ws_lost();
-    delay(backoff);
+    // wait out the backoff, but try again at once when the machine starts answering REST (it was off or rebooting):
+    // commands need this session, and the screen shows them unavailable until it is up
+    const bool was_online = net_rest_online();
+    for (uint32_t t0 = millis(); millis() - t0 < backoff;) {
+      delay(250);
+      if (!was_online && net_rest_online()) { backoff = 2000; break; }
+    }
   }
 }
 

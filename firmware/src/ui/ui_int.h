@@ -127,6 +127,8 @@ extern bd_profile_shape g_last_shape;
 extern int g_shape_id;
 extern lv_obj_t *g_tt_lbl, *g_tw_lbl;
 extern bool g_can_select;
+extern bool g_cmd_ready, g_can_change;
+void steppers_paint(void);   // -/+ and value boxes grey / not pressable unless g_can_change
 extern int g_tset;
 extern int g_act_temp;
 extern lv_timer_t *g_temp_tm;

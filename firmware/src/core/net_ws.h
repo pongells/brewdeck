@@ -14,6 +14,7 @@ void net_ws_scale_cfg(const WsScaleCfg *c); // scale type flags from d_settings 
 void net_ws_act_profile(const char *name, float weight, float temp);   // active profile (d_act_prof): name, target weight, brew temp
 void net_ws_notif(const WsNotif *n);          // d_notif: the machine's notification (shown as a banner)
 void net_ws_lost(void);                   // connection gone: REST values only again
+bool net_rest_online(void);               // the REST status requests get answers (the machine is up)
 // the STORED profile's stop weight and brew temperature (GET /api/profile/<id>), for the save check in
 // ws.cpp; called from the WS task, own buffer; false if the machine did not answer or it did not parse
 bool net_stored_profile(int id, float *weight, float *temp);

@@ -66,6 +66,7 @@ it leaves a feature out on purpose: [Leaving features out](#leaving-features-out
 | T7 | "Edited" mark and reset to the profile's original values | Optional | Tag | `action.reset` on the keypad or the profile row |
 | T8 | "Not saved: the profile has other unsaved changes" | Optional | Test | an edit made elsewhere (`machine stopweight`), then a change on the screen: the change applies, the save is skipped and `info.notice` says "Not saved" |
 | T9 | A change asked for while the machine is busy is visibly refused, never silently ignored | Required | Test | during a shot or steam: the controls are hidden or disabled, or a tap shows `info.refusal`; no command reaches the machine |
+| T10 | Changes are unavailable while the machine cannot take commands yet (`bd_machine.commands_ready` false: it has just come back) | Expected | Test | `machine commands off`: taps on `action.temp_up`, `action.weight_up` and `action.flush` send nothing; `machine commands on`: they work again |
 
 ## Profiles
 

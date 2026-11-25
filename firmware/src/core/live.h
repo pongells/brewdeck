@@ -26,6 +26,7 @@ typedef struct {
   float act_weight;       // target weight of the machine's ACTIVE profile (d_act_prof), 0 = not known yet
   float act_temp;         // its brew temperature (waterTemperature), 0 = not known / heater off
   char  act_profile[48];  // its name (raw)
+  bool  commands_ready;   // WebSocket session up and d_act_prof received in it: commands can be sent
   char  profile[48];
   char  machine[24];
   char  mode[20];         // HOME, BREW_AUTO, STEAM, FLUSH, DESCALE ...

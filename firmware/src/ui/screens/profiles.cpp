@@ -201,7 +201,7 @@ static void on_rs_restore(lv_event_t *e) {
   const bd_profile *p = prof_by_id(g_rs_id);
   int sw, sd;
   snap_close();
-  if (!p || !snap_get(p->name, &sw, &sd) || !g_can_select) return;
+  if (!p || !snap_get(p->name, &sw, &sd) || !g_can_change) return;
   g_rst.id = p->id;
   snprintf(g_rst.name, sizeof g_rst.name, "%s", p->name);
   g_rst.w10 = sw;

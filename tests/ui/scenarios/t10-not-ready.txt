@@ -1,0 +1,25 @@
+# T10 right after the machine comes back it answers status requests before it takes commands (bd_machine.commands_ready):
+# brew temp, stop weight and flush are unavailable until then, and a tap sends nothing; then they work again.
+# checks: T10
+wait 500
+wait_for screen.ready 10000
+machine commands off
+wait 800
+expect_no_cmd
+tap_tag action.temp_up
+wait 400
+tap_tag action.weight_up
+wait 400
+tap_tag action.flush
+wait 1500
+expect_no_cmd
+shot T10: commands not ready
+machine commands on
+wait 800
+tap_tag action.temp_up
+wait 2000
+expect_cmds 1 brew_temp
+tap_tag action.flush
+wait 800
+expect_cmds 1 flush mode=on
+quit
