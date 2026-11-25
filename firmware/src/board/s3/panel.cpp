@@ -5,7 +5,7 @@
 #include <string.h>
 #include <esp_lcd_panel_rgb.h>
 #include <esp_lcd_panel_ops.h>
-#include "esp32s3/rom/cache.h"
+#include <esp_cache.h>
 #include "board.h"
 #include "board_pins.h"
 #include "../../core/systime.h"
@@ -54,6 +54,6 @@ void board_init() {
   if (e != ESP_OK) { printf("panel: not started (%s)\n", esp_err_to_name(e)); return; }
   g_fb = (uint16_t *)fb;
   memset(g_fb, 0, (size_t)SCREEN_W * SCREEN_H * 2);
-  Cache_WriteBack_Addr((uint32_t)g_fb, (uint32_t)SCREEN_W * SCREEN_H * 2);
+  esp_cache_msync(g_fb, (size_t)SCREEN_W * SCREEN_H * 2, ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
   pin_set(PIN_BL, 1);
 }

@@ -6,7 +6,7 @@
 #include <driver/uart_vfs.h>
 #include "board.h"
 #include "soc/spi_mem_reg.h"
-#include "esp32s3/rom/cache.h"
+#include <esp_cache.h>
 #include <string.h>
 #include "../../core/brewdeck_core.h"
 #include "board_core.h"
@@ -44,8 +44,10 @@ void bd_display_flush(int x1, int y1, int x2, int y2, const uint16_t *px) {
     uint16_t *row = fb + (size_t)y1 * SCREEN_W + x1;
     for (uint32_t j = 0; j < h; j++, row += SCREEN_W, px += w) memcpy(row, px, w * 2);
     // write the rows back from the cache to PSRAM now (as Arduino_GFX did): the panel's refill reads PSRAM steadily
-    // instead of meeting a burst of evictions later
-    Cache_WriteBack_Addr((uint32_t)(fb + (size_t)y1 * SCREEN_W + x1), (uint32_t)((SCREEN_W * (h - 1) + w) * 2));
+    // instead of meeting a burst of evictions later. Through esp_cache_msync, never the ROM's Cache_WriteBack_Addr:
+    // msync holds the cache-sync lock, which keeps it out of a flash mapping's cache freeze (cache_freeze.cpp)
+    esp_cache_msync(fb + (size_t)y1 * SCREEN_W + x1, (size_t)(SCREEN_W * (h - 1) + w) * 2,
+                    ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
   }
   g_fl_busy = false;
   g_flush_us += clock_us() - t0;

@@ -20,3 +20,7 @@ file(GLOB_RECURSE srcs FOLLOW_SYMLINKS
 endif()
 idf_component_register(SRCS ${srcs}
                        INCLUDE_DIRS "." "core" "board/common" "board/${board}" "../include")
+if(board STREQUAL "s3")   # flash mappings take the cache-sync lock first (board/s3/cache_freeze.cpp)
+  target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=esp_cache_freeze_caches_disable_interrupts"
+                                                   "-Wl,--wrap=esp_cache_unfreeze_caches_enable_interrupts")
+endif()
