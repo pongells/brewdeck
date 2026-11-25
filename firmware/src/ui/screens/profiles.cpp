@@ -481,6 +481,7 @@ void picker_rebuild(void) {
   for (int i = 0; i < n; i++) add_row(col, &l->p[idx[i]]);
 }
 
+static void pick_late(lv_timer_t *);
 void build_picker(lv_obj_t *scr) {
   g_pick = box(scr, 0, 0, 800, 480, COL_BG, 0);
   tag(g_pick, "screen.profiles");
@@ -519,6 +520,26 @@ void build_picker(lv_obj_t *scr) {
   lv_obj_set_style_radius(g_pick_list, 2, LV_PART_SCROLLBAR);
   lv_obj_set_style_bg_color(g_pick_list, COL_OUTLINE, LV_PART_SCROLLBAR);
   lv_obj_set_style_bg_opa(g_pick_list, LV_OPA_COVER, LV_PART_SCROLLBAR);
+  lv_timer_create(pick_late, 100, NULL);
+}
+
+// The list changes while the page is open (after a restart the profiles' details arrive one per second): rebuilding
+// the rows under a finger deleted the row being pressed, so the tap was lost. While the screen is pressed the rebuild
+// waits for the release (pick_late, every 100 ms).
+static bool g_pick_dirty = false;
+static bool touch_down(void) {
+  for (lv_indev_t *in = lv_indev_get_next(NULL); in; in = lv_indev_get_next(in))
+    if (lv_indev_get_type(in) == LV_INDEV_TYPE_POINTER && lv_indev_get_state(in) == LV_INDEV_STATE_PRESSED) return true;
+  return false;
+}
+static void pick_refresh(void) {
+  g_pick_dirty = false;
+  const int32_t sy = lv_obj_get_scroll_y(g_pick_list);
+  picker_rebuild();
+  lv_obj_scroll_to_y(g_pick_list, sy, LV_ANIM_OFF);
+}
+static void pick_late(lv_timer_t *) {
+  if (g_pick_dirty && !touch_down() && !lv_obj_is_hidden(g_pick)) pick_refresh();
 }
 
 void ui_set_profiles(const bd_profiles *l) {
@@ -531,8 +552,7 @@ void ui_set_profiles(const bd_profiles *l) {
   if (g_pend_id)                                 // a select is in flight: keep showing the choice
     for (int i = 0; i < g_profiles.count; i++) g_profiles.p[i].active = g_profiles.p[i].id == g_pend_id;
   if (!lv_obj_is_hidden(g_pick)) {
-    int32_t sy = lv_obj_get_scroll_y(g_pick_list);
-    picker_rebuild();
-    lv_obj_scroll_to_y(g_pick_list, sy, LV_ANIM_OFF);
+    if (touch_down()) g_pick_dirty = true;
+    else pick_refresh();
   }
 }
