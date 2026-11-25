@@ -12,7 +12,7 @@
 #include "tlog.h"
 #include <esp_heap_caps.h>
 #include <WiFi.h>
-#include <ESPmDNS.h>
+#include <mdns.h>
 #include <string.h>
 #include <stdlib.h>
 #include "wifi_config.h"
@@ -73,9 +73,9 @@ static bool resolve(IPAddress *ip) {
   snprintf(name, sizeof name, "%s", g_mhost);
   char *dot = strstr(name, ".local");
   if (dot && dot[6] == 0) *dot = 0;               // mDNS wants the bare name
-  IPAddress r = MDNS.queryHost(name, 2000);
-  if ((uint32_t)r == 0) return false;
-  *ip = r;
+  esp_ip4_addr_t a = {};
+  if (mdns_query_a(name, 2000, &a) != ESP_OK || !a.addr) return false;   // ESP_ERR_NOT_FOUND: no answer in 2 s
+  *ip = IPAddress(a.addr);                          // both in network order
   return true;
 }
 
@@ -436,8 +436,11 @@ static bool loop_wifi_down(void) {
 // the machine's address (mDNS name or IP; the last one found while the name does not answer). false = not found
 static bool loop_find_machine(void) {
   if (g_loop.have_ip) return true;
-  static bool mdns_up = false;
-  if (!mdns_up) mdns_up = MDNS.begin(board_hostname());
+  static bool mdns_up = false;                      // our own name (brewdeck.local) + the responder for the lookups
+  if (!mdns_up) {
+    mdns_up = mdns_init() == ESP_OK;
+    if (mdns_up && mdns_hostname_set(board_hostname()) != ESP_OK) Log.println("net: mDNS name not set");
+  }
   IPAddress ip;
   bool found = resolve(&ip);
   if (!found && (uint32_t)g_last_ip != 0) {
