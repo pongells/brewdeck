@@ -2,13 +2,12 @@
 // Guition JC4880P443 (ESP32-P4 rev 3): 480x800 portrait MIPI-DSI panel (ST7701) shown as the UI's 800x480
 // landscape, GT911 touch, Wi-Fi through the on-board ESP32-C6. Panel settings from Arduino_GFX's JC4880P433 example;
 // raw touch coordinates are portrait panel pixels.
-#include <Arduino.h>
-#include <Arduino_GFX_Library.h>
+#include <stdint.h>
 
 #define SCREEN_W 800   // what the UI draws
 #define SCREEN_H 480
 
-// Rotation (Arduino_GFX): 1 = the panel's right edge (held in portrait) is the picture's top, 3 = its left edge.
+// Rotation: 1 = the panel's right edge (held in portrait) is the picture's top, 3 = its left edge.
 // 3: the board's SD card slot is at the bottom of the picture.
 #ifndef PANEL_ROT
 #define PANEL_ROT 3
@@ -31,8 +30,8 @@
 #define TOUCH_FLIP_Y 0
 #endif
 
-extern Arduino_DSI_Display *gfx;
-void board_init();
+void board_init();                      // panel up, black, backlight on (panel.cpp)
+uint16_t *board_fb(void);               // the portrait frame buffer in PSRAM (PANEL_W x PANEL_H RGB565), NULL if none
 void board_backlight(int level);        // 0 = off, 20-100 = dimmest useful .. fully on (backlight.cpp)
 // the PWM duty at level 20, in 1/1000: 1 % is dim but still readable on this panel; 5 % still looked bright (seen on the panel)
 #define BL_MIN_PERMILLE 10

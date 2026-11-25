@@ -1,7 +1,7 @@
 // Touch test: shows raw and mapped touch coordinates and leaves a trail of dots.
 // Tap the four labelled corners to check the axes. Tap CLEAR to wipe the trail.
 #include <Arduino.h>
-#include "board.h"
+#include "gfx_panel.h"
 #include "touch_gt911.h"
 
 static uint16_t C(uint8_t r, uint8_t g, uint8_t b) { return gfx->color565(r, g, b); }
@@ -36,7 +36,7 @@ static void draw_base() {
 void setup() {
   Serial.begin(115200);
   delay(200);
-  board_init();
+  gfx_panel_init();
   bool ok = touch_begin();
   draw_base();
   gfx->setTextSize(3);

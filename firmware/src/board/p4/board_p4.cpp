@@ -1,10 +1,10 @@
 // Display part of the board layer (brewdeck_core.h) for the Guition JC4880P443 (ESP32-P4): the UI's 800x480 picture
-// on the 480x800 portrait panel (panel.cpp). Arduino_GFX keeps the panel's frame buffer in PSRAM (the DSI controller
+// on the 480x800 portrait panel (panel.cpp). esp_lcd keeps the panel's frame buffer in PSRAM (the DSI controller
 // reads it by DMA). Each flushed rectangle is turned into it by the P4's 2D engine (PPA, rotate by 90 / 270 degrees);
-// if the PPA cannot be used, Arduino_GFX does the same with the CPU (rotation PANEL_ROT + cache write-back).
+// if the PPA cannot be used, the CPU does the same (cpu_copy, rotation PANEL_ROT + cache write-back).
 // Build with -DP4_PPA=0 to compare the two. Touch, memory: src/board/common.
-#include <Arduino.h>   // first: Arduino_GFX (board.h) needs it, and its B0 / B1 macros must come before termios.h
 #include "../../core/systime.h"
+#include <algorithm>
 #include <esp_heap_caps.h>
 #include <driver/ppa.h>
 #include <driver/usb_serial_jtag.h>
@@ -62,7 +62,7 @@ static bool ppa_worker_start(void);
 static void ppa_setup(void) {
   g_ppa_tried = true;
   if (!P4_PPA) return;
-  uint16_t *fb = gfx->getFramebuffer();
+  uint16_t *fb = board_fb();
   // the PPA writes the frame buffer by DMA: it must start and end on a cache line (the size IDF asks for in PSRAM)
   size_t align = 0;
   if (esp_cache_get_alignment(MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA, &align) != ESP_OK || !align) align = 128;
@@ -124,7 +124,7 @@ static void ppa_op(ppa_srm_oper_config_t &op, int x1, int y1, uint32_t w, uint32
 }
 static bool ppa_flush(int x1, int y1, uint32_t w, uint32_t h, const uint16_t *px) {
   ppa_srm_oper_config_t op;
-  ppa_op(op, x1, y1, w, h, px, gfx->getFramebuffer());
+  ppa_op(op, x1, y1, w, h, px, board_fb());
   op.mode = PPA_TRANS_MODE_BLOCKING;
   return ppa_do_scale_rotate_mirror(g_ppa, &op) == ESP_OK;
 }
@@ -196,9 +196,21 @@ static void cpu_copy(int x1, int y1, uint32_t w, uint32_t h, const uint16_t *px)
   int ax, ay, bx, by;
   pt_map(x1, y1, ax, ay);
   pt_map(x1 + w - 1, y1 + h - 1, bx, by);
-  pt_sync(gfx->getFramebuffer(), (size_t)min(ay, by) * PANEL_W, (size_t)(max(ay, by) + 1) * PANEL_W, g_align,
-          ESP_CACHE_MSYNC_FLAG_DIR_M2C);
-  gfx->draw16bitRGBBitmap(x1, y1, (uint16_t *)px, w, h);   // rotated by the CPU + cache write-back
+  uint16_t *fb = board_fb();
+  if (!fb) return;
+  const size_t r0 = (size_t)(ay < by ? ay : by), r1 = (size_t)(ay < by ? by : ay) + 1;   // panel rows touched
+  pt_sync(fb, r0 * PANEL_W, r1 * PANEL_W, g_align, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+  for (uint32_t j = 0; j < h; j++) {                // picture row y1 + j -> one panel column, walked along x
+    int c0, r;
+    pt_map(x1, y1 + (int)j, c0, r);
+    uint16_t *p = fb + (size_t)r * PANEL_W + c0;
+#if PANEL_ROT == 1
+    for (uint32_t i = 0; i < w; i++, p += PANEL_W) *p = *px++;   // x + 1 -> panel row + 1
+#else
+    for (uint32_t i = 0; i < w; i++, p -= PANEL_W) *p = *px++;   // x + 1 -> panel row - 1
+#endif
+  }
+  pt_sync(fb, r0 * PANEL_W, r1 * PANEL_W, g_align, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
 }
 static bool ppa_suits(int y1, uint32_t h) {     // sizes and positions the PPA is known to trip on: CPU
 #if PANEL_ROT == 1
@@ -321,9 +333,9 @@ size_t board_ppa_test(char *out, size_t cap) {
     int ax, ay, bx, by;
     pt_map(x1, y1, ax, ay);
     pt_map(x1 + w - 1, y1 + h - 1, bx, by);
-    const int r0 = max(0, min(ay, by) - 2), r1 = min(PANEL_H - 1, max(ay, by) + 2);
+    const int r0 = std::max(0, std::min(ay, by) - 2), r1 = std::min(PANEL_H - 1, std::max(ay, by) + 2);
     pt_sync(fb, (size_t)r0 * PANEL_W, (size_t)(r1 + 1) * PANEL_W, align, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
-    const int c0 = min(ax, bx), c1 = max(ax, bx);
+    const int c0 = std::min(ax, bx), c1 = std::max(ax, bx);
     uint32_t in_bad = 0, out_bad = 0;
     int fx = -1, fy = -1;
     uint16_t got = 0, want = 0;
@@ -331,7 +343,7 @@ size_t board_ppa_test(char *out, size_t cap) {
       for (int px = 0; px < PANEL_W; px++) {
         const uint16_t v = fb[(size_t)py * PANEL_W + px];
         uint16_t e = 0;
-        const bool inside = px >= c0 && px <= c1 && py >= min(ay, by) && py <= max(ay, by);
+        const bool inside = px >= c0 && px <= c1 && py >= std::min(ay, by) && py <= std::max(ay, by);
         if (inside) {   // invert pt_map: which picture pixel lands here
 #if PANEL_ROT == 1
           const int x = py, y = PANEL_W - 1 - px;
@@ -387,7 +399,7 @@ void bd_display_stats(uint32_t *us, uint32_t *px, bool reset) {
 // screenshots: the frame buffer is portrait, so gather the landscape rows (the inverse of the rotation) into a buffer
 const uint16_t *board_screen_rows(int y, int n) {
   static uint16_t *buf = NULL;
-  uint16_t *fb = gfx->getFramebuffer();
+  uint16_t *fb = board_fb();
   if (!fb || y < 0 || n <= 0 || n > 8 || y + n > SCREEN_H) return NULL;
   if (!buf) buf = (uint16_t *)heap_caps_malloc(SCREEN_W * 8 * 2, MALLOC_CAP_SPIRAM);
   if (!buf) return NULL;

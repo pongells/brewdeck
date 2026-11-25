@@ -1,11 +1,13 @@
 // Display part of the board layer (brewdeck_core.h) for the Sunton ESP32-S3 4.3" (800x480 RGB panel): on top of
-// panel.cpp. The panel is driven by Arduino_GFX with its frame buffer in PSRAM and bounce buffers (see panel.cpp);
-// a flushed rectangle is copied into that frame buffer by the CPU. Touch, memory: src/board/common.
+// panel.cpp (esp_lcd, frame buffer in PSRAM, bounce buffers); a flushed rectangle is copied into that frame buffer by
+// the CPU. Touch, memory: src/board/common.
 #include "../../core/systime.h"
 #include <driver/uart.h>
 #include <driver/uart_vfs.h>
 #include "board.h"
 #include "soc/spi_mem_reg.h"
+#include "esp32s3/rom/cache.h"
+#include <string.h>
 #include "../../core/brewdeck_core.h"
 #include "board_core.h"
 
@@ -37,7 +39,14 @@ void bd_display_flush(int x1, int y1, int x2, int y2, const uint16_t *px) {
   const uint32_t t0 = clock_us();
   g_fl_x = x1, g_fl_y = y1, g_fl_w = (int)w, g_fl_h = (int)h;
   g_fl_busy = true;
-  gfx->draw16bitRGBBitmap(x1, y1, (uint16_t *)px, w, h);
+  uint16_t *fb = board_fb();
+  if (fb && x1 >= 0 && y1 >= 0 && x2 < SCREEN_W && y2 < SCREEN_H && w && h) {
+    uint16_t *row = fb + (size_t)y1 * SCREEN_W + x1;
+    for (uint32_t j = 0; j < h; j++, row += SCREEN_W, px += w) memcpy(row, px, w * 2);
+    // write the rows back from the cache to PSRAM now (as Arduino_GFX did): the panel's refill reads PSRAM steadily
+    // instead of meeting a burst of evictions later
+    Cache_WriteBack_Addr((uint32_t)(fb + (size_t)y1 * SCREEN_W + x1), (uint32_t)((SCREEN_W * (h - 1) + w) * 2));
+  }
   g_fl_busy = false;
   g_flush_us += clock_us() - t0;
   g_flush_px += w * h;
@@ -50,7 +59,7 @@ void bd_display_stats(uint32_t *us, uint32_t *px, bool reset) {
 
 // the frame buffer is landscape already: its rows are the picture's rows
 const uint16_t *board_screen_rows(int y, int n) {
-  uint16_t *fb = gfx ? gfx->getFramebuffer() : NULL;
+  uint16_t *fb = board_fb();
   return fb && y >= 0 && n > 0 && y + n <= SCREEN_H ? fb + (size_t)y * SCREEN_W : NULL;
 }
 
