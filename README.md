@@ -170,10 +170,11 @@ a package for it, `brewdeck-<version>-esp32p4.zip`: follow its INSTALL.txt. Or b
    `build.sh` looks for it (or point `GAGGI_BACKUP` at it; a plain board
    can also be flashed without one, `NO_BACKUP=1`). Its port is `/dev/cu.usbmodem…` on macOS, `/dev/ttyACM0` on Linux.
 2. `./build.sh ui-p4 --flash`, then join Wi-Fi on the screen. On the network it is `brewdeck-p4`.
-3. If the first Wi-Fi join is slow at every start (it drops once and is retried), the board's ESP32-C6 runs old
-   firmware: update it once with
-   `./build.sh p4-c6-update --flash` (it uses the network saved on the screen and installs Espressif's image only
-   if its checksum matches; progress in the [serial log](docs/development.md#serial-log)), then flash `ui-p4` again.
+3. Update the board's ESP32-C6 (its Wi-Fi chip) once, to the ESP-Hosted version the firmware uses: boards ship with
+   older C6 firmware (with very old versions the first Wi-Fi join drops at every start).
+   `./build.sh p4-c6-update --flash` builds the C6 firmware from `firmware/c6` and installs it over the board's own
+   link to the C6 (no network needed; the C6 boots it only when it arrived complete; progress in the
+   [serial log](docs/development.md#serial-log)), then flash `ui-p4` again.
 4. Fit an antenna. The board's Wi-Fi (the ESP32-C6) is wired to the small IPEX Gen3 (MHF3) socket on the module, next
    to its shield: without an antenna it still joins, but weakly. On our board, by the machine: about -83 dBm without
    one, -60 dBm with a 3 cm flexible 2.4 GHz antenna stuck inside the case, away from the board's metal. Plug it in

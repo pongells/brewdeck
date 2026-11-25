@@ -6,7 +6,8 @@
 #   ./build.sh ui-p4-debug --ota   build, then send it over Wi-Fi to a screen running a debug build (kept only if it
 #                            runs properly for 60 s, else the screen goes back; HOST=name or address of the screen)
 #   ./build.sh ui-p4 ...     the Guition ESP32-P4 board (ui-p4-debug: with the debug web server)
-#   ./build.sh p4-c6-update --flash   P4 board: update its Wi-Fi chip's firmware (src/c6update), then flash ui-p4
+#   ./build.sh p4-c6-update --flash   P4 board: update its Wi-Fi chip's firmware (built from firmware/c6, installed by
+#                                     src/c6update), then flash ui-p4
 #   ./build.sh touchtest --flash      S3: raw touch test (src/touchtest)
 #   UI=ui_minimal ./build.sh ui   another UI folder under src/ (default: ui, Brewdeck's own)
 #   UI=../my-ui ./build.sh ui     a UI folder outside this repository (any path containing a /)
@@ -58,12 +59,18 @@ for f in $(grep -rl --include='*.c' --include='*.cpp' '__DATE__' src); do rm -f 
 for d in sdkconfig.base.* sdkconfig.brewdeck.*; do
   [[ -f "$d" && -f "sdkconfig.$TARGET" && "$d" -nt "sdkconfig.$TARGET" ]] && { rm -f "sdkconfig.$TARGET"; echo "$d changed: sdkconfig.$TARGET made again"; break; }
 done
+if [[ "$TARGET" == p4-c6-update ]]; then   # the updater carries the C6's firmware (firmware/c6): build that first
+  for d in c6/sdkconfig.defaults*; do
+    [[ -f c6/sdkconfig.c6 && "$d" -nt c6/sdkconfig.c6 ]] && { rm -f c6/sdkconfig.c6; echo "$d changed: c6/sdkconfig.c6 made again"; break; }
+  done
+  (cd c6 && $PIO run -e c6)
+fi
 $PIO run -e "$TARGET"
 BP="$HERE/.pio/build/$TARGET"
 echo "Build OK: $BP"
 
 # boot_app0.bin (the OTA data partition's start state, blank: boot app0) next to the build's images: ESP-IDF builds
-# make it (ota_data_initial.bin); the Arduino tools (touchtest, p4-c6-update) take the Arduino core's
+# make it (ota_data_initial.bin); the Arduino touch test takes the Arduino core's
 BOOT="$BP/ota_data_initial.bin"
 [[ -f "$BOOT" ]] || BOOT="$(find "$PLATFORMIO_CORE_DIR/packages" -path "*framework-arduinoespressif32*/tools/partitions/boot_app0.bin" 2>/dev/null | head -1)"
 [[ -f "$BOOT" ]] || { echo "boot_app0.bin not found (build folder, $PLATFORMIO_CORE_DIR/packages)"; exit 1; }

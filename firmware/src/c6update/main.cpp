@@ -1,160 +1,101 @@
 // One-off tool for the Guition ESP32-P4 board (env p4-c6-update): updates the board's ESP32-C6, the Wi-Fi chip the P4
 // talks to over SDIO (ESP-Hosted), to the ESP-Hosted version Brewdeck's firmware runs (esp_hosted in
-// src/idf_component.yml), not the older one this Arduino tool's own host library expects. Boards ship with older C6
-// firmware (seen: 2.3.2); with it the first Wi-Fi join dropped at every boot. A C6 behind the host also logs "Version
-// mismatch ... Upgrade co-proc to avoid RPC timeouts" at every boot.
-//   ./build.sh p4-c6-update --flash, then read the log (the screen stays dark), then flash Brewdeck again:
+// src/idf_component.yml). Boards ship with older C6 firmware (seen: 2.3.2); a C6 behind the host logs "Version
+// mismatch" at every boot, and with very old ones the first Wi-Fi join dropped.
+//   ./build.sh p4-c6-update --flash, read the log (the screen stays dark), then flash Brewdeck again:
 //   ./build.sh ui-p4 --flash
-// Wi-Fi: the network Brewdeck saved on the screen (NVS "wifi", read only), else the one in wifi_config.h.
 //
-// The image comes from Espressif (the folder the Arduino core downloads its C6 images from). Its size and SHA-256 are
-// pinned below: the hash is computed while the image is written to the C6, and the C6 is told to boot it only when
-// both match. On a mismatch, a failed download or a write error, the new image is never activated and the C6 keeps its
-// current firmware. When esp_hosted moves to another version, pin that version's image here (size and sha256 of the
-// downloaded .bin).
-// -DC6UPDATE_DRY_RUN (PLATFORMIO_BUILD_FLAGS): download and check the image even when the C6 is current, write nothing.
-#include <Arduino.h>
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include <NetworkClientSecure.h>
-#include <Preferences.h>
+// The C6 image is built from source in this repository (firmware/c6: ESP-Hosted's co-processor, same version as this
+// host; Espressif publishes C6 images only for 2.x) and carried inside this program, so no network is needed: only the
+// P4's SDIO link to the C6. It is sent with ESP-Hosted's co-processor OTA; the C6 checks the image (its own hash) and
+// boots it only when it is complete. If anything fails, the C6 keeps its current firmware.
+// -DC6UPDATE_DRY_RUN (PLATFORMIO_BUILD_FLAGS): check the image and the link, write nothing.
+#include <stdio.h>
+#include <string.h>
+#include <esp_attr.h>
+#include <esp_app_desc.h>
+#include <esp_app_format.h>
+#include <esp_system.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <mbedtls/sha256.h>
-#include "esp32-hal-hosted.h"
-#include "wifi_config.h"
+#include "esp_hosted.h"
+#include "esp_hosted_ota.h"
 
-// = esp_hosted in src/idf_component.yml
-static const struct { uint32_t major, minor, patch; const char *url; int size; const char *sha256; } TARGET = {
-  2, 13, 1, "https://espressif.github.io/arduino-esp32/hosted/esp32c6-v2.13.1.bin", 1244160,
-  "2d8a98801680f1feccdc8c20ace05617c425d4f8f5041fd5b17cb8dc802c643f"};
+// the C6 image (src/CMakeLists.txt embeds firmware/c6/.pio/build/c6/firmware.bin)
+extern const uint8_t c6_bin_start[] asm("_binary_firmware_bin_start");
+extern const uint8_t c6_bin_end[] asm("_binary_firmware_bin_end");
 
-static void versions(const char *when) {
-  uint32_t a, b, c, x, y, z;
-  hostedGetHostVersion(&a, &b, &c);
-  hostedGetSlaveVersion(&x, &y, &z);
-  Serial.printf("c6update: %s: host %u.%u.%u, C6 %u.%u.%u (%s)\n", when, (unsigned)a, (unsigned)b, (unsigned)c,
-                (unsigned)x, (unsigned)y, (unsigned)z, hostedGetSlaveTargetName());
-}
+// one try per version: if the C6 still reports another version after an update and a restart, stop (no loop)
+RTC_NOINIT_ATTR static uint32_t s_tried;
 
-// download the image, write it to the C6 while hashing it; activate only a complete image with the pinned hash
-static bool update_c6(const char *url, int want_size, const char *want_sha) {
-  NetworkClientSecure tls;
-  tls.setInsecure();   // the pinned SHA-256 checks the image itself, whoever served it
-  HTTPClient http;
-  if (!http.begin(tls, url)) { Serial.println("c6update: could not start the download"); return false; }
-  const int code = http.GET();
-  if (code != HTTP_CODE_OK) { Serial.printf("c6update: download failed (HTTP %d)\n", code); http.end(); return false; }
-  int left = http.getSize();
-  if (left != want_size) {
-    Serial.printf("c6update: image is %d bytes, expected %d: not the pinned image, nothing written\n", left, want_size);
-    http.end();
+static bool image_ok(const uint8_t *img, size_t len) {
+  esp_image_header_t h;
+  if (len < sizeof h + 8 + sizeof(esp_app_desc_t)) return false;
+  memcpy(&h, img, sizeof h);
+  if (h.magic != ESP_IMAGE_HEADER_MAGIC || h.chip_id != ESP_CHIP_ID_ESP32C6) {
+    printf("c6update: the carried image is not an ESP32-C6 app (magic 0x%02x, chip %u)\n", h.magic, (unsigned)h.chip_id);
     return false;
   }
-#ifndef C6UPDATE_DRY_RUN
-  if (!hostedBeginUpdate()) { Serial.println("c6update: the C6 refused to start the update"); http.end(); return false; }
-#endif
-  static uint8_t buf[2048];
-  mbedtls_sha256_context sha;
-  mbedtls_sha256_init(&sha);
-  mbedtls_sha256_starts(&sha, 0);
-  NetworkClient *in = http.getStreamPtr();
-  bool ok = true;
-  uint32_t last = millis();
-  while (left > 0) {
-    const size_t avail = in->available();
-    if (!avail) {
-      if (!http.connected() || millis() - last > 15000) { Serial.println("\nc6update: download stopped"); ok = false; break; }
-      delay(5);
-      continue;
-    }
-    const int n = in->readBytes(buf, min((int)avail, min(left, (int)sizeof buf)));
-    if (n <= 0) continue;
-    last = millis();
-    mbedtls_sha256_update(&sha, buf, n);
-#ifndef C6UPDATE_DRY_RUN
-    if (!hostedWriteUpdate(buf, n)) { Serial.println("\nc6update: writing to the C6 failed"); ok = false; break; }
-#endif
-    left -= n;
-    if ((want_size - left) % (64 * 1024) < (int)sizeof buf) Serial.print(".");
-  }
-  http.end();
-  uint8_t got[32];
-  mbedtls_sha256_finish(&sha, got);
-  mbedtls_sha256_free(&sha);
-  char hex[65];
-  for (int i = 0; i < 32; i++) snprintf(hex + 2 * i, 3, "%02x", got[i]);
-  Serial.println();
-  if (!ok || left != 0) return false;   // incomplete: never ended or activated, the C6 keeps its firmware
-  if (strcmp(hex, want_sha) != 0) {
-    Serial.printf("c6update: SHA-256 %s does not match the pinned %s: NOT activated\n", hex, want_sha);
-    return false;
-  }
-  Serial.println("c6update: SHA-256 matches the pinned image");
-#ifdef C6UPDATE_DRY_RUN
-  Serial.println("c6update: dry run: nothing written");
-  return false;
-#endif
-  if (!hostedEndUpdate()) { Serial.println("c6update: the C6 rejected the image: NOT activated"); return false; }
-  if (!hostedActivateUpdate()) { Serial.println("c6update: activating the new image failed"); return false; }
+  esp_app_desc_t d;
+  memcpy(&d, img + sizeof h + 8, sizeof d);   // the first segment starts with the app description
+  if (d.magic_word != ESP_APP_DESC_MAGIC_WORD) { printf("c6update: no app description in the image\n"); return false; }
+  uint8_t sha[32];
+  mbedtls_sha256(img, len, sha, 0);
+  printf("c6update: image %u bytes, %s, built with ESP-IDF %s, SHA-256 ", (unsigned)len, d.project_name, d.idf_ver);
+  for (int i = 0; i < 32; i++) printf("%02x", sha[i]);
+  printf("\n");
   return true;
 }
 
-void setup() {
-  Serial.begin(115200);
-  delay(1500);
-  Serial.println("c6update: start");
-  static char ssid[33] = "", pass[65] = "";
-  Preferences p;
-  if (p.begin("wifi", true)) {
-    p.getString("ssid", ssid, sizeof ssid);
-    p.getString("pass", pass, sizeof pass);
-    p.end();
+static bool send_image(const uint8_t *img, size_t len) {
+  if (esp_hosted_slave_ota_begin() != ESP_OK) { printf("c6update: the C6 refused to start the update\n"); return false; }
+  const size_t CHUNK = 1400;
+  for (size_t off = 0; off < len; off += CHUNK) {
+    const size_t n = len - off < CHUNK ? len - off : CHUNK;
+    if (esp_hosted_slave_ota_write(img + off, n) != ESP_OK) {
+      printf("\nc6update: writing to the C6 failed at %u of %u bytes\n", (unsigned)off, (unsigned)len);
+      return false;   // never ended or activated: the C6 keeps its firmware
+    }
+    if (off % (64 * 1024) < CHUNK) printf(".");
   }
-  if (ssid[0]) Serial.printf("c6update: using the network saved on the screen, \"%s\"\n", ssid);
-  else if (strcmp(WIFI_SSID, "YOUR_WIFI_NAME") != 0) {
-    snprintf(ssid, sizeof ssid, "%s", WIFI_SSID);
-    snprintf(pass, sizeof pass, "%s", WIFI_PASS);
-    Serial.printf("c6update: using the network in wifi_config.h, \"%s\"\n", ssid);
-  } else {
-    Serial.println("c6update: no network: join one on the screen with Brewdeck first, or set wifi_config.h");
-    return;
-  }
-  WiFi.STA.begin();
-  versions("before");
-  for (int attempt = 1; attempt <= 5 && WiFi.STA.status() != WL_CONNECTED; attempt++) {
-    Serial.printf("c6update: joining, attempt %d\n", attempt);
-    WiFi.STA.connect(ssid, pass);
-    for (int i = 0; i < 30 && WiFi.STA.status() != WL_CONNECTED; i++) delay(500);
-  }
-  memset(pass, 0, sizeof pass);
-  if (WiFi.STA.status() != WL_CONNECTED) { Serial.println("c6update: could not join Wi-Fi, nothing done"); return; }
-  uint32_t x, y, z;
-  hostedGetSlaveVersion(&x, &y, &z);
-  const bool current = x == TARGET.major && y == TARGET.minor && z == TARGET.patch;
-#ifndef C6UPDATE_DRY_RUN
-  if (current) { versions("no update needed, the C6 runs the pinned version"); return; }
-#endif
-  Serial.printf("c6update: C6 %u.%u.%u -> %u.%u.%u, from %s\n", (unsigned)x, (unsigned)y, (unsigned)z,
-                (unsigned)TARGET.major, (unsigned)TARGET.minor, (unsigned)TARGET.patch, TARGET.url);
-  const bool ok = update_c6(TARGET.url, TARGET.size, TARGET.sha256);
+  printf("\n");
+  if (esp_hosted_slave_ota_end() != ESP_OK) { printf("c6update: the C6 rejected the image: NOT activated\n"); return false; }
+  if (esp_hosted_slave_ota_activate() != ESP_OK) { printf("c6update: activating the new image failed\n"); return false; }
+  return true;
+}
+
+extern "C" void app_main(void) {
+  vTaskDelay(pdMS_TO_TICKS(1500));   // time to open the serial monitor
+  const uint32_t want = ESP_HOSTED_VERSION_VAL(ESP_HOSTED_VERSION_MAJOR_1, ESP_HOSTED_VERSION_MINOR_1,
+                                               ESP_HOSTED_VERSION_PATCH_1);
+  printf("c6update: start, host %u.%u.%u\n", (unsigned)ESP_HOSTED_VERSION_MAJOR_1, (unsigned)ESP_HOSTED_VERSION_MINOR_1,
+         (unsigned)ESP_HOSTED_VERSION_PATCH_1);
+  const uint8_t *img = c6_bin_start;
+  const size_t len = (size_t)(c6_bin_end - c6_bin_start);
+  if (!image_ok(img, len)) return;
+  esp_hosted_init();
+  if (esp_hosted_connect_to_slave() != 0) { printf("c6update: no link to the C6, nothing done\n"); return; }
+  esp_hosted_coprocessor_fwver_t v = {};
+  if (esp_hosted_get_coprocessor_fwversion(&v) != 0) { printf("c6update: the C6 did not report its version\n"); return; }
+  const uint32_t have = ESP_HOSTED_VERSION_VAL(v.major1, v.minor1, v.patch1);
+  printf("c6update: C6 runs %u.%u.%u, this program carries %u.%u.%u\n", (unsigned)v.major1, (unsigned)v.minor1,
+         (unsigned)v.patch1, (unsigned)ESP_HOSTED_VERSION_MAJOR_1, (unsigned)ESP_HOSTED_VERSION_MINOR_1,
+         (unsigned)ESP_HOSTED_VERSION_PATCH_1);
 #ifdef C6UPDATE_DRY_RUN
-  Serial.println("c6update: dry run finished");
+  printf("c6update: dry run: image and link checked, nothing written\n");
   return;
 #endif
-  Serial.printf("c6update: update %s\n", ok ? "done, restarting to check" : "FAILED (the C6 keeps its old firmware)");
-  if (ok) { delay(1000); ESP.restart(); }
+  if (have == want) { s_tried = 0; printf("c6update: no update needed, now flash Brewdeck again (./build.sh ui-p4 --flash)\n"); return; }
+  if (s_tried == want) {
+    s_tried = 0;
+    printf("c6update: the C6 still runs another version after one update: stopped (see the log above)\n");
+    return;
+  }
+  s_tried = want;
+  printf("c6update: updating the C6 ...\n");
+  if (!send_image(img, len)) { s_tried = 0; printf("c6update: update FAILED (the C6 keeps its old firmware)\n"); return; }
+  printf("c6update: update done, restarting to check\n");
+  vTaskDelay(pdMS_TO_TICKS(1000));
+  esp_restart();
 }
-
-void loop() { delay(1000); }
-
-// The firmware's settings turn Arduino's own start-up off (Brewdeck starts from app_main, src/core/main.cpp): this tool
-// still uses Arduino (WiFi, HTTPClient, ESP-Hosted OTA), so it starts it the way Arduino would.
-#if !CONFIG_AUTOSTART_ARDUINO
-static void loop_task(void *) {
-  setup();
-  for (;;) loop();
-}
-extern "C" void app_main(void) {
-  initArduino();
-  xTaskCreatePinnedToCore(loop_task, "loopTask", 8192, NULL, 1, NULL, 1);
-}
-#endif

@@ -76,7 +76,7 @@ Prerequisites and the first build: README, [Building](../README.md#building). In
 | `ui` | release build for the Sunton ESP32-S3 |
 | `ui-debug` | the same plus the debug web server (below) |
 | `ui-p4`, `ui-p4-debug` | the Guition ESP32-P4 board |
-| `p4-c6-update` | one-off: updates the P4 board's ESP32-C6 Wi-Fi firmware (`src/c6update`) |
+| `p4-c6-update` | one-off: updates the P4 board's ESP32-C6 Wi-Fi firmware (built from `firmware/c6`, installed by `src/c6update`) |
 | `touchtest` | raw touch test for the S3: shows touch coordinates, tap the corners to check the axes |
 
 `./build.sh <env>` builds, `--flash` flashes through `flash.sh`; `UI=<folder>` builds another UI folder (a folder name under `src/`, or a path to one outside the repository). Options are
@@ -84,7 +84,9 @@ in the header of [`build.sh`](../firmware/build.sh).
 
 Both boards are **plain ESP-IDF projects** (`framework = espidf`). ESP-IDF and the components named in
 `src/idf_component.yml` (mDNS; on the P4 ESP-Hosted and esp_wifi_remote) are compiled from source together, in the env's
-own build folder. Two small tools are plain Arduino builds instead: `touchtest` and `p4-c6-update`. Settings:
+own build folder; so are the C6 updater (`p4-c6-update`) and the C6's own firmware (`firmware/c6`, a separate project
+with ESP-Hosted's co-processor: Espressif publishes C6 images only for 2.x). The S3 touch test (`touchtest`) is a plain
+Arduino build. Settings:
 `sdkconfig.base.<chip>` (the settings the firmware ran on while it was built on the Arduino core, as the lines that
 differ from ESP-IDF's defaults; how it was made is in its header), plus `sdkconfig.brewdeck.<chip>`:
 - **S3** (`sdkconfig.brewdeck.esp32s3`): octal PSRAM, and what keeps the RGB panel's picture steady while Wi-Fi is busy

@@ -22,6 +22,10 @@ firmware/sdkconfig.*
 !firmware/sdkconfig.brewdeck.*
 !firmware/sdkconfig.base.*
 firmware/dependencies.lock
+# the C6 firmware project (firmware/c6): build output, fetched components, generated settings
+firmware/c6/.pio/
+firmware/c6/managed_components/
+firmware/c6/sdkconfig.c6
 .idea/
 # recorded WebSocket frames for host tests (no d_settings, see tools/ws_listen.py --raw)
 !sim/data/*.bin
