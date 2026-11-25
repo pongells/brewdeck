@@ -2,7 +2,6 @@
 #include <Arduino.h>
 #ifdef BREWDECK_DEBUG_HTTP
 #include <WiFi.h>
-#include <Update.h>
 #include <esp_ota_ops.h>
 #include <esp_app_format.h>
 #include <string.h>
@@ -21,6 +20,7 @@
 static const uint32_t KEEP_AFTER_MS = 60000, STALL_MS = 20000, WIFI_WITHIN_MS = 180000;
 
 // Arduino marks a new image as good as soon as it starts; here it is marked only after the checks in watch()
+// (needed while the Arduino core runs the start-up)
 extern "C" bool verifyRollbackLater() { return true; }
 
 // what the UI shows (BD_EV_UPDATE): written by the receiving task, read by the UI loop (ota_poll)
@@ -102,6 +102,9 @@ bool ota_receive(WiFiClient &c, size_t len, const char *token, char *msg, size_t
   size_t got = 0;
   uint32_t t0 = millis(), last_log = 0;
   bool started = false;
+  esp_ota_handle_t oh = 0;
+  esp_err_t e = ESP_OK;
+  uint32_t flash_us = 0;   // time spent erasing + writing flash (the rest is the network)
   while (got < len) {
     const size_t want = len - got < sizeof buf ? len - got : sizeof buf;
     const size_t n = c.readBytes(buf, want);
@@ -111,7 +114,12 @@ bool ota_receive(WiFiClient &c, size_t len, const char *token, char *msg, size_t
       if (n < sizeof *h || h->magic != ESP_IMAGE_HEADER_MAGIC || h->chip_id != CONFIG_IDF_FIRMWARE_CHIP_ID)
         return snprintf(msg, cap, "refused: not a firmware image for this chip (chip id %u, this is %u)\n",
                         n >= sizeof *h ? (unsigned)h->chip_id : 0, (unsigned)CONFIG_IDF_FIRMWARE_CHIP_ID), false;
-      if (!Update.begin(len, U_FLASH)) return snprintf(msg, cap, "failed to start: %s\n", Update.errorString()), false;
+      // the image's flash is erased here in one go, in 64 KB blocks where aligned (sector by sector as the data
+      // arrives took ~twice as long); with flash encryption on, the chip encrypts what is written
+      const uint32_t e0 = millis();
+      e = esp_ota_begin(next, len, &oh);
+      flash_us += (millis() - e0) * 1000;
+      if (e != ESP_OK) return snprintf(msg, cap, "failed to start: %s\n", esp_err_to_name(e)), false;
       char built[sizeof g_up.built], from[sizeof g_up.from];   // read outside the lock: remoteIP() waits on lwIP
       image_built(buf, n, built, sizeof built);
       snprintf(from, sizeof from, "%s", c.remoteIP().toString().c_str());
@@ -122,9 +130,12 @@ bool ota_receive(WiFiClient &c, size_t len, const char *token, char *msg, size_t
       Log.printf("ota: receiving %u bytes into %s\n", (unsigned)len, next->label);
       started = true;
     }
-    if (Update.write(buf, n) != n) {
-      snprintf(msg, cap, "write failed at %u: %s\n", (unsigned)got, Update.errorString());
-      Update.abort();
+    const uint32_t w0 = micros();
+    e = esp_ota_write(oh, buf, n);
+    flash_us += micros() - w0;
+    if (e != ESP_OK) {
+      snprintf(msg, cap, "write failed at %u: %s\n", (unsigned)got, esp_err_to_name(e));
+      esp_ota_abort(oh);
       up_set(BD_UPDATE_STOPPED, got, len);
       Log.printf("ota: %s", msg);
       return false;
@@ -138,22 +149,27 @@ bool ota_receive(WiFiClient &c, size_t len, const char *token, char *msg, size_t
   }
   if (got < len) {
     if (started) {
-      Update.abort();
+      esp_ota_abort(oh);
       up_set(BD_UPDATE_STOPPED, got, len);
     }
     snprintf(msg, cap, "connection ended after %u of %u bytes; nothing changed\n", (unsigned)got, (unsigned)len);
     Log.printf("ota: %s", msg);
     return false;
   }
-  if (!Update.end(true)) {   // checks the image (hash) and makes it the next boot
-    snprintf(msg, cap, "image check failed: %s; nothing changed\n", Update.errorString());
+  const uint32_t c0 = millis();
+  e = esp_ota_end(oh);                                   // checks the whole image (segments, hash)
+  if (e == ESP_OK) e = esp_ota_set_boot_partition(next);   // the next boot, on trial (rollback)
+  const uint32_t check_ms = millis() - c0;
+  if (e != ESP_OK) {
+    snprintf(msg, cap, "image check failed: %s; nothing changed\n", esp_err_to_name(e));
     up_set(BD_UPDATE_STOPPED, got, len);
     Log.printf("ota: %s", msg);
     return false;
   }
   up_set(BD_UPDATE_INSTALLED, len, len);
-  snprintf(msg, cap, "installed into %s (%u bytes in %.1f s); restarting, kept if it runs properly for 60 s\n",
-           next->label, (unsigned)len, (millis() - t0) / 1000.0f);
+  snprintf(msg, cap, "installed into %s (%u bytes in %.1f s: flash %.1f s, image check %.1f s); restarting, kept if "
+           "it runs properly for 60 s\n", next->label, (unsigned)len, (millis() - t0) / 1000.0f, flash_us / 1e6f,
+           check_ms / 1000.0f);
   Log.printf("ota: %s", msg);
   return true;
 }
