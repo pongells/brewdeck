@@ -4,7 +4,7 @@
 dependencies:
   espressif/mdns: "==1.15.1"            # finding the machine by name, the screen's own name
   espressif/esp_hosted:                 # P4: Wi-Fi through the ESP32-C6 (keep in step with the C6 updater, src/c6update)
-    version: "==2.13.1"
+    version: "==3.1.0"
     rules:
       - if: "target == esp32p4"
   espressif/esp_wifi_remote:            # P4: esp_wifi_* calls carried to the ESP32-C6

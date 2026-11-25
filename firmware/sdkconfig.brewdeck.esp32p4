@@ -6,7 +6,8 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_app3M_fat9M_16MB.csv"
 CONFIG_SPIRAM_BOOT_HW_INIT=y
 CONFIG_SPIRAM_BOOT_INIT=y
 CONFIG_SPIRAM_XIP_FROM_PSRAM=y
-# ESP-Hosted 2.13 receives from the C6 into two buffers by default: ~30 KB less internal RAM (217 vs 186 KB free)
-CONFIG_ESP_HOSTED_SDIO_RX_DOUBLE_BUFFERING=n
+# ESP-Hosted receives from the C6 into two staging buffers by default: one is enough here and saves ~30 KB of internal
+# RAM (2.x: SDIO_RX_DOUBLE_BUFFERING=n)
+CONFIG_ESP_HOSTED_HOST_SDIO_RX_STAGING_SLOTS=1
 # Start from our app_main (src/core/main.cpp), not Arduino's setup() / loop()
 # CONFIG_AUTOSTART_ARDUINO is not set
