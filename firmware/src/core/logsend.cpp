@@ -1,8 +1,8 @@
 // Log lines to a log server + the UI-loop watch (see logsend.h). Debug builds only.
 #include <Arduino.h>
 #ifdef BREWDECK_DEBUG_HTTP
-#include <WiFi.h>
-#include <WiFiUdp.h>
+#include <lwip/netdb.h>
+#include <lwip/sockets.h>
 #include "kv.h"
 #include <string.h>
 #include "logsend.h"
@@ -83,9 +83,24 @@ static void watch_loop(void) {
   }
 }
 
+// the log server's address: an IP address, or a name (DNS, or mDNS for .local names)
+static bool resolve(const char *host, uint16_t port, struct sockaddr_in *out) {
+  memset(out, 0, sizeof *out);
+  out->sin_family = AF_INET;
+  out->sin_port = htons(port);
+  if (inet_pton(AF_INET, host, &out->sin_addr) == 1) return true;
+  struct addrinfo hints = {}, *res = NULL;
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_DGRAM;
+  if (getaddrinfo(host, NULL, &hints, &res) != 0 || !res) return false;
+  out->sin_addr = ((struct sockaddr_in *)res->ai_addr)->sin_addr;
+  freeaddrinfo(res);
+  return true;
+}
+
 static void task(void *) {
-  WiFiUDP udp;
-  IPAddress ip;
+  int sock = -1;
+  struct sockaddr_in to;
   bool have_ip = false;
   uint32_t resolved_at = 0;
   uint32_t pos = 0;                              // from the boot line on: sent once Wi-Fi is up (the restart reason)
@@ -112,10 +127,11 @@ static void task(void *) {
     if (!net_wifi_up(NULL)) continue;            // keep pos: sent when Wi-Fi is back
     if (!have_ip && (!resolved_at || millis() - resolved_at > 60000)) {
       resolved_at = millis();
-      have_ip = ip.fromString(host) || WiFi.hostByName(host, ip) == 1;
+      have_ip = resolve(host, port, &to);
       if (!have_ip) { g_resolve_err++; continue; }
     }
     if (!have_ip) continue;
+    if (sock < 0 && (sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) continue;
     // whole lines from the memory log, one datagram each (at most 200 per round). A line that cannot go out (lwIP
     // buffers full, e.g. during a screenshot) is tried again next round, up to 3 times, then dropped.
     static int tries = 0;
@@ -136,10 +152,10 @@ static void task(void *) {
           continue;
         }
         if (ln) {
-          udp.beginPacket(ip, port);
-          udp.printf("<14>1 - %s brewdeck - - - ", board_hostname());   // RFC 5424, user.info, no timestamp
-          udp.write((const uint8_t *)line, ln);
-          if (!udp.endPacket()) {
+          static char dg[sizeof line + 64];       // RFC 5424, user.info, no timestamp
+          const int h = snprintf(dg, sizeof dg, "<14>1 - %s brewdeck - - - ", board_hostname());
+          memcpy(dg + h, line, ln);
+          if (sendto(sock, dg, h + ln, 0, (const struct sockaddr *)&to, sizeof to) < 0) {
             g_send_err++;
             if (++tries < 3) { again = true; break; }   // from this line's start, next round
           } else g_sent++;
