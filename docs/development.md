@@ -142,6 +142,10 @@ curl -4 'http://brewdeck-p4.local/release?base=http://<computer>:8000'   # check
 curl -4 'http://brewdeck-p4.local/release?install=1'                     # as the Install button does
 ```
 
+To try the real thing against the latest published release, build a debug firmware that reports an older version
+(`BREWDECK_VERSION=v0.2.9-test ./build.sh ui-p4-debug --ota`): it offers that release in Menu > About and installs it
+from GitHub. The screen then runs the release image, without the debug server.
+
 The test key's public half goes in `include/update_test_key.h` (git-ignored, `UPDATE_TEST_PUBKEY_PEM`); without it a
 debug build accepts only the release key. Never publish a debug build's image: it carries the Wi-Fi password and the
 OTA password.

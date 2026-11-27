@@ -67,12 +67,16 @@ print("Brewdeck UI: src/%s, board %s" % (ui, board))
 # The firmware's version: the git tag ("v0.2.0" on a release), "v0.2.0-3-gabc1234" between releases (3 commits after
 # it), "-dirty" with uncommitted changes, a bare commit hash without tags (shallow CI checkouts). Written to a header
 # in the build folder (core.cpp includes it if present), rewritten only when it changes so only that file recompiles.
+# BREWDECK_VERSION=v0.2.9-test overrides it (tests of the updates over Wi-Fi: a build that sees the latest release as
+# newer).
 import subprocess
-try:
-    ver = subprocess.check_output(["git", "describe", "--tags", "--always", "--dirty"],
-                                  cwd=env.subst("$PROJECT_DIR"), stderr=subprocess.DEVNULL).decode().strip()
-except Exception:
-    ver = ""
+ver = os.environ.get("BREWDECK_VERSION", "")
+if not ver:
+    try:
+        ver = subprocess.check_output(["git", "describe", "--tags", "--always", "--dirty"],
+                                      cwd=env.subst("$PROJECT_DIR"), stderr=subprocess.DEVNULL).decode().strip()
+    except Exception:
+        ver = ""
 gen = os.path.join(env.subst("$BUILD_DIR"), "gen")
 os.makedirs(gen, exist_ok=True)
 hdr = os.path.join(gen, "brewdeck_version.h")
