@@ -29,7 +29,7 @@ the example UI, scripts that fetch Brewdeck at a pinned release and build your U
 and CI for both boards. Press "Use this template", then follow its README.
 
 **Which Brewdeck you build against.** Pin a Brewdeck release tag, `v0.2.0` or later (v0.1.0 cannot build a UI from
-outside the repository). Within API version 1 every newer release keeps your UI compiling and working (see
+outside the repository; v0.3.0 builds its emulator but not its firmware, fixed after v0.3.0). Within API version 1 every newer release keeps your UI compiling and working (see
 "Compatibility" in `brewdeck_core.h`), so moving to a newer release is a one-line change; the release notes say when
 the API gains something, and a new major version of the API would be announced there first. Building against `main`
 works too, but it can change under you.
@@ -50,6 +50,26 @@ Naming a UI in its own repository, so people can find it and tell UIs apart:
 Brewdeck's own UI (`firmware/src/ui`) is the large example: every screen, the settings, the shot review.
 [Ledger](https://github.com/pongells/brewdeck-ui-ledger) is a complete UI in its own repository, built like the
 template: a different look, its own fonts, every screen in one file.
+
+## Getting your UI listed
+
+[`uis.json`](../uis.json) lists UIs kept in their own repositories. Brewdeck's CI (the "UIs" workflow) builds each one
+at its pinned commit against the **current** core, so a core change that would break a listed UI shows up before a
+release: the emulator with the shared UI scenarios ([UI features](ui-features.md)), and the firmware for both boards.
+Its status table is in that workflow's run summary.
+
+To be listed, a UI must:
+- live in a public repository named as above, with the `brewdeck-ui` topic and a license that lets Brewdeck's CI build
+  it (and, later, offer it from the screen: [#5](https://github.com/pongells/brewdeck/issues/5));
+- build against the current core (emulator, ESP32-S3 and ESP32-P4 firmware);
+- pass **S1** (says it is unofficial) and **X1** (sends no command without a user action). Everything else in the
+  table is reported, not required: an experimental UI is welcome.
+
+Open a pull request adding your entry to `uis.json` (`tools/uis.py validate` checks it): `name` (your `BD_UI` name),
+`title`, `repo` (`owner/name`), `commit` (a full commit SHA, never a branch: what was reviewed is what gets built),
+`folder` (the UI folder in your repository, e.g. `ui`), `license` and a one-line `description`. A newer version of
+your UI is another pull request moving the commit. If a listed UI stops building after a core change, the workflow
+says so: a core bug gets fixed here, anything else is raised with the UI's author.
 
 ## What a UI implements
 

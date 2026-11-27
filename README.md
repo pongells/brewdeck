@@ -233,7 +233,9 @@ session (`sim/build-emu.sh && sim/emu`, needs SDL2). The same runs in a browser 
 A UI is built on the core's API and compiled with it into one image; it can live in its own repository, pinned to a
 Brewdeck release. Start from the [UI template](https://github.com/pongells/brewdeck-ui-template) and the
 [custom UI guide](docs/custom-ui.md). Ideas, ports and interfaces of your own are welcome in the
-[discussions](https://github.com/pongells/brewdeck/discussions).
+[discussions](https://github.com/pongells/brewdeck/discussions). UIs in their own repositories can be listed in
+[`uis.json`](uis.json): Brewdeck's CI then builds and checks them against every core change
+([Getting your UI listed](docs/custom-ui.md#getting-your-ui-listed)).
 
 For an idea of how far that goes, [Ledger](https://github.com/pongells/brewdeck-ui-ledger) is a whole different UI on
 the same core: light and printed-looking, sharing no code or look with Brewdeck's own.
@@ -254,7 +256,7 @@ How the parts fit together (board, core, UI, the network tasks, the emulator): [
 | `sim/` | emulator, renderer and recorded machine data |
 | `tests/` | host unit tests |
 | `docs/` | the [user manual](docs/manual.md) and its animations, [development](docs/development.md), the [architecture](docs/architecture.md), [writing your own UI](docs/custom-ui.md), the [design system](docs/design-system.md), [machine API notes](docs/gaggiuino-api.md), the [WebSocket protocol](docs/ws/README.md) |
-| `tools/` | release packaging (`make-release.sh`, `sign-update.sh` for updates over Wi-Fi), protocol listener, manual recorder, screenshot and screen recorder helpers, offline cup picture (`gen_cup.py`), a fake machine from the community profiles (`community_profiles.py`), font edge contrast (`font_contrast.py`) |
+| `tools/` | release packaging (`make-release.sh`, `sign-update.sh` for updates over Wi-Fi), the list of outside UIs (`uis.py`, for `uis.json`), protocol listener, manual recorder, screenshot and screen recorder helpers, offline cup picture (`gen_cup.py`), a fake machine from the community profiles (`community_profiles.py`), font edge contrast (`font_contrast.py`) |
 
 Debug builds (`ui-debug`, `ui-p4-debug`) add a small web server for screenshots, a screen recorder and remote touch; it has no
 password, so use them only on a network you trust ([development](docs/development.md#debug-web-server)).
@@ -272,8 +274,6 @@ Plans, not promises:
   ([#3](https://github.com/pongells/brewdeck/issues/3)).
 - **Switching between UIs** from the screen itself, built on the updates over Wi-Fi
   ([#5](https://github.com/pongells/brewdeck/issues/5)).
-- **A list of UIs** made by others, built by CI against the current core ([#1](https://github.com/pongells/brewdeck/issues/1));
-  your own UI in its own repository works already ([Your own interface](#your-own-interface)).
 - Maybe: **sounds**, off by default: a beep before the pressure release, perhaps when a shot ends. The ESP32-P4 board
   has a speaker output; the ESP32-S3 board needs a small piezo added.
 - Maybe, for fun: **a camera on the ESP32-P4**, watching the shot pour, or taking a picture of you waiting for

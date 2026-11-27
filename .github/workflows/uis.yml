@@ -1,0 +1,98 @@
+name: UIs
+
+# The UIs in their own repositories (uis.json), each at its pinned commit, built against the current core: the
+# emulator with the shared UI scenarios (docs/ui-features.md), and the firmware for both boards. A UI stays listed
+# while it builds and passes S1 (says it is unofficial) and X1 (no command without a user action); its whole status
+# table is in the run summary. A failure here does not block the main CI or a release.
+# This runs other people's code: no secrets, read-only access, and the build caches are only restored, never saved
+# (nothing a UI's build leaves behind reaches another workflow).
+on:
+  push:
+    branches: [main]
+    paths: ['uis.json', 'tools/uis.py', '.github/workflows/uis.yml', 'firmware/**', 'sim/**', 'tests/ui/**']
+  pull_request:
+    paths: ['uis.json', 'tools/uis.py', '.github/workflows/uis.yml', 'firmware/**', 'sim/**', 'tests/ui/**']
+  schedule:
+    - cron: '17 4 * * 1'   # weekly, Monday morning (UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uis-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  list:
+    name: Read uis.json
+    runs-on: ubuntu-latest
+    outputs:
+      names: ${{ steps.m.outputs.names }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: m
+        run: |
+          tools/uis.py validate
+          echo "names=$(tools/uis.py matrix)" >> "$GITHUB_OUTPUT"
+
+  emulator:
+    name: ${{ matrix.ui }}, emulator and UI scenarios
+    needs: list
+    if: needs.list.outputs.names != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ui: ${{ fromJSON(needs.list.outputs.names) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
+      - run: pip install pillow
+      - name: Fetch the UI at its pinned commit
+        run: echo "UI_DIR=$(tools/uis.py fetch ${{ matrix.ui }} "$RUNNER_TEMP/ui")" >> "$GITHUB_ENV"
+      - name: Shared UI scenarios against the current core
+        # every feature is reported; only the listing bar (next step) decides
+        run: UI_OUT="$RUNNER_TEMP/out" tests/ui/run.sh "$UI_DIR" || true
+      - name: Listing bar (S1, X1)
+        run: tools/uis.py check ${{ matrix.ui }} "$RUNNER_TEMP/out/status.md"
+      - name: Keep the scenario logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-${{ matrix.ui }}-scenarios
+          path: ${{ runner.temp }}/out/
+
+  firmware:
+    name: ${{ matrix.ui }}, firmware ${{ matrix.board }}
+    needs: list
+    if: needs.list.outputs.names != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ui: ${{ fromJSON(needs.list.outputs.names) }}
+        board: [s3, p4]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2   # v10.3.3 (Node 24)
+      - name: Restore the main CI's build cache (never saved from here)
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.platformio-brewdeck
+            firmware/.pio
+            firmware/managed_components
+          key: platformio-${{ matrix.board }}-espidf-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini', 'firmware/CMakeLists.txt', 'firmware/src/idf_component.yml', format('firmware/sdkconfig.base.esp32{0}', matrix.board), format('firmware/sdkconfig.brewdeck.esp32{0}', matrix.board), format('firmware/dependencies.lock.esp32{0}', matrix.board)) }}
+          restore-keys: platformio-${{ matrix.board }}-espidf-${{ runner.os }}-
+      - name: Fetch the UI at its pinned commit
+        run: echo "UI_DIR=$(tools/uis.py fetch ${{ matrix.ui }} "$RUNNER_TEMP/ui")" >> "$GITHUB_ENV"
+      - name: Build the release firmware with it
+        working-directory: firmware
+        run: |
+          env=${{ matrix.board == 'p4' && 'ui-p4' || 'ui' }}
+          # pioarduino can install a pioarduino package its own version check rejects (6.2.0.post1 vs >=6.2.0)
+          UI="$UI_DIR" ./build.sh $env || { uv pip install --python ~/.platformio-brewdeck/penv/bin/python pioarduino==6.2.0 && UI="$UI_DIR" ./build.sh $env; }

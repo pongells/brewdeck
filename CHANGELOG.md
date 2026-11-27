@@ -8,6 +8,15 @@ is ready for wider use. The screen shows its version on the splash and in Menu >
 `v0.2.0-3-gabc1234`: 3 commits after v0.2.0). The UI API (`BD_API_VERSION` in `brewdeck_core.h`) has its own number,
 which changes only when a custom UI would need changes.
 
+## Unreleased
+
+For developers:
+- A UI kept in its own repository builds into the firmware again (since the move to ESP-IDF its files were compiled
+  twice and the link failed; the emulator was fine). CI now builds an outside UI's firmware for both boards.
+- `uis.json` lists UIs in their own repositories; the "UIs" workflow builds each at its pinned commit against the
+  current core and checks it (docs/custom-ui.md, "Getting your UI listed"). First entry: Ledger.
+- `BREWDECK_VERSION=...` overrides the firmware's version (tests of the updates over Wi-Fi).
+
 ## v0.3.0 (2026-11-27)
 
 Install this version by USB once (as before, with your backup). On the ESP32-P4 board, also run the C6 update once

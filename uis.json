@@ -1,0 +1,14 @@
+{
+  "about": "UIs in their own repositories, built by .github/workflows/uis.yml against the current core. Each entry is pinned to an exact commit; moving it is a pull request here. To get listed: docs/custom-ui.md, 'Getting your UI listed'.",
+  "uis": [
+    {
+      "name": "ledger",
+      "title": "Ledger",
+      "repo": "pongells/brewdeck-ui-ledger",
+      "commit": "7de684d1f1e9fc89be67b3ccf8b0a09992ebf646",
+      "folder": "ui",
+      "license": "MIT",
+      "description": "Light and printed-looking: the boiler temperature set huge, the profile's values in ruled rows."
+    }
+  ]
+}
