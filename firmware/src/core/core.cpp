@@ -21,9 +21,10 @@
 #include "core_state.h"
 #include "board_core.h"
 #include "tlog.h"
+#include "ota.h"
+#include "update.h"
 #ifdef BREWDECK_DEBUG_HTTP
 #include "logsend.h"
-#include "ota.h"
 #define LOOP_MARK(where) loop_mark(where)   // the UI loop watch (logsend.h)
 #else
 #define LOOP_MARK(where) ((void)0)
@@ -245,8 +246,9 @@ void bd_core_setup(void) {
 #ifdef BREWDECK_DEBUG_HTTP
   debug_http_begin();                     // debug web server (debug_http.cpp: screen.bmp, heap, tasks, flash, roam, touch, bl, the UI's route): env ui-debug only
   logsend_begin();                        // log lines to a log server + the UI loop watch (logsend.h)
-  ota_begin();                            // a new firmware pushed from the computer: kept or rolled back (ota.h)
 #endif
+  ota_begin();                            // a new firmware (a release or a debug push): kept or rolled back (ota.h)
+  update_begin(BREWDECK_VERSION);         // looks for newer releases (update.h)
   ws_begin();
   Log.printf("ui \"%s\" %s ready\n", BD_UI.name, BD_UI.version);
 }
@@ -265,6 +267,7 @@ void bd_core_loop(void) {
   // shot must be in before the state that says it ended
   static uint32_t pf_n = 0, pf_max = 0, pf_sum = 0, pf_shots = 0, pf_t = 0;
   const uint32_t lp0 = clock_ms();            // a slow pass is logged by section (the UI must keep answering touch)
+  ota_loop_alive();                           // a new firmware's trial (ota.h)
   LOOP_MARK("shot points");
 #if defined(BREWDECK_DEBUG_HTTP) && defined(OTA_TEST_FREEZE)
   if (clock_ms() > 15000) for (;;) wait_ms(1000);   // test build only: a firmware that stops, to check the rollback (ota.h)
@@ -312,13 +315,12 @@ void bd_core_loop(void) {
   const uint32_t lp1 = clock_ms();
   LOOP_MARK("core tick");
   cs_tick(clock_ms());
-#ifdef BREWDECK_DEBUG_HTTP
-#ifdef BREWDECK_DEBUG_HTTP
   {
     bd_event ev;
-    if (ota_poll(&ev)) bd_ui_event(&ev);    // a firmware update arriving over Wi-Fi (ota.h)
+    if (ota_poll(&ev)) bd_ui_event(&ev);    // a firmware update being written (ota.h)
   }
-#endif
+  update_tick(clock_ms());                // a release check or download when due (update.h)
+#ifdef BREWDECK_DEBUG_HTTP
   LOOP_MARK("debug job");
   debug_http_service();                   // a UI debug route asked for (bd_debug_route): answered here, on the UI task
 #endif

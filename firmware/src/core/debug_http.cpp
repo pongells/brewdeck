@@ -16,6 +16,7 @@
 #include "tlog.h"
 #include "logsend.h"
 #include "ota.h"
+#include "update.h"
 #if __has_include("brewdeck_version.h")
 #include "brewdeck_version.h"
 #endif
@@ -272,6 +273,32 @@ static void task(void *) {
       c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nlog server: %s\n"
                "lines sent %lu, send errors %lu, address not found %lu\n", t[0] ? t : "off", (unsigned long)sent,
                (unsigned long)err, (unsigned long)unres);
+    } else if (strncmp(line, "GET /release", 12) == 0 && (line[12] == ' ' || line[12] == '?')) {
+      // /release shows the release state; ?base=http://host:8000/dir takes releases from there (test key accepted),
+      // ?base= goes back to GitHub; ?check=1 looks now; ?install=1 installs the newer release (as the UI would)
+      const char *pb = strstr(line, "base=");
+      if (pb) {
+        char base[96];
+        size_t k = 0;
+        for (pb += 5; *pb && *pb != ' ' && *pb != '&' && k < sizeof base - 1; pb++) base[k++] = *pb;
+        base[k] = 0;
+        update_set_base(base);
+      } else if (strstr(line, "check=1")) {
+        bd_release_check();
+      } else if (strstr(line, "install=1")) {   // as the UI's Install button does
+        static const char *const RES[] = {"ok", "offline", "busy", "range", "profile changed", "no scale", "pending",
+                                          "no newer release known"};
+        const bd_result res = bd_release_install();
+        c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\ninstall: %s\n", RES[res]);
+        c.close();
+        continue;
+      }
+      static const char *const ST[] = {"unknown", "checking", "up to date", "update available", "check failed"};
+      const bd_release *r = bd_release_info();
+      c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nreleases from: %s\n"
+               "state: %s, newest %s (%u bytes)%s%s%s\nrunning: %s\n", update_base()[0] ? update_base() : "GitHub",
+               ST[r->state], r->version[0] ? r->version : "-", (unsigned)r->size, r->installing ? ", installing" : "",
+               r->error[0] ? ", last error: " : "", r->error, ota_slot());
     } else if (strncmp(line, "GET /heap ", 10) == 0) {   // memory and Wi-Fi link
       char ssid[33], ap[18];
       int8_t rssi;
@@ -380,7 +407,7 @@ static void task(void *) {
       if (pp) bd_set_backlight(atoi(pp + 4));
       c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nok\n");
     } else {
-      c.print("HTTP/1.0 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nGET /screen.bmp, /rec?every=ms[&max=n], /rec, /rec/stop, /rec.bin, /rec/free, /heap, /tasks, /flash, /roam, /i2c, /ppatest?n=&seed=&hmin=&hmax=, /log[?from=], /log/prev, /loghost?to=, POST /ota, /touch?x=&y=&ms=, /bl?pct=&hz=\n");
+      c.print("HTTP/1.0 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nGET /screen.bmp, /rec?every=ms[&max=n], /rec, /rec/stop, /rec.bin, /rec/free, /heap, /tasks, /flash, /roam, /i2c, /ppatest?n=&seed=&hmin=&hmax=, /log[?from=], /log/prev, /loghost?to=, /release[?base=|?check=1|?install=1], POST /ota, /touch?x=&y=&ms=, /bl?pct=&hz=\n");
     }
     c.close();
   }

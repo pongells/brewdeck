@@ -213,6 +213,11 @@ static void on_tare(void) { printf("machine <- tare\n"); g_m.weight = 0; }
 static uint32_t g_autoflush_ms = 0;
 static uint32_t g_upd_ms = 0;               // a fake firmware update (update_step; "update" command)
 static bool g_upd_stop = false;
+// firmware releases (bd_release_*): up to date unless "release v0.3.0" says a newer one is out; installing plays the
+// fake update above as a download from github.com
+static bd_release g_rel = {BD_RELEASE_CURRENT, "v0.2.0", 1677721, false, ""};
+static uint32_t g_rel_seq = 1;
+static bool g_upd_rel = false;               // the running fake update is a release download
 static void on_flush(int mode) {
   static const char *const N[8] = {"", "", "FLUSH", "", "", "FLUSH_AUTO", "", "HOME"};
   const char *n = mode >= 0 && mode < 8 ? N[mode] : "";
@@ -837,6 +842,23 @@ bd_result bd_tare(void) {
   on_tare();
   return r;
 }
+const bd_release *bd_release_info(void) { return &g_rel; }
+uint32_t bd_seq_release(void) { return g_rel_seq; }
+void bd_release_check(void) { logged(BD_OK, true, "release_check"); }
+bd_result bd_release_install(void) {
+  const bool busy = g_m.brew_active || g_m.steam_active || g_m.hot_water_active || !strncmp(g_m.mode, "FLUSH", 5);
+  const bd_result r = busy ? BD_ERR_BUSY : g_rel.state != BD_RELEASE_AVAILABLE || g_rel.installing ? BD_ERR_UNKNOWN_ID
+                    : BD_OK;
+  logged(r, false, "release_install %s", g_rel.version);
+  if (r != BD_OK) return r;
+  g_rel.installing = true;
+  g_rel.error[0] = 0;
+  g_rel_seq++;
+  g_upd_ms = stamp_nz(SDL_GetTicks());
+  g_upd_stop = false;
+  g_upd_rel = true;
+  return r;
+}
 bd_result bd_load_previous_shot(const char *profile, int dur10) {
   logged(BD_OK, true, "load_previous_shot profile=\"%s\" dur=%.1f", profile ? profile : "", dur10 / 10.0);
   on_prev(profile, dur10);
@@ -1328,6 +1350,12 @@ static bool cmd_line(const char *l, uint32_t now, SDL_Keycode *key) {
   } else if (!strncmp(l, "update", 6) && (!l[6] || l[6] == ' ')) {   // a firmware update arriving ("update stop": it fails)
     g_upd_ms = stamp_nz(SDL_GetTicks());
     g_upd_stop = strstr(l, "stop") != NULL;
+    g_upd_rel = false;
+  } else if (!strncmp(l, "release ", 8)) {   // release v0.3.0: a newer release is out; release none: up to date
+    const bool none = !strcmp(l + 8, "none");
+    g_rel.state = none ? BD_RELEASE_CURRENT : BD_RELEASE_AVAILABLE;
+    snprintf(g_rel.version, sizeof g_rel.version, "%s", none ? "v0.2.0" : l + 8);
+    g_rel_seq++;
   } else if (!strncmp(l, "machine stopweight ", 19)) {   // the active profile's stop weight changed elsewhere (0: none)
     on_weight(profile_name(g_active_id), (int)(atof(l + 19) * 10 + 0.5));
   } else if (sscanf(l, "expect_cmds %d %n", &a, &b) == 1) {
@@ -1502,12 +1530,19 @@ static void update_step(uint32_t now) {
   e.u.update.total = total;
   e.u.update.percent = (int)((uint64_t)got * 100 / total);
   e.u.update.built = "24 Nov 2026 21:40";
-  e.u.update.from = "192.168.1.10";
+  e.u.update.from = g_upd_rel ? "github.com" : "192.168.1.10";
+  e.u.update.version = g_upd_rel ? g_rel.version : "";
   bd_ui_event(&e);
   if (st == BD_UPDATE_NONE || st == BD_UPDATE_STOPPED) {
     printf("emulator: update %s\n", st == BD_UPDATE_NONE ? "installed, restarted" : "stopped at 38 %");
     g_upd_ms = 0;
     sent = BD_UPDATE_NONE;
+    if (g_upd_rel) {   // the "restart": now running the release
+      g_rel.installing = false;
+      if (st == BD_UPDATE_NONE) g_rel.state = BD_RELEASE_CURRENT;
+      g_rel_seq++;
+      g_upd_rel = false;
+    }
   }
 }
 static uint32_t last_live = 0, last_tick = 0, last_info = 0;

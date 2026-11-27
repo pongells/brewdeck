@@ -257,8 +257,8 @@ talks to the machine. Security problems: please report them privately, see [SECU
 
 Plans, not promises:
 
-- **Updates over Wi-Fi**: a new release installed without USB, the old one kept as a fallback
-  ([#3](https://github.com/pongells/brewdeck/issues/3)).
+- **Updates over Wi-Fi**: a new release installed from Menu > About without USB, the old one kept as a fallback
+  ([#3](https://github.com/pongells/brewdeck/issues/3)); in progress, ESP32-P4 first.
 - **Switching between UIs** from the screen itself, built on the updates over Wi-Fi
   ([#5](https://github.com/pongells/brewdeck/issues/5)).
 - **A list of UIs** made by others, built by CI against the current core ([#1](https://github.com/pongells/brewdeck/issues/1));

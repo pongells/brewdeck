@@ -21,5 +21,6 @@ run preview_test tests/preview_test.cpp $CORE/parse.cpp $CORE/preview.cpp -- $V 
 run frames_test  tests/frames_test.cpp  $CORE/frames.cpp              --
 run pb_test      tests/pb_test.cpp      $CORE/pb.cpp                   -- $D/ws_idle.bin
 run shot_test    tests/shot_test.cpp    $CORE/parse.cpp $CORE/pb.cpp     -- $D/shot_298.json $D/shot_297.json $D/ws_idle.bin $D/ws_shot.bin
+run update_test  tests/update_test.cpp  $CORE/update_parse.cpp         --
 run core_state_test tests/core_state_test.cpp $CORE/core_state.cpp $CORE/preview.cpp $CORE/pb.cpp $CORE/parse.cpp --
 [[ $fail == 0 ]] && echo "ALL TESTS PASSED" || { echo "SOME TESTS FAILED"; exit 1; }

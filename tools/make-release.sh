@@ -103,3 +103,23 @@ EOF
 fi
 (cd "$ROOT/dist" && zip -qr "$NAME.zip" "$NAME")
 echo "Release package: $ROOT/dist/$NAME.zip"
+
+# updates over Wi-Fi (ESP32-P4 only for now): the app image + its signed description, published next to the zip.
+# UPDATE_SIGNING_KEY = the private key's PEM text (the release workflow's secret) or a path to it.
+if [[ $BOARD == p4 ]]; then
+  if [[ -z "${UPDATE_SIGNING_KEY:-}" ]]; then
+    [[ -n "${CI:-}" ]] && { echo "UPDATE_SIGNING_KEY is not set: refusing to release without the update files."; exit 1; }
+    echo "UPDATE_SIGNING_KEY not set: no update files (screens cannot update to this build over Wi-Fi)."
+  else
+    if [[ -f "$UPDATE_SIGNING_KEY" ]]; then
+      "$ROOT/tools/sign-update.sh" "$VER" "$CHIP" "$FW/.pio/build/$ENV/firmware.bin" "$UPDATE_SIGNING_KEY" "$ROOT/dist"
+    else   # the key's text: a temporary file, removed whatever happens (the EXIT trap above restores wifi_config.h)
+      KEYF="$(mktemp)"
+      printf '%s\n' "$UPDATE_SIGNING_KEY" > "$KEYF"
+      ok=0
+      "$ROOT/tools/sign-update.sh" "$VER" "$CHIP" "$FW/.pio/build/$ENV/firmware.bin" "$KEYF" "$ROOT/dist" || ok=$?
+      rm -f "$KEYF"
+      [[ $ok == 0 ]] || exit "$ok"
+    fi
+  fi
+fi

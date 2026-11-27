@@ -2,7 +2,8 @@ name: Release
 
 # A tag like v0.1.0 builds the release images (no debug web server, no Wi-Fi network built in) and publishes them as
 # one GitHub release: brewdeck-<tag>-esp32s3.zip and brewdeck-<tag>-esp32p4.zip (images, flash.sh,
-# SHA256SUMS, INSTALL.txt), notes from CHANGELOG.md.
+# SHA256SUMS, INSTALL.txt), notes from CHANGELOG.md. For updates over Wi-Fi (ESP32-P4) also brewdeck-<tag>-esp32p4.bin
+# and its signed description update-esp32p4.txt (tools/sign-update.sh, key in the UPDATE_SIGNING_KEY secret).
 on:
   push:
     tags: ['v*']
@@ -32,13 +33,18 @@ jobs:
           key: platformio-${{ matrix.board == 'p4' && 'p4-' || '' }}${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
           restore-keys: platformio-${{ matrix.board == 'p4' && 'p4-' || '' }}${{ runner.os }}-
       - name: Build and package
+        env:
+          UPDATE_SIGNING_KEY: ${{ matrix.board == 'p4' && secrets.UPDATE_SIGNING_KEY || '' }}
         run: |
           # pioarduino can install a pioarduino package its own version check rejects (6.2.0.post1 vs >=6.2.0)
           tools/make-release.sh "$GITHUB_REF_NAME" ${{ matrix.board }} || { uv pip install --python ~/.platformio-brewdeck/penv/bin/python pioarduino==6.2.0 && tools/make-release.sh "$GITHUB_REF_NAME" ${{ matrix.board }}; }
       - uses: actions/upload-artifact@v7
         with:
           name: package-${{ matrix.board }}
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.bin
+            dist/update-*.txt
           if-no-files-found: error
 
   publish:
@@ -73,5 +79,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # the update files must be there: screens find a release by update-esp32p4.txt
+          test -s dist/update-esp32p4.txt && test -s "dist/brewdeck-$GITHUB_REF_NAME-esp32p4.bin"
           gh release create "$GITHUB_REF_NAME" "dist/brewdeck-$GITHUB_REF_NAME-esp32s3.zip" \
-            "dist/brewdeck-$GITHUB_REF_NAME-esp32p4.zip" --title "Brewdeck $GITHUB_REF_NAME" --notes-file notes.md
+            "dist/brewdeck-$GITHUB_REF_NAME-esp32p4.zip" "dist/brewdeck-$GITHUB_REF_NAME-esp32p4.bin" \
+            dist/update-esp32p4.txt --title "Brewdeck $GITHUB_REF_NAME" --notes-file notes.md

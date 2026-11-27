@@ -52,7 +52,8 @@ the heap in use. `expect_order <tag> <tag> ...` checks that they are shown top t
 square, its extra click area included. `expect_text` looks at all the shown labels under the tagged object; `expect_no_text <tag> <a|b> [ms]` checks it
 holds none of them. `expect_cmds <n> <command ...>`: 1 to n commands of that kind since the previous check, the
 last one starting with that text (a burst of taps). Fake machine: `machine mode <MODE>` (FLUSH, DESCALE, HOME),
-`machine hotwater on|off`, `machine stopweight <g>` (the active profile changed elsewhere; 0 = none). `update` plays
+`machine hotwater on|off`, `machine stopweight <g>` (the active profile changed elsewhere; 0 = none). `release v0.3.0`
+makes a newer release known (`release none`: up to date; Install plays the update below as a download). `update` plays
 a firmware update arriving over Wi-Fi (`BD_EV_UPDATE`: 1.6 MB in 6 s, installed, the page closes 2.5 s later as at the
 restart); `update stop` fails it at 38 %.
 
@@ -117,7 +118,33 @@ the screen returns to the previous firmware about 20 s later (`/log/prev` says w
 
 The screen asks for a password: `include/ota_token.h`, made by `build.sh` on first use (git-ignored, never printed).
 A screen learns it from one flash by USB; after that only builds with the same file are accepted. Release builds have
-no web server and take no updates over Wi-Fi.
+no web server and take no pushes; they install releases (below).
+
+### Releases over Wi-Fi (ESP32-P4)
+
+The screen looks for a newer release about 90 s after it starts and then once a day: it downloads only
+`https://github.com/<repo>/releases/latest/download/update-esp32p4.txt`, a two-line description (version, chip, size,
+SHA-256 of the image, then an ECDSA P-256 signature of that line). It accepts it only with a valid signature from the
+key in `firmware/src/core/update_key.h`. Menu > About then offers the release; Install (tap twice) downloads
+`brewdeck-<version>-esp32p4.bin` from the same release into the free app slot, checks its size and SHA-256 against
+the description, and restarts into it with the same 60 s trial as above. Not while a shot, steam, hot water or a
+flush runs; a download stops if one starts. Not on the ESP32-S3 yet: a TLS connection needs about 40 KB of internal
+RAM, and the S3 has about 49 KB free while connected.
+
+The release workflow makes both files with `tools/sign-update.sh` and the private key in the repository secret
+`UPDATE_SIGNING_KEY` (kept outside every repository; a fork that publishes its own releases puts its own public key in
+`update_key.h`). A release without them is refused. To try the flow without publishing anything, debug builds also
+accept a test key and another source:
+
+```sh
+tools/sign-update.sh v0.9.0 esp32p4 .pio/build/ui-p4-debug/firmware.bin <test key.pem> <folder>   # serve <folder> over HTTP
+curl -4 'http://brewdeck-p4.local/release?base=http://<computer>:8000'   # check there now; ?base= = GitHub again
+curl -4 'http://brewdeck-p4.local/release?install=1'                     # as the Install button does
+```
+
+The test key's public half goes in `include/update_test_key.h` (git-ignored, `UPDATE_TEST_PUBKEY_PEM`); without it a
+debug build accepts only the release key. Never publish a debug build's image: it carries the Wi-Fi password and the
+OTA password.
 
 ## Serial log
 
@@ -178,6 +205,7 @@ waits about 5 s for IPv6 over mDNS.
 | `/flashtest?op=erase\|write&ms=5000[&pre=1&chunk=256]` | flash erases or writes alone on the free app slot, to see what the panel does meanwhile (longest pause in the answer) |
 | `/ppatest?stall=1` | P4: the next 2D-engine copy hangs, as the known PPA bugs make it; checks that the screen switches to CPU rotation within 100 ms and keeps running (until a restart) |
 | `POST /ota` | a new firmware image (`build.sh <env> --ota`, see [Over Wi-Fi](#over-wi-fi-debug-builds)) |
+| `/release` | the release state (newest version, last error, the running app slot); `?base=<url>` takes releases from there (test key accepted), `?base=` from GitHub again; `?check=1` looks now; `?install=1` installs the newer release (see [Releases over Wi-Fi](#releases-over-wi-fi-esp32-p4)) |
 | `/log`, `/log/prev`, `/loghost?to=` | the memory log, the log from before a crash, the log server (see [Serial log](#serial-log)) |
 | `/bl?pct=&hz=` | sets the backlight level and PWM frequency |
 

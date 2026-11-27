@@ -223,6 +223,23 @@ void bd_wifi_forget(void);
 void bd_wifi_retry(void);
 void bd_set_machine_address(const char *host);                    // name (mDNS, ".local" optional) or IP; saved, used at once
 void bd_set_backlight(int pct);   // 0 = off, 20-100 = the panel's dimmest useful .. fully on (the board maps it)
+// firmware releases (BD_HAS_RELEASES): the core looks for a newer release at start and once a day (only its signed
+// description: version, size, checksum); installing downloads it into the free app slot, checks it and restarts into
+// it (progress: BD_EV_UPDATE, as for any update). Only while no shot, steam, hot water or flush runs (else BUSY);
+// UNKNOWN_ID = no newer release known. A download stops if one starts.
+typedef enum { BD_RELEASE_UNKNOWN = 0, BD_RELEASE_CHECKING, BD_RELEASE_CURRENT, BD_RELEASE_AVAILABLE,
+               BD_RELEASE_FAILED } bd_release_state;
+typedef struct {
+  bd_release_state state;         // FAILED: the last check got no valid answer (the previous version, if any, stays)
+  char     version[16];           // the newest release ("v0.3.0"), "" until a check answered
+  uint32_t size;                  // its image, bytes
+  bool     installing;            // bd_release_install accepted, download running
+  char     error[48];             // why the last check or install failed ("" = it did not); cleared by the next try
+} bd_release;
+const bd_release *bd_release_info(void);
+uint32_t          bd_seq_release(void);
+void              bd_release_check(void);       // look now (a check already running: nothing)
+bd_result         bd_release_install(void);
 // key-value storage for the UI's own settings, in the UI's own namespace (flash, survives updates of the UI)
 int32_t bd_store_get_int(const char *key, int32_t def);
 void    bd_store_set_int(const char *key, int32_t v);
@@ -278,7 +295,8 @@ typedef enum {
   BD_EV_SHOT_LOADED,        // answer to bd_load_previous_shot / bd_load_stored_shot
   BD_EV_WIFI_SCAN,
   BD_EV_WIFI_JOIN,
-  BD_EV_UPDATE,             // a firmware update arriving over Wi-Fi (debug builds: build.sh --ota). The screen should say
+  BD_EV_UPDATE,             // a firmware update being written (a release, bd_release_install; debug builds also a push
+                            // from the computer, build.sh --ota). The screen should say
                             // so above everything (and stay on): RECEIVING with progress, then INSTALLED (the core
                             // restarts ~2 s later) or STOPPED (nothing changed); NONE = nothing to show any more
 } bd_event_type;
@@ -292,6 +310,7 @@ typedef enum { BD_LOAD_NONE = 0, BD_LOAD_LOADING, BD_LOAD_OK, BD_LOAD_MISSING, B
 typedef enum { BD_JOIN_IDLE = 0, BD_JOIN_BUSY, BD_JOIN_OK, BD_JOIN_FAILED } bd_join;
 typedef enum { BD_UPDATE_NONE = 0, BD_UPDATE_RECEIVING, BD_UPDATE_INSTALLED, BD_UPDATE_STOPPED } bd_update;
 #define BD_HAS_UPDATE_EVENT 1   // additions within API 1.x come with a macro: a UI can still build against an older core
+#define BD_HAS_RELEASES 1       // bd_release_*, bd_event.u.update.version
 
 typedef struct {
   bd_event_type type;
@@ -309,7 +328,8 @@ typedef struct {
     struct { bd_update state; int percent;                        // UPDATE: percent received (STOPPED: where it stopped)
              uint32_t received, total;                            //   bytes
              const char *built;                                   //   the new firmware's build date ("24 Nov 2026 21:40", "" = not known)
-             const char *from; } update;                          //   the sender's address ("" = not known)
+             const char *from;                                    //   the sender's address or "github.com" ("" = not known)
+             const char *version; } update;                       //   the release being installed ("" = a debug push)
   } u;
 } bd_event;
 
