@@ -8,18 +8,39 @@ is ready for wider use. The screen shows its version on the splash and in Menu >
 `v0.2.0-3-gabc1234`: 3 commits after v0.2.0). The UI API (`BD_API_VERSION` in `brewdeck_core.h`) has its own number,
 which changes only when a custom UI would need changes.
 
-## Unreleased
+## v0.3.0 (2026-11-27)
+
+Install this version by USB once (as before, with your backup). On the ESP32-P4 board, also run the C6 update once
+(INSTALL.txt): this version talks to the board's Wi-Fi chip with ESP-Hosted 3.1.0.
 
 On the screen:
-- ESP32-P4: updates over Wi-Fi. The screen looks for a newer release once a day and offers it in Menu > About
-  (and once in the notices); Install (tap twice) downloads it, checks its signature and checksum, and restarts into
-  it. If the new version does not run properly, the screen goes back to the old one by itself. Needs one last
-  update by USB to this version.
+- ESP32-P4: updates over Wi-Fi. The screen looks for a newer release once a day and offers it in Menu > About (and
+  once in the notices); Install (tap twice) downloads it, checks its signature and checksum, and restarts into it. If
+  the new version does not run properly, the screen goes back to the old one by itself. Later releases install this
+  way, without USB.
+- ESP32-P4: the picture is turned by the chip's 2D engine instead of the CPU (full redraws ~42 -> ~15 ms), and the
+  firmware runs from PSRAM, so writing flash no longer makes the panel flash light blue.
+- ESP32-P4: the C6 update tool carries the C6 firmware itself (built from source, no network needed).
+- Brewing temperature, stop weight, flush and tare are greyed out until the machine can take a change (right after it
+  comes back online); the screen reconnects to the machine as soon as it answers again.
+- Profile taps are no longer lost while the profile list refreshes.
+- The profile preview estimates phase lengths from recorded shots (basket fill before pressure, the last phase sized to
+  the stop weight).
+- Brightness levels are spread evenly from each panel's dimmest useful level.
+- ESP32-S3: fixed a rare hang when flash was read while the screen drew, and the picture jumping on full redraws.
+
+Under the hood:
+- Both boards are plain ESP-IDF projects: Wi-Fi, networking, display, touch, settings and updates use ESP-IDF
+  directly instead of the Arduino core (more free memory, mostly on the S3). The build keeps its own PlatformIO folder,
+  `~/.platformio-brewdeck`.
 
 For developers:
 - API 1.x additions (`BD_HAS_RELEASES`): `bd_release_info`, `bd_seq_release`, `bd_release_check`,
   `bd_release_install`, and `version` in the update event.
 - Releases carry `brewdeck-<tag>-esp32p4.bin` and its signed description `update-esp32p4.txt` (`tools/sign-update.sh`).
+- Debug builds: updates pushed over Wi-Fi (`build.sh <env> --ota`), a memory log, a log server, the release route
+  `/release`.
+- Shared UI scenarios (`tests/ui/run.sh`) check any UI against the feature list in `docs/ui-features.md`.
 
 ## v0.2.0 (2026-11-21)
 

@@ -59,7 +59,7 @@ A tour of every screen, with animations: **[User manual](docs/manual.md)**.
   it has been unused for a long time or the machine is switched off.
 - **Setup on the screen**: join Wi-Fi with the on-screen keyboard; find the machine by name (mDNS) or IP. If something
   is wrong, the screen says what (Wi-Fi out of range, wrong password, machine not answering) and offers the fix.
-- **Updates over Wi-Fi** (ESP32-P4, from the next release): a newer Brewdeck release shows in Menu > About; Install
+- **Updates over Wi-Fi** (ESP32-P4, from v0.3.0): a newer Brewdeck release shows in Menu > About; Install
   downloads it, checks its signature and checksum, and keeps the old version as a fallback.
 
 ## What Brewdeck sends to the machine
@@ -158,8 +158,8 @@ looks for the machine as `gaggiuino.local`; another name or an IP can be set und
 network, then Machine).
 
 **Updating**: download the new release and flash it the same way (step 4, with your backup). The backup stays valid,
-and the screen keeps its Wi-Fi, machine address and settings. (The ESP32-P4 board updates itself over Wi-Fi from the
-next release on: Menu > About.)
+and the screen keeps its Wi-Fi, machine address and settings. (The ESP32-P4 board updates itself over Wi-Fi from
+v0.3.0 on: Menu > About.)
 
 **Back to the original firmware**: check the backup's size again (a short file would leave the screen unbootable), then
 write it back as it is, **without** `--encrypt` (a Gen 3 backup already holds the encrypted contents):
@@ -268,7 +268,7 @@ talks to the machine. Security problems: please report them privately, see [SECU
 
 Plans, not promises:
 
-- **Updates over Wi-Fi**: built for the ESP32-P4 (in the next release); the ESP32-S3 needs its memory first
+- **Updates over Wi-Fi**: done for the ESP32-P4 (v0.3.0); the ESP32-S3 needs its memory first
   ([#3](https://github.com/pongells/brewdeck/issues/3)).
 - **Switching between UIs** from the screen itself, built on the updates over Wi-Fi
   ([#5](https://github.com/pongells/brewdeck/issues/5)).
