@@ -77,6 +77,7 @@ jobs:
           ./build.sh ui || { uv pip install --python ~/.platformio-brewdeck/penv/bin/python pioarduino==6.2.0 && ./build.sh ui; }
           ./build.sh ui-debug
           UI=ui_minimal ./build.sh ui   # the example UI: proves a UI builds on the core API alone
+          cp -r src/ui_minimal "$RUNNER_TEMP/outside-ui" && UI="$RUNNER_TEMP/outside-ui" ./build.sh ui   # a UI outside the repository
           ./build.sh touchtest
 
   firmware-p4:
@@ -101,4 +102,5 @@ jobs:
           ./build.sh ui-p4 || { uv pip install --python ~/.platformio-brewdeck/penv/bin/python pioarduino==6.2.0 && ./build.sh ui-p4; }
           ./build.sh ui-p4-debug
           UI=ui_minimal ./build.sh ui-p4
+          cp -r src/ui_minimal "$RUNNER_TEMP/outside-ui" && UI="$RUNNER_TEMP/outside-ui" ./build.sh ui-p4
           ./build.sh p4-c6-update

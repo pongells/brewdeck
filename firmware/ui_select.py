@@ -58,6 +58,9 @@ if "espidf" in env.subst("$PIOFRAMEWORK"):
             os.remove(cache)
             print("Brewdeck: sources changed (%s): CMake configures again" % sel.strip().split(" ")[1])
         open(sel_file, "w").write(sel)
+    # PlatformIO also compiles src/ files it does not find in the CMake source list; a UI linked in as src/ui_ext is
+    # listed by its real path, so it was compiled twice (multiple definitions at link time): leave it to CMake
+    env.Append(SRC_FILTER=["-<%s/>" % EXT])
 elif only:
     env.Replace(SRC_FILTER=["-<*>", "+<%s/>" % only])
 else:
