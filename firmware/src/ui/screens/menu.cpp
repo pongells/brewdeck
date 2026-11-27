@@ -21,6 +21,39 @@ bd_machine g_menu_live;
 int g_menu_link = BD_LINK_CONNECTING;
 static char g_sys_txt[3][64] = {"", "", ""};   // build (version + date), uptime (+ restart reason), memory
 static char g_sys_ver[40] = "";                  // the firmware version, "" when not known
+// Brewdeck's own releases (ui_set_release): the About page's version row gets an Install button while one is out
+static int g_rel_state = BD_RELEASE_UNKNOWN;
+static char g_rel_ver[16] = "", g_rel_err[48] = "";
+static bool g_rel_installing = false;
+static lv_obj_t *g_rel_btn, *g_rel_lbl;
+static uint32_t g_rel_armed = 0;                 // lv_tick when Install was tapped once, 0 = not armed
+static uint32_t g_rel_note_at = 0;               // lv_tick of a refusal shown in the row ("machine busy")
+static const uint32_t REL_ARM_MS = 3000, REL_NOTE_MS = 4000;
+static void menu_refresh(void);
+static void on_rel_install(lv_event_t *e) {
+  (void)e;
+  if (!g_rel_armed) {                            // first tap: "Tap again" for 3 s (like Forget this network)
+    g_rel_armed = stamp_nz(lv_tick_get());
+    menu_refresh();
+    return;
+  }
+  g_rel_armed = 0;
+  const bd_result r = bd_release_install();      // OK: the update page takes over (BD_EV_UPDATE)
+  if (r == BD_ERR_BUSY) {
+    snprintf(g_rel_err, sizeof g_rel_err, "Not while the machine is busy");
+    g_rel_note_at = stamp_nz(lv_tick_get());
+  }
+  bd_log("ui: install %s: %s", g_rel_ver, r == BD_OK ? "started" : r == BD_ERR_BUSY ? "machine busy" : "not available");
+  menu_refresh();
+}
+void ui_set_release(int state, const char *version, bool installing, const char *error) {
+  g_rel_state = state;
+  snprintf(g_rel_ver, sizeof g_rel_ver, "%s", version ? version : "");
+  g_rel_installing = installing;
+  if (!g_rel_note_at) snprintf(g_rel_err, sizeof g_rel_err, "%s", error ? error : "");
+  if (state == BD_RELEASE_AVAILABLE) ntc_release(g_rel_ver);
+  menu_refresh();
+}
 static const int IDLE_OPTS[] = {0, 1, 2, 5, 10, 20, 30, 60};
 static const char *const PAGE_NAMES[MENU_PAGES] = {"Display", "Scale", "Wi-Fi", "About", "", "", "Machine address",
                                                      "Shot history"};
@@ -73,7 +106,10 @@ static void menu_refresh(void) {
     int day = 0;
     const char *bd = g_sys_txt[0];
     if (!strncmp(bd, "emulator ", 9)) bd += 9;
-    if (g_upd_known) snprintf(b, sizeof b, "Machine update available");
+    const bool rel = g_rel_state == BD_RELEASE_AVAILABLE;
+    set_tc(g_mrow_val[5], rel ? COL_BLUE : COL_MUTED);
+    if (rel) snprintf(b, sizeof b, "Update available");
+    else if (g_upd_known) snprintf(b, sizeof b, "Machine update available");
     else if (g_sys_ver[0]) snprintf(b, sizeof b, "%s", g_sys_ver);
     else if (sscanf(bd, "%d %3s", &day, mon) == 2 || sscanf(bd, "%3s %d", mon, &day) == 2)
       snprintf(b, sizeof b, "Built %d %s", day, mon);
@@ -117,6 +153,25 @@ static void menu_refresh(void) {
   forget_refresh();
   // About
   for (int i = 0; i < 3; i++) set_text(g_info[MP_ABOUT][i], g_sys_txt[i][0] ? g_sys_txt[i] : "-");
+  if (g_rel_btn) {                                // Brewdeck version: + the newest release and Install while one is out
+    if (g_rel_armed && lv_tick_elaps(g_rel_armed) > REL_ARM_MS) g_rel_armed = 0;
+    if (g_rel_note_at && lv_tick_elaps(g_rel_note_at) > REL_NOTE_MS) { g_rel_note_at = 0; g_rel_err[0] = 0; }
+    const bool avail = g_rel_state == BD_RELEASE_AVAILABLE && !g_rel_installing;
+    set_hidden(g_rel_btn, !avail);
+    lv_obj_align(g_info[MP_ABOUT][0], LV_ALIGN_RIGHT_MID, avail ? -(132 + 12) : 0, 0);
+    if (avail || g_rel_installing) {
+      if (g_rel_err[0]) snprintf(b, sizeof b, "%s", g_rel_err);
+      else if (g_rel_installing) snprintf(b, sizeof b, "Installing %s...", g_rel_ver);
+      else snprintf(b, sizeof b, "%s available", g_rel_ver);
+      set_text(g_info[MP_ABOUT][0], b);
+      set_tc(g_info[MP_ABOUT][0], g_rel_err[0] ? COL_WARN : COL_BLUE);
+    } else {
+      set_tc(g_info[MP_ABOUT][0], COL_TEXT);
+    }
+    set_bg(g_rel_btn, g_rel_armed ? COL_WARN_BG : COL_CARD);
+    set_tc(g_rel_lbl, g_rel_armed ? COL_WARN : COL_TEXT);
+    set_text(g_rel_lbl, g_rel_armed ? "Tap again" : "Install");
+  }
   if (g_upd_rel[0]) snprintf(b, sizeof b, "Release %s \xC2\xB7 install in the web UI", g_upd_rel);
   else snprintf(b, sizeof b, "%s", g_upd_known ? "Available \xC2\xB7 install in the web UI" : "None reported");
   set_tc(g_info[MP_ABOUT][6], g_upd_known ? COL_BLUE : COL_TEXT);
@@ -323,7 +378,8 @@ void build_menu(lv_obj_t *scr) {
   // About: the screen's own 3 rows, then the machine's versions and its update notice
   static const char *const INFO[5][7] = {
     {NULL}, {"Type", "Status", "Weight", "Tare"}, {NULL},
-    {"Build", "Running for", "Free memory", "Machine firmware", "Machine screen", "Machine web UI", "Machine update"},
+    {"Brewdeck version", "Running for", "Free memory", "Machine firmware", "Machine screen", "Machine web UI",
+     "Machine update"},
     {"Network", "Signal", "Access point", "Screen", "Machine"}};
   build_wifi(g_menu);                              // the Wi-Fi list and password / address pages
   build_hist(g_menu);                              // shot history
@@ -380,6 +436,18 @@ void build_menu(lv_obj_t *scr) {
       g_info[k][i] = label(r, "", F_TEXT, COL_TEXT);
       if (k == MP_ABOUT && i == 6) tag(g_info[k][i], "info.update");   // the machine's update notice, kept
       lv_obj_align(g_info[k][i], LV_ALIGN_RIGHT_MID, 0, 0);
+      if (k == MP_ABOUT && i == 0) {                // Install a newer Brewdeck release (hidden until one is out)
+        tag(g_info[k][i], "info.release");
+        g_rel_btn = box(r, 0, 0, 132, 36, COL_CARD, RAD_CTRL);
+        lv_obj_align(g_rel_btn, LV_ALIGN_RIGHT_MID, 0, 0);
+        make_button(g_rel_btn, COL_CARD_PR);
+        lv_obj_add_event_cb(g_rel_btn, on_rel_install, LV_EVENT_CLICKED, NULL);
+        lv_obj_set_ext_click_area(g_rel_btn, 6);    // 48 px touch height (X6) from the 36 px button
+        tag(g_rel_btn, "action.release_install");
+        g_rel_lbl = label(g_rel_btn, "Install", F_TEXT_B, COL_TEXT);
+        lv_obj_center(g_rel_lbl);
+        lv_obj_set_hidden(g_rel_btn, true);
+      }
       if (k == MP_WIFI_DETAILS && i == 4) {         // Machine row: change the machine's address
         lv_obj_align(g_info[k][i], LV_ALIGN_RIGHT_MID, -28, 0);
         lv_obj_t *ch = icon_box(r, 16, 16);

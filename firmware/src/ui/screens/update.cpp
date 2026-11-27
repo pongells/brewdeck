@@ -60,7 +60,8 @@ static void on_up_timer(lv_timer_t *t) {
   set_text(g_up_amount, b);
 }
 
-void ui_set_update(int state, int pct, uint32_t got, uint32_t total, const char *built, const char *from) {
+void ui_set_update(int state, int pct, uint32_t got, uint32_t total, const char *built, const char *from,
+                   const char *version) {
   if (state == BD_UPDATE_NONE) {
     g_up_state = state;
     lv_obj_set_hidden(g_up, true);
@@ -86,7 +87,8 @@ void ui_set_update(int state, int pct, uint32_t got, uint32_t total, const char 
              : state == BD_UPDATE_INSTALLED ? "Restarting now. If the new version does not run properly, the screen goes back to this one by itself."
                                             : "The update did not arrive completely. Nothing changed: the screen keeps its current version.");
     set_bg(g_up_fill, state == BD_UPDATE_RECEIVING ? COL_BLUE : state == BD_UPDATE_INSTALLED ? COL_GREEN : COL_BORDER);
-    if (built && built[0] && from && from[0]) snprintf(b, sizeof b, "New version built %s \xC2\xB7 sent from %s", built, from);
+    if (version && version[0]) snprintf(b, sizeof b, "Brewdeck %s \xC2\xB7 from %s", version, from && from[0] ? from : "?");
+    else if (built && built[0] && from && from[0]) snprintf(b, sizeof b, "New version built %s \xC2\xB7 sent from %s", built, from);
     else if (built && built[0]) snprintf(b, sizeof b, "New version built %s", built);
     else snprintf(b, sizeof b, "%s", from && from[0] ? from : "");
     set_text(g_up_foot, b);

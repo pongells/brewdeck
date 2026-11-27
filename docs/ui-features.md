@@ -167,7 +167,8 @@ it leaves a feature out on purpose: [Leaving features out](#leaving-features-out
 | X4 | No crash and no memory left behind | Required | Test | every scenario runs to its end; opening and closing each screen 20 times does not grow the memory in use |
 | X5 | No slow frames while live data is shown | Expected | Panel | `tools/frames.sh` after a shot or steam on a debug build: after the screen opening (1.5 s), no frame of 150 ms or more and at most 2 % of 40 ms or more (Brewdeck: most under 40 ms, full redraws ~50-150 ms) |
 | X6 | Touch targets big enough for a wet finger | Expected | Test | every shown object a tap acts on is at least 48 x 48 px, its extra click area included (about 5.7 mm on a 4.3" 800 x 480 panel), on each screen the scenarios open |
-| X7 | A firmware update arriving over Wi-Fi (debug builds, `BD_EV_UPDATE`) is shown above everything: progress, then installed or stopped | Optional | Test | `update`: `screen.update` with `value.update_progress` rising, then the restart closes it; `update stop`: `value.update_progress` says where it stopped, back to `screen.ready` after 5 s |
+| X7 | A firmware update being installed (`BD_EV_UPDATE`: a release, or a push from the computer on debug builds) is shown above everything: progress, then installed or stopped | Optional | Test | `update`: `screen.update` with `value.update_progress` rising, then the restart closes it; `update stop`: `value.update_progress` says where it stopped, back to `screen.ready` after 5 s |
+| X8 | A newer release (`bd_release_info`) is shown and can be installed from the screen, only after a confirmation | Optional | Test | `release v0.3.0`: `info.release` names it; one tap on `action.release_install` sends nothing, a second one sends `release_install` and `screen.update` shows |
 
 ## How the checks work
 

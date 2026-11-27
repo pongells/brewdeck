@@ -1,0 +1,16 @@
+# X8 a newer release is shown and installs only after a confirmation (Brewdeck: Menu > About, Install, Tap again).
+# checks: X8
+wait_for screen.ready 10000
+release v0.3.0
+button About
+expect_text info.release v0.3.0 2000
+shot X8: a newer release
+tap_tag action.release_install
+expect_no_cmd
+shot X8: install asked once
+tap_tag action.release_install
+expect_cmd release_install
+expect_visible screen.update 3000
+shot X8: installing
+expect_hidden screen.update 15000
+quit

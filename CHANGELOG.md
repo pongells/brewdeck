@@ -8,6 +8,19 @@ is ready for wider use. The screen shows its version on the splash and in Menu >
 `v0.2.0-3-gabc1234`: 3 commits after v0.2.0). The UI API (`BD_API_VERSION` in `brewdeck_core.h`) has its own number,
 which changes only when a custom UI would need changes.
 
+## Unreleased
+
+On the screen:
+- ESP32-P4: updates over Wi-Fi. The screen looks for a newer release once a day and offers it in Menu > About
+  (and once in the notices); Install (tap twice) downloads it, checks its signature and checksum, and restarts into
+  it. If the new version does not run properly, the screen goes back to the old one by itself. Needs one last
+  update by USB to this version.
+
+For developers:
+- API 1.x additions (`BD_HAS_RELEASES`): `bd_release_info`, `bd_seq_release`, `bd_release_check`,
+  `bd_release_install`, and `version` in the update event.
+- Releases carry `brewdeck-<tag>-esp32p4.bin` and its signed description `update-esp32p4.txt` (`tools/sign-update.sh`).
+
 ## v0.2.0 (2026-11-21)
 
 On the screen:

@@ -164,6 +164,12 @@ void bd_ui_tick(uint32_t now) {
     seen_hi = bd_seq_history();
     ui_set_shot_index(bd_shot_history());
   }
+  static uint32_t seen_rel;
+  if (bd_seq_release() != seen_rel) {             // Brewdeck's own releases (Menu > About)
+    seen_rel = bd_seq_release();
+    const bd_release *r = bd_release_info();
+    ui_set_release(r->state, r->version, r->installing, r->error);
+  }
   if (g_set_dirty && now - g_set_dirty > 2000) {
     g_set_dirty = 0;
     bd_store_set_int("bright", g_bright);
@@ -197,7 +203,7 @@ void bd_ui_event(const bd_event *e) {
     case BD_EV_WIFI_JOIN: ui_set_wifi_join(e->u.join.state); break;
     case BD_EV_UPDATE:
       ui_set_update(e->u.update.state, e->u.update.percent, e->u.update.received, e->u.update.total, e->u.update.built,
-                    e->u.update.from);
+                    e->u.update.from, e->u.update.version);
       break;
     default: break;
   }

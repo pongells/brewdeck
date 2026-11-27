@@ -250,6 +250,7 @@ extern char g_upd_rel[32];
 extern bool g_upd_known;
 extern bool g_upd_shown;
 void ntc_build_btn(lv_obj_t *scr, int32_t x);
+void ntc_release(const char *version);   // a newer Brewdeck release, listed once (notices.cpp)
 void build_notif(void);
 void build_frame(void);
 

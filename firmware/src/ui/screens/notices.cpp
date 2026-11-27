@@ -419,6 +419,16 @@ void ui_update_notice(int type, const char *release) {
   notify_show(type, "Update available \xC2\xB7 see web UI", 0);
 }
 
+// a newer Brewdeck release: listed once per version (unread dot), no banner, does not wake the screen
+void ntc_release(const char *version) {
+  static char listed[16] = "";
+  if (!version || !version[0] || !strcmp(listed, version)) return;
+  snprintf(listed, sizeof listed, "%s", version);
+  char t[64];
+  snprintf(t, sizeof t, "Brewdeck %s available \xC2\xB7 Menu > About", version);
+  ntc_add(BD_NOTICE_INFO, t, false);
+}
+
 // the banner (top layer), hidden until a notice comes
 void build_notif(void) {
   g_nb = flex(lv_layer_top(), LV_FLEX_FLOW_ROW, 8);
