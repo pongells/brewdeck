@@ -59,6 +59,8 @@ A tour of every screen, with animations: **[User manual](docs/manual.md)**.
   it has been unused for a long time or the machine is switched off.
 - **Setup on the screen**: join Wi-Fi with the on-screen keyboard; find the machine by name (mDNS) or IP. If something
   is wrong, the screen says what (Wi-Fi out of range, wrong password, machine not answering) and offers the fix.
+- **Updates over Wi-Fi** (ESP32-P4, from the next release): a newer Brewdeck release shows in Menu > About; Install
+  downloads it, checks its signature and checksum, and keeps the old version as a fallback.
 
 ## What Brewdeck sends to the machine
 
@@ -75,6 +77,14 @@ the machine is idle on its home screen (to end a flush, while flushing; never du
 A flush runs the machine's own flush mode, as the web UI does: the machine then runs the pump (the brew switch in
 FLUSH, a timed flush in FLUSH_AUTO). Nothing else: no brewing, steam, descaling or calibration commands, no direct
 control of the pump, valves or heater, and never a delete.
+
+### Other network traffic
+
+Besides the machine, the screen talks only to: your router (Wi-Fi, DHCP), mDNS on your network (finding the machine,
+announcing itself), time servers (`pool.ntp.org`, `time.google.com`, for the clock) and, on the ESP32-P4, GitHub:
+once at start and once a day it fetches the signed description of the latest Brewdeck release (a few hundred bytes),
+and the release image itself only when you tap Install. Nothing about you or your machine is sent. Debug builds can
+also send their log to a log server you set.
 
 ## Hardware
 
@@ -148,7 +158,8 @@ looks for the machine as `gaggiuino.local`; another name or an IP can be set und
 network, then Machine).
 
 **Updating**: download the new release and flash it the same way (step 4, with your backup). The backup stays valid,
-and the screen keeps its Wi-Fi, machine address and settings.
+and the screen keeps its Wi-Fi, machine address and settings. (The ESP32-P4 board updates itself over Wi-Fi from the
+next release on: Menu > About.)
 
 **Back to the original firmware**: check the backup's size again (a short file would leave the screen unbootable), then
 write it back as it is, **without** `--encrypt` (a Gen 3 backup already holds the encrypted contents):
@@ -235,7 +246,7 @@ How the parts fit together (board, core, UI, the network tasks, the emulator): [
 
 | Path | What |
 |---|---|
-| `firmware/src/core/` | the core: `brewdeck_core.h` (the API a UI is built on), `core.cpp` (setup, loop, settings), `core_state.cpp` (machine state, events, the command rules), the network task (`net.cpp`: finding the machine, REST; `wifi.cpp`: the screen's Wi-Fi; `net_data.cpp`: hand-over to the loop), the WebSocket (`ws.cpp`, decoder `pb.cpp`), REST parsers (`parse.cpp`), profile previews (`preview.cpp`), the debug web server (`debug_http.cpp`) |
+| `firmware/src/core/` | the core: `brewdeck_core.h` (the API a UI is built on), `core.cpp` (setup, loop, settings), `core_state.cpp` (machine state, events, the command rules), the network task (`net.cpp`: finding the machine, REST; `wifi.cpp`: the screen's Wi-Fi; `net_data.cpp`: hand-over to the loop), the WebSocket (`ws.cpp`, decoder `pb.cpp`), REST parsers (`parse.cpp`), profile previews (`preview.cpp`), updates over Wi-Fi (`update.cpp`: finding and checking a release; `ota.cpp`: writing it, the trial and rollback), the debug web server (`debug_http.cpp`) |
 | `firmware/src/board/` | the board layer: `common/` (start-up, GT911 touch, backlight, memory: shared by both boards; `board_core.h` is what the core uses), `s3/` (the Sunton ESP32-S3 RGB panel), `p4/` (the Guition ESP32-P4 DSI panel); each board folder has its `board.h` (pins) |
 | `firmware/src/ui_minimal/` | an example UI on the core API alone, to start your own from ([writing your own UI](docs/custom-ui.md)) |
 | `firmware/src/touchtest/`, `firmware/src/c6update/` | one-off firmware: a raw touch test (S3), the P4 board's Wi-Fi chip updater |
@@ -243,7 +254,7 @@ How the parts fit together (board, core, UI, the network tasks, the emulator): [
 | `sim/` | emulator, renderer and recorded machine data |
 | `tests/` | host unit tests |
 | `docs/` | the [user manual](docs/manual.md) and its animations, [development](docs/development.md), the [architecture](docs/architecture.md), [writing your own UI](docs/custom-ui.md), the [design system](docs/design-system.md), [machine API notes](docs/gaggiuino-api.md), the [WebSocket protocol](docs/ws/README.md) |
-| `tools/` | release packaging (`make-release.sh`), protocol listener, manual recorder, screenshot and screen recorder helpers, offline cup picture (`gen_cup.py`), a fake machine from the community profiles (`community_profiles.py`), font edge contrast (`font_contrast.py`) |
+| `tools/` | release packaging (`make-release.sh`, `sign-update.sh` for updates over Wi-Fi), protocol listener, manual recorder, screenshot and screen recorder helpers, offline cup picture (`gen_cup.py`), a fake machine from the community profiles (`community_profiles.py`), font edge contrast (`font_contrast.py`) |
 
 Debug builds (`ui-debug`, `ui-p4-debug`) add a small web server for screenshots, a screen recorder and remote touch; it has no
 password, so use them only on a network you trust ([development](docs/development.md#debug-web-server)).
@@ -257,14 +268,12 @@ talks to the machine. Security problems: please report them privately, see [SECU
 
 Plans, not promises:
 
-- **Updates over Wi-Fi**: a new release installed from Menu > About without USB, the old one kept as a fallback
-  ([#3](https://github.com/pongells/brewdeck/issues/3)); in progress, ESP32-P4 first.
+- **Updates over Wi-Fi**: built for the ESP32-P4 (in the next release); the ESP32-S3 needs its memory first
+  ([#3](https://github.com/pongells/brewdeck/issues/3)).
 - **Switching between UIs** from the screen itself, built on the updates over Wi-Fi
   ([#5](https://github.com/pongells/brewdeck/issues/5)).
 - **A list of UIs** made by others, built by CI against the current core ([#1](https://github.com/pongells/brewdeck/issues/1));
   your own UI in its own repository works already ([Your own interface](#your-own-interface)).
-- **Faster redraws on the ESP32-P4**: turn the picture with the chip's hardware instead of the CPU
-  ([#4](https://github.com/pongells/brewdeck/issues/4)).
 - Maybe: **sounds**, off by default: a beep before the pressure release, perhaps when a shot ends. The ESP32-P4 board
   has a speaker output; the ESP32-S3 board needs a small piezo added.
 - Maybe, for fun: **a camera on the ESP32-P4**, watching the shot pour, or taking a picture of you waiting for
@@ -296,7 +305,7 @@ Not covered by Brewdeck's license:
   here only as test and demo data; they will be replaced if the Gaggiuino project asks.
 - The fonts in `firmware/src/ui/fonts/` are generated from [Inter Tight](https://github.com/rsms/inter-tight) and stay under
   the SIL Open Font License 1.1 ([OFL.txt](firmware/src/ui/fonts/OFL.txt)).
-- Libraries fetched at build time (LVGL, ESP-IDF and its components; the Arduino core and Arduino_GFX for two small tools only) keep their own licenses. Release images
+- Libraries fetched at build time (LVGL, ESP-IDF and its components; the Arduino core and Arduino_GFX only for the S3 touch test, which is not in a release) keep their own licenses. Release images
   and the web demo contain them compiled in: their notices and license texts are in
   [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt), which every release package includes.
 

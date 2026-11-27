@@ -173,6 +173,12 @@ the machine has released it.
 - **About**: Brewdeck's version and build, how long it has been running and why it last started (power-on, crash,
   freeze, power dip or a system reset, e.g. after flashing a P4 board), memory, and the machine's firmware, screen and
   web UI versions, plus a pending machine update.
+- **Updating Brewdeck** (ESP32-P4): the screen looks for a newer Brewdeck release once a day. When there is one, the
+  menu's About row says *Update available*, the notices list it once, and About shows it next to *Brewdeck version*
+  with an **Install** button: tap it, then *Tap again* within 3 s. The screen downloads the release (about 15 s),
+  checks that it is genuine and complete, and restarts into it; if the new version does not run properly, it goes
+  back to the old one by itself. Not while a shot, steam, hot water or a flush runs. The ESP32-S3 screen is updated
+  by USB (README, Installing).
 
 Profiles and maintenance are edited in the machine's web UI.
 

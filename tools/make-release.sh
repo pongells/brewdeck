@@ -92,11 +92,15 @@ Wi-Fi is weak (about -83 dBm on our board, -60 dBm with a 3 cm flexible antenna)
 The screen starts on "No Wi-Fi set up": choose your network on the screen, then it looks for the machine
 ("gaggiuino.local"; another name or IP under Menu > Wi-Fi). On the network the screen is "brewdeck-p4".
 
-Optional, once: the board's Wi-Fi chip (ESP32-C6) ships with older firmware that drops the first Wi-Fi join at every
-start (Brewdeck retries, so it only joins slower). c6-update/ updates it: after step 3 and joining Wi-Fi on the screen,
+Once, after step 3: update the board's Wi-Fi chip (ESP32-C6) to the ESP-Hosted version Brewdeck uses. Boards ship
+with older C6 firmware (with very old versions the first Wi-Fi join drops at every start). c6-update/ carries the
+C6 image and sends it over the board's own link to the C6 (no network needed; the C6 boots it only when it arrived
+complete, else it keeps its current firmware; progress on the serial port, 115200 baud):
      GAGGI_BACKUP=backup/p4-guition-original.bin PORT=<port> ./flash.sh c6-update
-It uses the network saved on the screen, downloads Espressif's image and installs it only if its checksum matches
-(progress on the serial port, 115200 baud). Then flash Brewdeck again (step 3).
+Then flash Brewdeck again (step 3).
+
+Later releases install over Wi-Fi: Menu > About shows a newer one with an Install button (the screen checks once a
+day; if a new version does not run properly, it goes back to the old one by itself).
 Ports: /dev/cu.usbmodem... on macOS, /dev/ttyACM0 or similar on Linux.
 License: PolyForm Noncommercial 1.0.0 (LICENSE). Third-party software in the images: THIRD_PARTY_NOTICES.txt.
 EOF

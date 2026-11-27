@@ -11,8 +11,8 @@ README ("What Brewdeck sends to the machine"), only while the machine is idle.
 - **Do not add new machine commands** (pump, valve, heater, steam, brewing, descaling, calibration, deleting
   anything, settings) in a pull request. If you think one is needed, open an issue first to discuss it.
 - Changes to the core (`firmware/src/core/`, especially `core_state.cpp` with the command rules, `ws.cpp`, `pb.cpp`
-  and `net.cpp`) or anything that sends to the machine get a careful review and are tested on real hardware before
-  they are merged.
+  and `net.cpp`, and the updates over Wi-Fi in `update.cpp` / `ota.cpp`) or anything that sends to the machine get a
+  careful review and are tested on real hardware before they are merged.
 
 ## Before you open a pull request
 
