@@ -26,6 +26,10 @@ For developers:
 - `uis.json` lists UIs in their own repositories; the "UIs" workflow builds each at its pinned commit against the
   current core and checks it (docs/custom-ui.md, "Getting your UI listed"). First entry: Ledger.
 - `BREWDECK_VERSION=...` overrides the firmware's version (tests of the updates over Wi-Fi).
+- The firmware is built with ESP-IDF's own `idf.py` (ESP-IDF v5.5.6; `tools/install-idf.sh` installs it) instead of
+  PlatformIO / pioarduino: same `./build.sh` commands, output in `firmware/build/<env>/`, LVGL from Espressif's
+  component registry. No more Python 3.14 / `uvx` or pioarduino package pin. `DEFINES=...` replaces
+  `PLATFORMIO_BUILD_FLAGS`. The touch test is a small UI now (`UI=touchtest ./build.sh ui`, both boards).
 
 ## v0.3.0 (2026-11-27)
 

@@ -78,21 +78,15 @@ jobs:
         board: [s3, p4]
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2   # v10.3.3 (Node 24)
-      - name: Restore the main CI's build cache (never saved from here)
-        uses: actions/cache/restore@v6
+      - name: ESP-IDF and the main CI's build folders (restored only, never saved from here)
+        uses: ./.github/actions/esp-idf
         with:
-          path: |
-            ~/.platformio-brewdeck
-            firmware/.pio
-            firmware/managed_components
-          key: platformio-${{ matrix.board }}-espidf-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini', 'firmware/CMakeLists.txt', 'firmware/src/idf_component.yml', format('firmware/sdkconfig.base.esp32{0}', matrix.board), format('firmware/sdkconfig.brewdeck.esp32{0}', matrix.board), format('firmware/dependencies.lock.esp32{0}', matrix.board)) }}
-          restore-keys: platformio-${{ matrix.board }}-espidf-${{ runner.os }}-
+          builds-key: ${{ matrix.board }}
+          save: 'false'
       - name: Fetch the UI at its pinned commit
         run: echo "UI_DIR=$(tools/uis.py fetch ${{ matrix.ui }} "$RUNNER_TEMP/ui")" >> "$GITHUB_ENV"
       - name: Build the release firmware with it
         working-directory: firmware
         run: |
           env=${{ matrix.board == 'p4' && 'ui-p4' || 'ui' }}
-          # pioarduino can install a pioarduino package its own version check rejects (6.2.0.post1 vs >=6.2.0)
-          UI="$UI_DIR" ./build.sh $env || { uv pip install --python ~/.platformio-brewdeck/penv/bin/python pioarduino==6.2.0 && UI="$UI_DIR" ./build.sh $env; }
+          UI="$UI_DIR" ./build.sh $env

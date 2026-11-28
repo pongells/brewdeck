@@ -60,4 +60,4 @@ direct_dependencies:
 - idf
 manifest_hash: 3523c522fb0d5f72b0206e6395ff30ddd6836e5d22edadd82b9bbb7b4abd8374
 target: esp32c6
-version: 3.0.0
+version: 2.0.0

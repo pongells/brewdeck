@@ -36,8 +36,8 @@ works too, but it can change under you.
 
 How it works, if you set it up yourself: give `UI` a path instead of a folder name, e.g.
 `UI=../../my-ui ./build.sh ui` or `UI=../my-ui sim/build-emu.sh` (the emulator is then `sim/emu-my-ui`). A path is
-anything with a `/` in it, taken from where you run the script. The firmware build links the folder into
-`firmware/src/ui_ext` (PlatformIO compiles only inside `src/`; the link is git-ignored). Include the core's headers by
+anything with a `/` in it, taken from where you run the script. The firmware build compiles the folder as part of
+the firmware's component. Include the core's headers by
 name (`#include "brewdeck_core.h"`, `#include "bd_lvgl9.h"`): both builds put `src/core` on the include path.
 
 Naming a UI in its own repository, so people can find it and tell UIs apart:

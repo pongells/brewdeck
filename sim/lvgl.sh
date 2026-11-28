@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Compiles LVGL for the host builds (render harness, emulator, web demo) into <objdir>/lvgl. LVGL's version is read
-# from firmware/platformio.ini; the objects are rebuilt when it, lv_conf.h, the compiler or the flags change.
+# from firmware/src/idf_component.yml (the firmware's); the objects are rebuilt when it, lv_conf.h, the compiler or the flags change.
 # Usage: sim/lvgl.sh <objdir> <cc> <flags...>
 set -euo pipefail
 SIM="$(cd "$(dirname "$0")" && pwd)"; P="$SIM/../firmware"
 OUT="$1/lvgl"; CC="$2"; shift 2; FLAGS="$*"
-LV="v$(sed -n 's|.*lvgl/lvgl@\([0-9.]*\).*|\1|p' "$P/platformio.ini" | head -1)"
+LV="v$(sed -n 's|^ *lvgl/lvgl: *"==\([0-9.]*\)".*|\1|p' "$P/src/idf_component.yml" | head -1)"
+[[ "$LV" != v ]] || { echo "LVGL's version not found in firmware/src/idf_component.yml" >&2; exit 1; }
 if [[ "$(git -C "$SIM/lvgl" describe --tags 2>/dev/null)" != "$LV" ]]; then
   rm -rf "$SIM/lvgl"
   git clone --quiet --depth 1 --branch "$LV" https://github.com/lvgl/lvgl.git "$SIM/lvgl"

@@ -14,3 +14,9 @@ CONFIG_ESP_HOSTED_HOST_SDIO_RX_STAGING_SLOTS=1
 # The board's flash is a BOYA chip: name it (same generic functions either way; without it ESP-IDF warns at every boot
 # "Detected boya flash chip but using generic driver")
 CONFIG_SPI_FLASH_SUPPORT_BOYA_CHIP=y
+# LVGL's component: only the library (its settings come from include/lv_conf.h, see CMakeLists.txt)
+CONFIG_LV_BUILD_EXAMPLES=n
+CONFIG_LV_BUILD_DEMOS=n
+# ESP-Hosted's board preset: none, as in the Arduino core's ESP-IDF (plain ESP-IDF picks the Function EV board: the same
+# SDIO pins, only narrower allowed ranges)
+CONFIG_ESP_HOSTED_P4_DEV_BOARD_NONE=y

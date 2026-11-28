@@ -32,11 +32,9 @@ case "$IMG_CHIP" in
   *) echo "bootloader.bin is for chip id $IMG_CHIP, not an ESP32-S3 (9) or ESP32-P4 (18). Refusing to flash."; exit 1 ;;
 esac
 
-# esptool: one on PATH (e.g. brew install esptool, the latest) first, else PlatformIO's bundled copy
+# esptool: the one on PATH (brew install esptool, or pip install esptool; build.sh --flash falls back to ESP-IDF's)
 if command -v esptool >/dev/null; then ESP=(esptool)
 elif command -v esptool.py >/dev/null; then ESP=(esptool.py)
-elif PIOD="${PLATFORMIO_CORE_DIR:-$HOME/.platformio-brewdeck}"; [[ -f "$PIOD/packages/tool-esptoolpy/esptool.py" ]]; then
-  ESP=("$PIOD/penv/bin/python" "$PIOD/packages/tool-esptoolpy/esptool.py")
 else echo "esptool not found (brew install esptool, or pip install esptool)"; exit 1; fi
 VER="$("${ESP[@]}" version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 || true)"
 if [[ "${VER%%.*}" -ge 5 ]] 2>/dev/null; then W=write-flash; FM=--flash-mode; FF=--flash-freq; FS=--flash-size; SI=get-security-info

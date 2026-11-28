@@ -160,8 +160,8 @@ flowchart LR
   was written for (`BD_UI {name, version, api}`); the core logs both at boot and warns when the UI wants a newer one.
 - **Brewdeck does not know about these UIs**: nothing in this repository depends on them. Their CI builds them
   against the pinned release (the emulator and both boards).
-- **How it is wired**: `firmware/ui_select.py` links an outside folder as `firmware/src/ui_ext` (git-ignored) and adds
-  the core's headers to the include path; `sim/build-emu.sh` compiles it into `sim/emu-<folder>` (a folder called
+- **How it is wired**: `firmware/build.sh` passes the folder to CMake (`BREWDECK_UI`), which compiles it with the core
+  and puts the core's headers on its include path; `sim/build-emu.sh` compiles it into `sim/emu-<folder>` (a folder called
   `ui` gives `sim/emu-ui-ext`).
 - **Settings**: each UI's settings are stored under its `BD_UI` name; Wi-Fi and the machine address belong to the
   core, so they survive a switch to another UI.

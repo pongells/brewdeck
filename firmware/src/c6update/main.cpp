@@ -9,7 +9,7 @@
 // host; Espressif publishes C6 images only for 2.x) and carried inside this program, so no network is needed: only the
 // P4's SDIO link to the C6. It is sent with ESP-Hosted's co-processor OTA; the C6 checks the image (its own hash) and
 // boots it only when it is complete. If anything fails, the C6 keeps its current firmware.
-// -DC6UPDATE_DRY_RUN (PLATFORMIO_BUILD_FLAGS): check the image and the link, write nothing.
+// DEFINES=C6UPDATE_DRY_RUN ./build.sh p4-c6-update: check the image and the link, write nothing.
 #include <stdio.h>
 #include <string.h>
 #include <esp_attr.h>
@@ -22,7 +22,7 @@
 #include "esp_hosted.h"
 #include "esp_hosted_ota.h"
 
-// the C6 image (src/CMakeLists.txt embeds firmware/c6/.pio/build/c6/firmware.bin)
+// the C6 image (src/CMakeLists.txt embeds firmware/c6/build/firmware.bin)
 extern const uint8_t c6_bin_start[] asm("_binary_firmware_bin_start");
 extern const uint8_t c6_bin_end[] asm("_binary_firmware_bin_end");
 

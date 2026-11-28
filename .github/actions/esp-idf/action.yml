@@ -1,0 +1,60 @@
+name: ESP-IDF
+description: >
+  The ESP-IDF release firmware/build.sh builds with (IDF_VERSION there), installed by tools/install-idf.sh and cached,
+  plus the cached build folders of the envs this job builds.
+inputs:
+  builds-key:
+    description: Name of this job's build-folder cache (e.g. s3, p4)
+    required: true
+  save:
+    description: "'false' only restores the caches (jobs that build other people's code)"
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - name: ESP-IDF version
+      id: v
+      shell: bash
+      run: echo "idf=$(sed -n 's/^IDF_VERSION=//p' firmware/build.sh)" >> "$GITHUB_OUTPUT"
+    - name: Build tools
+      shell: bash
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq ninja-build ccache libusb-1.0-0 > /dev/null
+    # ESP-IDF itself (~/esp) and its tools (~/.espressif): only the version in the key
+    - if: inputs.save == 'true'
+      uses: actions/cache@v6
+      with:
+        path: |
+          ~/esp
+          ~/.espressif
+        key: esp-idf-${{ steps.v.outputs.idf }}-${{ runner.os }}
+    - if: inputs.save != 'true'
+      uses: actions/cache/restore@v6
+      with:
+        path: |
+          ~/esp
+          ~/.espressif
+        key: esp-idf-${{ steps.v.outputs.idf }}-${{ runner.os }}
+    - name: Install ESP-IDF (checks a cached one)
+      shell: bash
+      run: tools/install-idf.sh
+    # the envs' build folders and the downloaded components: a later build compiles only what changed
+    - if: inputs.save == 'true'
+      uses: actions/cache@v6
+      with:
+        path: |
+          firmware/build
+          firmware/managed_components
+          firmware/c6/build
+          firmware/c6/managed_components
+        key: idf-builds-${{ inputs.builds-key }}-${{ steps.v.outputs.idf }}-${{ runner.os }}-${{ hashFiles('firmware/CMakeLists.txt', 'firmware/src/CMakeLists.txt', 'firmware/src/idf_component.yml', 'firmware/sdkconfig.base.*', 'firmware/sdkconfig.brewdeck.*', 'firmware/dependencies.lock.*') }}
+        restore-keys: idf-builds-${{ inputs.builds-key }}-${{ steps.v.outputs.idf }}-${{ runner.os }}-
+    - if: inputs.save != 'true'
+      uses: actions/cache/restore@v6
+      with:
+        path: |
+          firmware/build
+          firmware/managed_components
+          firmware/c6/build
+          firmware/c6/managed_components
+        key: idf-builds-${{ inputs.builds-key }}-${{ steps.v.outputs.idf }}-${{ runner.os }}-${{ hashFiles('firmware/CMakeLists.txt', 'firmware/src/CMakeLists.txt', 'firmware/src/idf_component.yml', 'firmware/sdkconfig.base.*', 'firmware/sdkconfig.brewdeck.*', 'firmware/dependencies.lock.*') }}
+        restore-keys: idf-builds-${{ inputs.builds-key }}-${{ steps.v.outputs.idf }}-${{ runner.os }}-

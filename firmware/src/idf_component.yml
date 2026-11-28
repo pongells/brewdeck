@@ -2,6 +2,7 @@
 # dependencies.lock.<chip>). Pinned to the versions the Arduino core brought until it was dropped; move them on
 # one at a time, each checked on the board.
 dependencies:
+  lvgl/lvgl: "==9.6.0"                  # the UIs' graphics library (settings: include/lv_conf.h only)
   espressif/mdns: "==1.15.1"            # finding the machine by name, the screen's own name
   espressif/esp_hosted:                 # P4: Wi-Fi through the ESP32-C6 (keep in step with the C6 updater, src/c6update)
     version: "==3.1.0"

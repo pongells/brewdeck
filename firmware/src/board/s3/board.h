@@ -6,12 +6,12 @@
 #define SCREEN_W 800   // what the UI draws
 #define SCREEN_H 480
 
-// Pixel clock. Default 12 MHz; platformio.ini sets 16 MHz (stable there with the bounce buffer and its sdkconfig).
+// Pixel clock. Default 12 MHz; firmware/CMakeLists.txt sets 16 MHz (stable there with the bounce buffer and its sdkconfig).
 #ifndef PANEL_PCLK_HZ
 #define PANEL_PCLK_HZ 12000000
 #endif
-// Bounce buffer (pixels): lets the LCD peripheral read from fast internal RAM instead of PSRAM (platformio.ini sets
-// 8000; 0 = off).
+// Bounce buffer (pixels): lets the LCD peripheral read from fast internal RAM instead of PSRAM (firmware/CMakeLists.txt
+// sets 8000; 0 = off).
 #ifndef PANEL_BOUNCE_PX
 #define PANEL_BOUNCE_PX 0
 #endif

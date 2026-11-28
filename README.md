@@ -198,17 +198,23 @@ Pins: [`firmware/src/board/p4/board.h`](firmware/src/board/p4/board.h).
 
 ## Building
 
-To build it yourself instead of using a release. The build uses
-[pioarduino](https://github.com/pioarduino/platform-espressif32) (PlatformIO). Each board is a plain ESP-IDF project,
-compiled from source with the settings in `firmware/sdkconfig.base.<chip>` and `firmware/sdkconfig.brewdeck.<chip>` (on
-the S3: code and data run from PSRAM, cache line 64 B, an IRAM-safe panel interrupt, which keeps the picture steady
-while Wi-Fi is busy).
+To build it yourself instead of using a release. Each board is a plain ESP-IDF project, built with ESP-IDF's own
+`idf.py`, compiled from source with the settings in `firmware/sdkconfig.base.<chip>` and
+`firmware/sdkconfig.brewdeck.<chip>` (on the S3: code and data run from PSRAM, cache line 64 B, an IRAM-safe panel
+interrupt, which keeps the picture steady while Wi-Fi is busy).
 
-You need [uv](https://docs.astral.sh/uv/) (the script runs PlatformIO through `uvx --python 3.14`; pioarduino does
-not support newer Python yet), git and esptool. The first build downloads the toolchain and compiles everything
-(several minutes); later builds take about 30 s. If PlatformIO then complains that its own `pioarduino` package is too
-old (`6.2.0.post1` does not satisfy `>=6.2.0`), pin it:
-`uv pip install --python ~/.platformio-brewdeck/penv/bin/python pioarduino==6.2.0`.
+You need [ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/v5.5.6/esp32s3/get-started/index.html) **v5.5.6**
+(the version `build.sh` checks for), CMake, Ninja, git and esptool. On macOS:
+
+```sh
+brew install cmake ninja esptool
+mkdir -p ~/esp && cd ~/esp
+git clone -b v5.5.6 --depth 1 --recurse-submodules --shallow-submodules https://github.com/espressif/esp-idf.git esp-idf-v5.5.6
+esp-idf-v5.5.6/install.sh esp32s3,esp32p4,esp32c6
+```
+
+`build.sh` finds it there (or set `IDF_PATH` to another folder) and loads its environment itself. The first build of
+each env downloads the components and compiles everything (a few minutes); later builds take about 30 s.
 
 Make the backup first (step 3 above, into `backup/` at the repository root), then:
 
@@ -218,10 +224,10 @@ cd firmware
 ./build.sh ui --flash    # build, then flash with flash.sh (env PORT=..., GAGGI_BACKUP=path to the backup)
 ```
 
-`build.sh --flash` runs the same `flash.sh` as a release, on the build's images. Never flash with
-`pio run -t upload`: it skips all these checks. `include/wifi_config.h` (git-ignored) can hold your Wi-Fi network and
+`build.sh --flash` runs the same `flash.sh` as a release, on the build's images (in `build/<env>/`). Never flash with
+`idf.py flash`: it skips all these checks. `include/wifi_config.h` (git-ignored) can hold your Wi-Fi network and
 the machine's name or IP; left as created, the screen starts on "No Wi-Fi set up" and you choose the network there.
-Other envs (debug builds, the P4, the touch test) and the debug tools: [development](docs/development.md). A release
+Other envs (debug builds, the P4), the touch test and the debug tools: [development](docs/development.md). A release
 package is made with `tools/make-release.sh <version> [s3|p4]` (CI makes both for each `v*` tag; notes from
 [CHANGELOG.md](CHANGELOG.md)).
 
@@ -254,7 +260,7 @@ How the parts fit together (board, core, UI, the network tasks, the emulator): [
 | `firmware/src/core/` | the core: `brewdeck_core.h` (the API a UI is built on), `core.cpp` (setup, loop, settings), `core_state.cpp` (machine state, events, the command rules), the network task (`net.cpp`: finding the machine, REST; `wifi.cpp`: the screen's Wi-Fi; `net_data.cpp`: hand-over to the loop), the WebSocket (`ws.cpp`, decoder `pb.cpp`), REST parsers (`parse.cpp`), profile previews (`preview.cpp`), updates over Wi-Fi (`update.cpp`: finding and checking a release; `ota.cpp`: writing it, the trial and rollback), the debug web server (`debug_http.cpp`) |
 | `firmware/src/board/` | the board layer: `common/` (start-up, GT911 touch, backlight, memory: shared by both boards; `board_core.h` is what the core uses), `s3/` (the Sunton ESP32-S3 RGB panel), `p4/` (the Guition ESP32-P4 DSI panel); each board folder has its `board.h` (pins) |
 | `firmware/src/ui_minimal/` | an example UI on the core API alone, to start your own from ([writing your own UI](docs/custom-ui.md)) |
-| `firmware/src/touchtest/`, `firmware/src/c6update/` | one-off firmware: a raw touch test (S3), the P4 board's Wi-Fi chip updater |
+| `firmware/src/touchtest/`, `firmware/src/c6update/` | a touch test (a small UI, both boards), the P4 board's Wi-Fi chip updater |
 | `firmware/src/ui/` | Brewdeck's UI: `ui_bridge.cpp` (the core's `bd_ui_*` entry points), screens (`screens/`, one file per screen; `ui.cpp` starts them and takes the live data; `ui_int.h` is what they share; design tokens in `theme.h`) |
 | `sim/` | emulator, renderer and recorded machine data |
 | `tests/` | host unit tests |
@@ -308,7 +314,7 @@ Not covered by Brewdeck's license:
   here only as test and demo data; they will be replaced if the Gaggiuino project asks.
 - The fonts in `firmware/src/ui/fonts/` are generated from [Inter Tight](https://github.com/rsms/inter-tight) and stay under
   the SIL Open Font License 1.1 ([OFL.txt](firmware/src/ui/fonts/OFL.txt)).
-- Libraries fetched at build time (LVGL, ESP-IDF and its components; the Arduino core and Arduino_GFX only for the S3 touch test, which is not in a release) keep their own licenses. Release images
+- Libraries fetched at build time (LVGL, ESP-IDF and its components) keep their own licenses. Release images
   and the web demo contain them compiled in: their notices and license texts are in
   [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt), which every release package includes.
 

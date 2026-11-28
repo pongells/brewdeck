@@ -56,50 +56,35 @@ jobs:
           path: sim/out/*.png
 
   firmware:
-    # an ESP-IDF project like the P4 (see firmware-p4); the touch test is a plain Arduino build
+    # ESP-IDF projects built with idf.py (firmware/build.sh); ESP-IDF and the build folders are cached
     name: Firmware (release and debug builds, the example UI, the touch test)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2   # v10.3.3 (Node 24)
-      - uses: actions/cache@v6
+      - uses: ./.github/actions/esp-idf
         with:
-          path: |
-            ~/.platformio-brewdeck
-            firmware/.pio
-            firmware/managed_components
-          key: platformio-s3-espidf-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini', 'firmware/CMakeLists.txt', 'firmware/src/idf_component.yml', 'firmware/sdkconfig.base.esp32s3', 'firmware/sdkconfig.brewdeck.esp32s3', 'firmware/dependencies.lock.esp32s3') }}
-          restore-keys: platformio-s3-espidf-${{ runner.os }}-
+          builds-key: s3
       - name: Build
         working-directory: firmware
         run: |
-          # pioarduino can install a pioarduino package its own version check rejects (6.2.0.post1 vs >=6.2.0)
-          ./build.sh ui || { uv pip install --python ~/.platformio-brewdeck/penv/bin/python pioarduino==6.2.0 && ./build.sh ui; }
+          ./build.sh ui
           ./build.sh ui-debug
           UI=ui_minimal ./build.sh ui   # the example UI: proves a UI builds on the core API alone
           cp -r src/ui_minimal "$RUNNER_TEMP/outside-ui" && UI="$RUNNER_TEMP/outside-ui" ./build.sh ui   # a UI outside the repository
-          ./build.sh touchtest
+          UI=touchtest ./build.sh ui    # the touch test
 
   firmware-p4:
-    # an ESP-IDF project: each env compiles ESP-IDF from source in its own build folder, so those folders and the
-    # downloaded components are cached too; the C6 updater is a plain Arduino build
-    name: Firmware, ESP32-P4 board (release and debug builds, the example UI)
+    name: Firmware, ESP32-P4 board (release and debug builds, the example UI, the C6 updater)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2   # v10.3.3 (Node 24)
-      - uses: actions/cache@v6
+      - uses: ./.github/actions/esp-idf
         with:
-          path: |
-            ~/.platformio-brewdeck
-            firmware/.pio
-            firmware/managed_components
-          key: platformio-p4-espidf-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini', 'firmware/CMakeLists.txt', 'firmware/src/idf_component.yml', 'firmware/sdkconfig.base.esp32p4', 'firmware/sdkconfig.brewdeck.esp32p4', 'firmware/dependencies.lock.esp32p4') }}
-          restore-keys: platformio-p4-espidf-${{ runner.os }}-
+          builds-key: p4
       - name: Build
         working-directory: firmware
         run: |
-          ./build.sh ui-p4 || { uv pip install --python ~/.platformio-brewdeck/penv/bin/python pioarduino==6.2.0 && ./build.sh ui-p4; }
+          ./build.sh ui-p4
           ./build.sh ui-p4-debug
           UI=ui_minimal ./build.sh ui-p4
           cp -r src/ui_minimal "$RUNNER_TEMP/outside-ui" && UI="$RUNNER_TEMP/outside-ui" ./build.sh ui-p4

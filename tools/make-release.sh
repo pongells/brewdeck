@@ -23,8 +23,8 @@ fi
 cp "$FW/include/wifi_config.example.h" "$FW/include/wifi_config.h"
 (cd "$FW" && UI=ui ./build.sh "$ENV")
 [[ $BOARD == p4 ]] && (cd "$FW" && ./build.sh p4-c6-update)
-# the version built into the image (git describe, firmware/ui_select.py) should be the release's own tag
-BUILT="$(sed -n 's/^#define BREWDECK_VERSION "\(.*\)"$/\1/p' "$FW/.pio/build/$ENV/gen/brewdeck_version.h" 2>/dev/null || true)"
+# the version built into the image (git describe, firmware/version.cmake) should be the release's own tag
+BUILT="$(sed -n 's/^#define BREWDECK_VERSION "\(.*\)"$/\1/p' "$FW/build/$ENV/gen/brewdeck_version.h" 2>/dev/null || true)"
 if [[ "$BUILT" != "$VER" ]]; then
   echo "The image says version '${BUILT:-unknown}', not $VER (tag the commit first, no local changes)."
   [[ -n "${CI:-}" ]] && { echo "Refusing to package a release with the wrong version."; exit 1; }   # local: a warning
@@ -34,11 +34,11 @@ OUT="$ROOT/dist/$NAME"
 rm -rf "$OUT" "$ROOT/dist/$NAME.zip"
 mkdir -p "$OUT"
 sums() { (cd "$1" && if command -v sha256sum >/dev/null; then sha256sum *.bin; else shasum -a 256 *.bin; fi > SHA256SUMS); }
-for f in bootloader.bin partitions.bin boot_app0.bin firmware.bin; do cp "$FW/.pio/build/$ENV/$f" "$OUT/"; done
+for f in bootloader.bin partitions.bin boot_app0.bin firmware.bin; do cp "$FW/build/$ENV/$f" "$OUT/"; done
 sums "$OUT"
 if [[ $BOARD == p4 ]]; then
   mkdir -p "$OUT/c6-update"
-  for f in bootloader.bin partitions.bin boot_app0.bin firmware.bin; do cp "$FW/.pio/build/p4-c6-update/$f" "$OUT/c6-update/"; done
+  for f in bootloader.bin partitions.bin boot_app0.bin firmware.bin; do cp "$FW/build/p4-c6-update/$f" "$OUT/c6-update/"; done
   sums "$OUT/c6-update"
 fi
 cp "$FW/flash.sh" "$OUT/"
@@ -116,12 +116,12 @@ if [[ $BOARD == p4 ]]; then
     echo "UPDATE_SIGNING_KEY not set: no update files (screens cannot update to this build over Wi-Fi)."
   else
     if [[ -f "$UPDATE_SIGNING_KEY" ]]; then
-      "$ROOT/tools/sign-update.sh" "$VER" "$CHIP" "$FW/.pio/build/$ENV/firmware.bin" "$UPDATE_SIGNING_KEY" "$ROOT/dist"
+      "$ROOT/tools/sign-update.sh" "$VER" "$CHIP" "$FW/build/$ENV/firmware.bin" "$UPDATE_SIGNING_KEY" "$ROOT/dist"
     else   # the key's text: a temporary file, removed whatever happens (the EXIT trap above restores wifi_config.h)
       KEYF="$(mktemp)"
       printf '%s\n' "$UPDATE_SIGNING_KEY" > "$KEYF"
       ok=0
-      "$ROOT/tools/sign-update.sh" "$VER" "$CHIP" "$FW/.pio/build/$ENV/firmware.bin" "$KEYF" "$ROOT/dist" || ok=$?
+      "$ROOT/tools/sign-update.sh" "$VER" "$CHIP" "$FW/build/$ENV/firmware.bin" "$KEYF" "$ROOT/dist" || ok=$?
       rm -f "$KEYF"
       [[ $ok == 0 ]] || exit "$ok"
     fi

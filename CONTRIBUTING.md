@@ -60,7 +60,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 ```
 
 - **type**: `feat` (something new for users or UI authors), `fix` (a bug), `perf`, `refactor` (no change in
-  behaviour), `docs`, `test`, `build` (build scripts, PlatformIO, toolchains), `ci`, `chore` (anything else).
+  behaviour), `docs`, `test`, `build` (build scripts, ESP-IDF, toolchains), `ci`, `chore` (anything else).
 - **scope** (optional): the part it touches: `core`, `ui`, `board`, `s3`, `p4`, `sim`, `web`, `tools`, `docs`.
 - **summary**: imperative, lower case, no full stop, up to about 72 characters ("fix(core): find the previous shot
   after a WebSocket gap").

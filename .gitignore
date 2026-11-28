@@ -13,21 +13,16 @@ sim/web/dist/
 sim/out/
 # output of tools/record.sh and tools/screenshot.sh
 rec-*/
-firmware/.pio/
+# firmware: idf.py build folders (build.sh: build/<env>, with each env's sdkconfig) and fetched components
+firmware/build/
 *.bin
 *.raw
-# pioarduino hybrid-compile output (regenerated from platformio.ini)
-firmware/.dummy/
 firmware/managed_components/
-firmware/sdkconfig.defaults
-firmware/sdkconfig.*
-!firmware/sdkconfig.brewdeck.*
-!firmware/sdkconfig.base.*
-firmware/dependencies.lock
-# the C6 firmware project (firmware/c6): build output, fetched components, generated settings
-firmware/c6/.pio/
+firmware/sdkconfig
+firmware/sdkconfig.old
+# the C6 firmware project (firmware/c6)
+firmware/c6/build/
 firmware/c6/managed_components/
-firmware/c6/sdkconfig.c6
 .idea/
 # recorded WebSocket frames for host tests (no d_settings, see tools/ws_listen.py --raw)
 !sim/data/*.bin
@@ -45,5 +40,4 @@ __pycache__/
 ws_schema*.json
 firmware/include/wifi_config.h.local
 dist/
-firmware/src/ui_ext
 tests/ui/out/

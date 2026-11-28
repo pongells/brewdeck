@@ -21,9 +21,6 @@ ESP-IDF includes third-party components under their own licenses (among them Fre
 Mbed TLS: Apache-2.0; newlib: BSD-style). Their list and notices: the "Copyrights and Licenses" page of the ESP-IDF
 documentation, https://docs.espressif.com/projects/esp-idf/en/v5.5/esp32/COPYRIGHT.html
 
-The S3 touch test (env touchtest, not part of any release) is built on the Arduino core for ESP32 (LGPL-2.1-or-later)
-and Arduino_GFX (BSD); the firmware itself uses neither.
-
 
 ======================================================================================================================
 LVGL: MIT License

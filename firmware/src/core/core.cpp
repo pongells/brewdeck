@@ -11,7 +11,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include "brewdeck_core.h"
-#if __has_include("brewdeck_version.h")    // written by ui_select.py at build time (git describe)
+#if __has_include("brewdeck_version.h")    // written by version.cmake at build time (git describe)
 #include "brewdeck_version.h"
 #endif
 #ifndef BREWDECK_VERSION

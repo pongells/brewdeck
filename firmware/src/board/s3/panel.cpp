@@ -1,7 +1,7 @@
 // Sunton ESP32-S3 panel on ESP-IDF's RGB LCD driver (esp_lcd): one frame buffer in PSRAM that the LCD peripheral
 // scans out on its own, through two bounce buffers in internal RAM (the DMA reads those, the driver's interrupt refills
 // them from PSRAM), so the picture holds while Wi-Fi and flash are busy (with the settings in sdkconfig.brewdeck.esp32s3).
-// Timing and pins as Arduino_GFX had them (src/touchtest/gfx_panel.cpp still uses that).
+// Timing and pins as the board's Arduino_GFX setup had them.
 #include <string.h>
 #include <esp_lcd_panel_rgb.h>
 #include <esp_lcd_panel_ops.h>

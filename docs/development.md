@@ -78,16 +78,19 @@ Prerequisites and the first build: README, [Building](../README.md#building). In
 | `ui-debug` | the same plus the debug web server (below) |
 | `ui-p4`, `ui-p4-debug` | the Guition ESP32-P4 board |
 | `p4-c6-update` | one-off: updates the P4 board's ESP32-C6 Wi-Fi firmware (built from `firmware/c6`, installed by `src/c6update`) |
-| `touchtest` | raw touch test for the S3: shows touch coordinates, tap the corners to check the axes |
 
-`./build.sh <env>` builds, `--flash` flashes through `flash.sh`; `UI=<folder>` builds another UI folder (a folder name under `src/`, or a path to one outside the repository). Options are
-in the header of [`build.sh`](../firmware/build.sh).
+`./build.sh <env>` builds into `build/<env>/`, `--flash` flashes through `flash.sh`; `UI=<folder>` builds another UI
+folder (a folder name under `src/`, or a path to one outside the repository). Options are in the header of
+[`build.sh`](../firmware/build.sh).
 
-Both boards are **plain ESP-IDF projects** (`framework = espidf`). ESP-IDF and the components named in
-`src/idf_component.yml` (mDNS; on the P4 ESP-Hosted and esp_wifi_remote) are compiled from source together, in the env's
-own build folder; so are the C6 updater (`p4-c6-update`) and the C6's own firmware (`firmware/c6`, a separate project
-with ESP-Hosted's co-processor: Espressif publishes C6 images only for 2.x). The S3 touch test (`touchtest`) is a plain
-Arduino build. Settings:
+Both boards are **plain ESP-IDF projects**, built with `idf.py` (ESP-IDF v5.5.6, `IDF_VERSION` in `build.sh`). ESP-IDF
+and the components named in `src/idf_component.yml` (LVGL, mDNS; on the P4 ESP-Hosted and esp_wifi_remote) are
+compiled from source together, in the env's own build folder; so are the C6 updater (`p4-c6-update`) and the C6's own
+firmware (`firmware/c6`, a separate project with ESP-Hosted's co-processor: Espressif publishes C6 images only for
+2.x). `CMakeLists.txt` takes the choice as CMake variables (`BREWDECK_BOARD`, `BREWDECK_UI`, `BREWDECK_DEBUG`, ...;
+`build.sh` sets them per env) and `src/CMakeLists.txt` picks the sources (core, board, UI). LVGL takes its settings
+from `include/lv_conf.h` only (its own Kconfig is ignored). The touch test is a small UI:
+`UI=touchtest ./build.sh ui --flash` (or `ui-p4`) shows where touches land; tap the corners to check the axes. Settings:
 `sdkconfig.base.<chip>` (the settings the firmware ran on while it was built on the Arduino core, as the lines that
 differ from ESP-IDF's defaults; how it was made is in its header), plus `sdkconfig.brewdeck.<chip>`:
 - **S3** (`sdkconfig.brewdeck.esp32s3`): octal PSRAM, and what keeps the RGB panel's picture steady while Wi-Fi is busy
@@ -97,9 +100,8 @@ differ from ESP-IDF's defaults; how it was made is in its header), plus `sdkconf
   reads and it flashed light blue), ESP-Hosted receive double buffering off (internal RAM).
 
 Component versions are locked in `dependencies.lock.<chip>` (commit it; delete it to take the newest allowed versions,
-then test). `src/CMakeLists.txt` picks the sources (core, board, UI; `ui_select.py` passes the choice). `build.sh`
-makes the generated `sdkconfig.<env>` again when `sdkconfig.brewdeck.*` changes. First build of each env: a few
-minutes. The S3 touch test (`touchtest`) is a plain Arduino build on the stock prebuilt libraries.
+then test). `build.sh` makes the build's `sdkconfig` (`build/<env>/sdkconfig`) again when `sdkconfig.base.*` or
+`sdkconfig.brewdeck.*` changes. First build of each env: a few minutes.
 
 ### Over Wi-Fi (debug builds)
 
@@ -113,7 +115,7 @@ The image goes into the free app slot and the screen restarts into it. It keeps 
 properly for 60 s (UI loop alive, Wi-Fi up); if the UI loop stops for 20 s, or Wi-Fi is not up within 3 minutes, it
 goes back to the previous one by itself, so a bad build cannot lock you out. `build.sh` waits and says which happened
 (`GET /heap`, line `firmware:`). Refused while a shot, steam, hot water or a flush runs. To check the way back:
-`PLATFORMIO_BUILD_FLAGS=-DOTA_TEST_FREEZE ./build.sh ui-p4-debug --ota` sends a build whose UI loop stops after 15 s;
+`DEFINES=OTA_TEST_FREEZE ./build.sh ui-p4-debug --ota` sends a build whose UI loop stops after 15 s;
 the screen returns to the previous firmware about 20 s later (`/log/prev` says why).
 
 The screen asks for a password: `include/ota_token.h`, made by `build.sh` on first use (git-ignored, never printed).
@@ -137,7 +139,7 @@ The release workflow makes both files with `tools/sign-update.sh` and the privat
 accept a test key and another source:
 
 ```sh
-tools/sign-update.sh v0.9.0 esp32p4 .pio/build/ui-p4-debug/firmware.bin <test key.pem> <folder>   # serve <folder> over HTTP
+tools/sign-update.sh v0.9.0 esp32p4 firmware/build/ui-p4-debug/firmware.bin <test key.pem> <folder>   # serve <folder> over HTTP
 curl -4 'http://brewdeck-p4.local/release?base=http://<computer>:8000'   # check there now; ?base= = GitHub again
 curl -4 'http://brewdeck-p4.local/release?install=1'                     # as the Install button does
 ```

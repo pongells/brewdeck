@@ -1,6 +1,6 @@
 // The part of the board layer (brewdeck_core.h) both boards share: start-up, touch (the GT911 driver next to this
 // file, plus the debug server's remote touch), the backlight call and memory. Each board's own folder (src/board/s3,
-// src/board/p4; ui_select.py builds one) has its panel, display functions and board.h (pins, touch orientation).
+// src/board/p4; src/CMakeLists.txt builds one) has its panel, display functions and board.h (pins, touch orientation).
 #include "../../core/systime.h"
 #include <esp_heap_caps.h>
 #include <esp_system.h>

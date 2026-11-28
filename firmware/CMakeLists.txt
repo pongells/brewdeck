@@ -1,27 +1,61 @@
-# ESP-IDF project (PlatformIO framework = espidf): the firmware is the one component in src/ plus the components it
-# names (src/idf_component.yml), compiled with the settings below and the component versions locked in
-# dependencies.lock.<chip>.
+# ESP-IDF project: the firmware is the one component in src/ plus the components it names (src/idf_component.yml),
+# compiled with the settings below and the component versions locked in dependencies.lock.<chip>.
+# What to build (CMake variables; build.sh sets them per env):
+#   BREWDECK_BOARD  s3 (Sunton ESP32-S3, the default) or p4 (Guition ESP32-P4); the chip follows (IDF_TARGET)
+#   BREWDECK_UI     the UI folder: a name under src/ (ui = Brewdeck's own, the default) or an absolute path
+#   BREWDECK_DEBUG  ON = the debug web server (src/core/debug_http.cpp); release builds leave it out
+#   BREWDECK_ONLY   a standalone program under src/ instead of the firmware (c6update)
+#   BREWDECK_DEFINES  extra defines for every file, ;-separated (test builds: OTA_TEST_FREEZE)
 cmake_minimum_required(VERSION 3.16.0)
+if(NOT BREWDECK_BOARD)
+  set(BREWDECK_BOARD s3)
+endif()
+if(NOT BREWDECK_UI)
+  set(BREWDECK_UI ui)
+endif()
+if(BREWDECK_BOARD STREQUAL "s3")
+  set(chip esp32s3)
+elseif(BREWDECK_BOARD STREQUAL "p4")
+  set(chip esp32p4)
+else()
+  message(FATAL_ERROR "BREWDECK_BOARD=${BREWDECK_BOARD}: expected s3 or p4")
+endif()
+if(DEFINED IDF_TARGET AND NOT IDF_TARGET STREQUAL chip)
+  message(FATAL_ERROR "board ${BREWDECK_BOARD} is an ${chip}, not ${IDF_TARGET}")
+endif()
+set(IDF_TARGET ${chip})
 # settings: the chip's base (sdkconfig.base.<chip>), then Brewdeck's changes; named here so ESP-IDF does not also read
 # a sdkconfig.defaults
-set(SDKCONFIG_DEFAULTS "${CMAKE_CURRENT_LIST_DIR}/sdkconfig.base.${IDF_TARGET};${CMAKE_CURRENT_LIST_DIR}/sdkconfig.brewdeck.${IDF_TARGET}")
+set(SDKCONFIG_DEFAULTS "${CMAKE_CURRENT_LIST_DIR}/sdkconfig.base.${chip};${CMAKE_CURRENT_LIST_DIR}/sdkconfig.brewdeck.${chip}")
+# the firmware's own component (src/)
+set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/src")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-# one lock file per chip (PlatformIO passes the chip as -DIDF_TARGET)
-idf_build_set_property(DEPENDENCIES_LOCK "${CMAKE_CURRENT_LIST_DIR}/dependencies.lock.${IDF_TARGET}")
-project(brewdeck)
-# ESP-Hosted 3.x (P4) force-includes its config header with "-include eh_host_port_master_config.h", two words that
-# PlatformIO's ESP-IDF builder sorts apart (pioarduino/platform-espressif32#576). The builder also gives the app's
-# flags to every component and to the bootloader, which lack the header's folder and ESP-Hosted's settings. So the
-# option becomes one word (-include<file>, the same to GCC) naming a small header made here: it includes ESP-Hosted's
-# header by its full path, only where ESP-Hosted is in the settings (that header is macros and sdkconfig.h).
-if(TARGET eh_host_config)
-  get_target_property(opts eh_host_config INTERFACE_COMPILE_OPTIONS)
-  get_target_property(dirs eh_host_config INTERFACE_INCLUDE_DIRECTORIES)
-  list(GET dirs 0 dir)
-  set(wrap "${CMAKE_BINARY_DIR}/esp_hosted_force_include.h")
-  file(WRITE "${wrap}" "/* made by CMakeLists.txt: ESP-Hosted's forced config header, where ESP-Hosted is set up */\n"
-                       "#include \"sdkconfig.h\"\n#ifdef CONFIG_ESP_HOSTED_HOST\n"
-                       "#include \"${dir}/eh_host_port_master_config.h\"\n#endif\n")
-  list(TRANSFORM opts REPLACE "^SHELL:-include +eh_host_port_master_config\\.h$" "-include${wrap}")
-  set_target_properties(eh_host_config PROPERTIES INTERFACE_COMPILE_OPTIONS "${opts}")
+# one lock file per chip
+idf_build_set_property(DEPENDENCIES_LOCK "${CMAKE_CURRENT_LIST_DIR}/dependencies.lock.${chip}")
+# for src/CMakeLists.txt (component files see build properties, not this file's variables)
+idf_build_set_property(BREWDECK_BOARD "${BREWDECK_BOARD}")
+idf_build_set_property(BREWDECK_UI "${BREWDECK_UI}")
+idf_build_set_property(BREWDECK_ONLY "${BREWDECK_ONLY}")
+# flags for every component (LVGL reads include/lv_conf.h; the board's board.h comes first by its folder)
+set(d "${CMAKE_CURRENT_LIST_DIR}")
+idf_build_set_property(COMPILE_OPTIONS "-I${d}/include" APPEND)
+idf_build_set_property(COMPILE_OPTIONS "-I${d}/src/board/${BREWDECK_BOARD}" APPEND)
+idf_build_set_property(COMPILE_OPTIONS "-I${d}/src/board/common" APPEND)
+idf_build_set_property(COMPILE_OPTIONS "-Werror=infinite-recursion" APPEND)   # a function calling itself by mistake
+idf_build_set_property(COMPILE_DEFINITIONS "LV_CONF_INCLUDE_SIMPLE" APPEND)
+# LVGL's ESP-IDF component also reads its own Kconfig settings; Brewdeck sets LVGL only in include/lv_conf.h (the same
+# as the emulator, which has no Kconfig)
+idf_build_set_property(COMPILE_DEFINITIONS "LV_KCONFIG_IGNORE" APPEND)
+if(BREWDECK_BOARD STREQUAL "s3")
+  idf_build_set_property(COMPILE_DEFINITIONS "PANEL_PCLK_HZ=16000000" APPEND)
+  idf_build_set_property(COMPILE_DEFINITIONS "PANEL_BOUNCE_PX=8000" APPEND)
+else()
+  idf_build_set_property(COMPILE_DEFINITIONS "BOARD_P4" APPEND)
 endif()
+if(BREWDECK_DEBUG)
+  idf_build_set_property(COMPILE_DEFINITIONS "BREWDECK_DEBUG_HTTP" APPEND)
+endif()
+foreach(def ${BREWDECK_DEFINES})
+  idf_build_set_property(COMPILE_DEFINITIONS "${def}" APPEND)
+endforeach()
+project(brewdeck)

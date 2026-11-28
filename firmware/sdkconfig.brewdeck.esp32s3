@@ -45,3 +45,6 @@ CONFIG_MDNS_TASK_STACK_SIZE=3072
 # in 8 KB chunks, so the panel's bounce-buffer refill (~0.5 ms per buffer) is never held off long enough to jump
 CONFIG_ESP_MM_CACHE_MSYNC_C2M_CHUNKED_OPS=y
 CONFIG_ESP_MM_CACHE_MSYNC_C2M_CHUNKED_OPS_MAX_LEN=0x2000
+# LVGL's component: only the library (its settings come from include/lv_conf.h, see CMakeLists.txt)
+CONFIG_LV_BUILD_EXAMPLES=n
+CONFIG_LV_BUILD_DEMOS=n
