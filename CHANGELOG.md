@@ -10,7 +10,17 @@ which changes only when a custom UI would need changes.
 
 ## Unreleased
 
+On the screen:
+- ESP32-P4: other interfaces. Menu > Interface (a sixth menu row; the rows are a little lower) lists the interfaces of
+  the newest release, Brewdeck's own and the UIs listed in `uis.json` (for now Ledger), each with a picture of its
+  Ready screen; a row opens its details, where Install (tap twice) installs it like an update.
+  Holding the screen for 5 s while it starts boots the previous firmware, whatever interface is installed.
+
 For developers:
+- API 1.x additions (`BD_HAS_UI_CATALOG`): `bd_ui_catalog`, `bd_ui_install`, `bd_ui_preview`, and `title` in the
+  update event.
+- Releases carry `catalog-esp32p4.txt` (signed) and an image per listed UI; the UIs are built in release jobs
+  without the signing key.
 - A UI kept in its own repository builds into the firmware again (since the move to ESP-IDF its files were compiled
   twice and the link failed; the emulator was fine). CI now builds an outside UI's firmware for both boards.
 - `uis.json` lists UIs in their own repositories; the "UIs" workflow builds each at its pinned commit against the

@@ -1,0 +1,22 @@
+# X9 the interfaces of the newest release are listed and another one installs only after a confirmation (Brewdeck:
+# Menu > Interface, a row opens its details, Install there, Tap again).
+# checks: X9
+wait_for screen.ready 10000
+button Menu
+tap_tag action.interface
+expect_visible screen.interface 2000
+expect_touch_targets 48
+shot X9: the interfaces
+tap_tag row.interface.1
+expect_visible screen.interface_detail 2000
+expect_touch_targets 48
+expect_no_cmd
+shot X9: one interface's details
+tap_tag action.interface_install
+expect_no_cmd
+tap_tag action.interface_install
+expect_cmd ui_install ledger
+expect_visible screen.update 3000
+shot X9: installing another interface
+expect_hidden screen.update 15000
+quit

@@ -40,13 +40,13 @@ static inline int clamp_w10(int w10) { return w10 <= 0 ? 0 : w10 < W_MIN10 ? W_M
 // brew temperature: 1-105 degC (0 = not known / heater off, never sent); a + from an unknown value starts at T_START
 static const int T_MIN = 1, T_MAX = 105, T_START = 60;
 static const int VALS_Y = 404;                      // brewing / steam: the values row under the chart (y 404..456)
-enum { IC_HISTORY, IC_SCALE, IC_DISPLAY, IC_WIFI, IC_ABOUT, IC_PROFILES, IC_SETTINGS, IC_BELL };   // line_icon kinds
+enum { IC_HISTORY, IC_SCALE, IC_DISPLAY, IC_WIFI, IC_ABOUT, IC_PROFILES, IC_SETTINGS, IC_BELL, IC_INTERFACE };   // line_icon kinds
 struct EmptyState { lv_obj_t *box, *title, *body; };
 struct Restore { int id; char name[48]; int w10, deg; uint32_t t; };   // a restore waiting for its profile
 enum { RV_PREV_NONE = 0, RV_PREV_LOADING, RV_PREV_READY, RV_PREV_MISSING, RV_PREV_FAILED };   // = bd_load (BD_LOAD_*)
 // menu pages (g_menu_page, menu_show_page); the address page uses the password page's objects
 enum { MP_LIST = -1, MP_DISPLAY, MP_SCALE, MP_WIFI, MP_ABOUT, MP_WIFI_DETAILS, MP_PASSWORD, MP_ADDRESS, MP_HISTORY,
-       MENU_PAGES };
+       MP_INTERFACE, MP_IFACE_DETAIL, MENU_PAGES };
 // brewing screen / shot review (g_br_state)
 enum { BR_HIDDEN = 0, BR_BREWING, BR_DONE, BR_REVIEW };
 // the flush button: the machine's mode as bd_flush (BD_FLUSH_OFF = HOME), FL_UNKNOWN = busy, offline or not asked

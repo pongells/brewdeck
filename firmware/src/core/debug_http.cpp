@@ -285,10 +285,14 @@ static void task(void *) {
         update_set_base(base);
       } else if (strstr(line, "check=1")) {
         bd_release_check();
-      } else if (strstr(line, "install=1")) {   // as the UI's Install button does
+      } else if (const char *pi = strstr(line, "install=")) {   // 1: as the UI's Install button; <name>: that UI
         static const char *const RES[] = {"ok", "offline", "busy", "range", "profile changed", "no scale", "pending",
-                                          "no newer release known"};
-        const bd_result res = bd_release_install();
+                                          "not in the catalogue / no newer release"};
+        char name[16];
+        size_t k = 0;
+        for (pi += 8; *pi && *pi != ' ' && *pi != '&' && k < sizeof name - 1; pi++) name[k++] = *pi;
+        name[k] = 0;
+        const bd_result res = !strcmp(name, "1") ? bd_release_install() : bd_ui_install(name);
         c.printf("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\ninstall: %s\n", RES[res]);
         c.close();
         continue;
@@ -299,6 +303,10 @@ static void task(void *) {
                "state: %s, newest %s (%u bytes)%s%s%s\nrunning: %s\n", update_base()[0] ? update_base() : "GitHub",
                ST[r->state], r->version[0] ? r->version : "-", (unsigned)r->size, r->installing ? ", installing" : "",
                r->error[0] ? ", last error: " : "", r->error, ota_slot());
+      const bd_catalog *cat = bd_ui_catalog();
+      for (int i = 0; i < cat->n; i++)
+        c.printf("interface %s \"%s\" (%u bytes)%s\n", cat->ui[i].name, cat->ui[i].title, (unsigned)cat->ui[i].size,
+                 cat->ui[i].current ? ", running" : "");
     } else if (strncmp(line, "GET /heap ", 10) == 0) {   // memory and Wi-Fi link
       char ssid[33], ap[18];
       int8_t rssi;
@@ -407,7 +415,7 @@ static void task(void *) {
       if (pp) bd_set_backlight(atoi(pp + 4));
       c.print("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nok\n");
     } else {
-      c.print("HTTP/1.0 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nGET /screen.bmp, /rec?every=ms[&max=n], /rec, /rec/stop, /rec.bin, /rec/free, /heap, /tasks, /flash, /roam, /i2c, /ppatest?n=&seed=&hmin=&hmax=, /log[?from=], /log/prev, /loghost?to=, /release[?base=|?check=1|?install=1], POST /ota, /touch?x=&y=&ms=, /bl?pct=&hz=\n");
+      c.print("HTTP/1.0 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nGET /screen.bmp, /rec?every=ms[&max=n], /rec, /rec/stop, /rec.bin, /rec/free, /heap, /tasks, /flash, /roam, /i2c, /ppatest?n=&seed=&hmin=&hmax=, /log[?from=], /log/prev, /loghost?to=, /release[?base=|?check=1|?install=1|?install=<ui>], POST /ota, /touch?x=&y=&ms=, /bl?pct=&hz=\n");
     }
     c.close();
   }

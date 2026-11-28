@@ -203,7 +203,7 @@ void bd_ui_event(const bd_event *e) {
     case BD_EV_WIFI_JOIN: ui_set_wifi_join(e->u.join.state); break;
     case BD_EV_UPDATE:
       ui_set_update(e->u.update.state, e->u.update.percent, e->u.update.received, e->u.update.total, e->u.update.built,
-                    e->u.update.from, e->u.update.version);
+                    e->u.update.from, e->u.update.version, e->u.update.title);
       break;
     default: break;
   }

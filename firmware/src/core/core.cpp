@@ -233,6 +233,7 @@ void bd_core_setup(void) {
   net_begin();                      // before the panel starts (see net.h)
   Log.println(board_begin() ? "touch ok" : "touch NOT found");
   cs_blank_screen();
+  ota_recovery_check();             // held 5 s at start: the previous firmware / interface (ota.h)
   Log.printf("core: API %d, UI \"%s\" %s written for API %d\n", BD_API_VERSION, BD_UI.name, BD_UI.version,
              BD_UI.api_version);
   if (BD_UI.api_version > BD_API_VERSION)

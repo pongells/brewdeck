@@ -9,6 +9,9 @@ const bd_release *bd_release_info(void) { static bd_release r; return &r; }
 uint32_t bd_seq_release(void) { return 0; }
 void bd_release_check(void) {}
 bd_result bd_release_install(void) { return BD_ERR_UNKNOWN_ID; }
+const bd_catalog *bd_ui_catalog(void) { static bd_catalog c; return &c; }
+bd_result bd_ui_install(const char *) { return BD_ERR_UNKNOWN_ID; }
+const bd_picture *bd_ui_preview(const char *) { return NULL; }
 void update_begin(const char *) {}
 void update_tick(uint32_t) {}
 #ifdef BREWDECK_DEBUG_HTTP
@@ -17,6 +20,7 @@ const char *update_base(void) { return "(not on this board)"; }
 #endif
 #else
 #include <esp_crt_bundle.h>
+#include <esp_heap_caps.h>
 #include <esp_http_client.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -47,7 +51,15 @@ static char g_running[40];
 static portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
 static bd_release g_rel;                                 // under g_mux
 static uint32_t g_seq = 1;
-static RelDesc g_desc;                                   // the newest release's signed description (under g_mux)
+static RelCatalog g_cat;                                 // the newest release's signed UI catalogue (under g_mux)
+static char g_install_name[16];                          // the UI being installed (bd_ui_install)
+// previews (bd_ui_preview): downloaded on request into PSRAM, per catalogue entry; freed only on the UI task
+// (update_tick) after the catalogue changed, so a UI copying one in its tick never sees it go
+static uint16_t *g_pv_px[REL_MAX_UIS];                   // under g_mux
+static uint32_t g_pv_want = 0, g_pv_failed = 0;          // bit per entry; under g_mux
+static volatile bool g_pv_reset = false;                 // the catalogue changed: free the old ones
+static volatile int g_pv_job = -1;                       // the entry being downloaded
+static int cat_find(const char *name);
 static volatile bool g_busy = false;                     // a check or download task is running
 static volatile bool g_want_check = false, g_want_install = false;
 static uint32_t g_next_check = 0;                        // clock_ms of the next scheduled check
@@ -77,18 +89,62 @@ const bd_release *bd_release_info(void) {
   portEXIT_CRITICAL(&g_mux);
   return &out;
 }
+const bd_picture *bd_ui_preview(const char *name) {
+  static bd_picture pic;
+  if (!name) return NULL;
+  const bd_picture *r = NULL;
+  portENTER_CRITICAL(&g_mux);
+  const int k = cat_find(name);
+  if (k >= 0 && g_pv_px[k] && !g_pv_reset) {
+    pic.px = g_pv_px[k];
+    pic.w = REL_PREVIEW_W;
+    pic.h = REL_PREVIEW_H;
+    r = &pic;
+  } else if (k >= 0 && g_cat.ui[k].preview[0] && !(g_pv_failed & 1u << k)) {
+    g_pv_want |= 1u << k;   // update_tick starts the download
+  }
+  portEXIT_CRITICAL(&g_mux);
+  return r;
+}
 uint32_t bd_seq_release(void) { return g_seq; }
 void bd_release_check(void) { g_want_check = true; }
-bd_result bd_release_install(void) {
+// the catalogue entry of a UI, -1 = none (call under g_mux)
+static int cat_find(const char *name) {
+  for (int i = 0; i < g_cat.n; i++)
+    if (!strcmp(g_cat.ui[i].name, name)) return i;
+  return -1;
+}
+static bd_result install(const char *name, bool only_newer) {
   char why[48];
   if (ota_machine_busy(why, sizeof why)) return BD_ERR_BUSY;
   portENTER_CRITICAL(&g_mux);
-  const bool avail = g_rel.state == BD_RELEASE_AVAILABLE && !g_rel.installing;
+  const bool ok = !g_rel.installing && cat_find(name) >= 0 &&
+                  (!only_newer || g_rel.state == BD_RELEASE_AVAILABLE);
+  if (ok) snprintf(g_install_name, sizeof g_install_name, "%s", name);
   portEXIT_CRITICAL(&g_mux);
-  if (!avail) return BD_ERR_UNKNOWN_ID;
+  if (!ok) return BD_ERR_UNKNOWN_ID;
   g_want_install = true;
   set_installing(true, NULL);
   return BD_OK;
+}
+bd_result bd_release_install(void) { return install(BD_UI.name, true); }
+bd_result bd_ui_install(const char *name) { return name ? install(name, false) : BD_ERR_UNKNOWN_ID; }
+const bd_catalog *bd_ui_catalog(void) {
+  static bd_catalog out;
+  portENTER_CRITICAL(&g_mux);
+  memset(&out, 0, sizeof out);
+  snprintf(out.version, sizeof out.version, "%s", g_cat.version);
+  for (int i = 0; i < g_cat.n && i < BD_MAX_UIS; i++) {
+    bd_ui_entry *e = &out.ui[out.n++];
+    snprintf(e->name, sizeof e->name, "%s", g_cat.ui[i].name);
+    snprintf(e->title, sizeof e->title, "%s", g_cat.ui[i].title);
+    snprintf(e->about, sizeof e->about, "%s", g_cat.ui[i].about);
+    e->size = g_cat.ui[i].size;
+    e->current = !strcmp(g_cat.ui[i].name, BD_UI.name);
+    e->has_preview = g_cat.ui[i].preview[0] != 0;
+  }
+  portEXIT_CRITICAL(&g_mux);
+  return &out;
 }
 
 #ifdef BREWDECK_DEBUG_HTTP
@@ -101,17 +157,18 @@ void update_set_base(const char *base) {
 const char *update_base(void) { return g_base; }
 #endif
 
-static void manifest_url(char *out, size_t cap) {
+// what = "catalog" (the UI catalogue, from v0.3.1) or "update" (Brewdeck's own description, every release)
+static void latest_url(const char *what, char *out, size_t cap) {
 #ifdef BREWDECK_DEBUG_HTTP
-  if (g_base[0]) { snprintf(out, cap, "%s/update-%s.txt", g_base, CHIP); return; }
+  if (g_base[0]) { snprintf(out, cap, "%s/%s-%s.txt", g_base, what, CHIP); return; }
 #endif
-  snprintf(out, cap, "https://github.com/" UPDATE_REPO "/releases/latest/download/update-%s.txt", CHIP);
+  snprintf(out, cap, "https://github.com/" UPDATE_REPO "/releases/latest/download/%s-%s.txt", what, CHIP);
 }
-static void image_url(const char *ver, char *out, size_t cap) {
+static void image_url(const char *ver, const char *file, char *out, size_t cap) {
 #ifdef BREWDECK_DEBUG_HTTP
-  if (g_base[0]) { snprintf(out, cap, "%s/brewdeck-%s-%s.bin", g_base, ver, CHIP); return; }
+  if (g_base[0]) { snprintf(out, cap, "%s/%s", g_base, file); return; }
 #endif
-  snprintf(out, cap, "https://github.com/" UPDATE_REPO "/releases/download/%s/brewdeck-%s-%s.bin", ver, ver, CHIP);
+  snprintf(out, cap, "https://github.com/" UPDATE_REPO "/releases/download/%s/%s", ver, file);
 }
 static const char *source_name(void) {
 #ifdef BREWDECK_DEBUG_HTTP
@@ -189,67 +246,118 @@ static bool sig_ok(const char *line, size_t ln, const char *sig64, size_t sn, co
 }
 
 // ---- the two jobs -------------------------------------------------------------------------------------------------
-static void do_check(void) {
-  set_state(BD_RELEASE_CHECKING, NULL);
-  char url[160], err[48] = "";
-  manifest_url(url, sizeof url);
+// one signed file of the latest release into text (0-terminated); n = its length, -1 = failed (err says why)
+static int fetch_signed(const char *what, char *text, int cap, char *err, size_t ecap, int *status404) {
+  char url[160];
+  latest_url(what, url, sizeof url);
   esp_http_client_handle_t h;
   int64_t len;
-  static char text[1024];
   int n = -1;
-  if (http_open(url, &h, &len, err, sizeof err)) {
-    n = read_full(h, (uint8_t *)text, sizeof text - 1);
+  if (http_open(url, &h, &len, err, ecap)) {
+    n = read_full(h, (uint8_t *)text, cap - 1);
     esp_http_client_cleanup(h);
-    if (n < 0) snprintf(err, sizeof err, "download broke off");
+    if (n < 0) snprintf(err, ecap, "download broke off");
+    else if (n >= cap - 1) { snprintf(err, ecap, "%s file too long", what); n = -1; }
   }
+  *status404 = n < 0 && strstr(err, "404") != NULL;
+  if (n >= 0) text[n] = 0;
+  return n;
+}
+static bool signed_ok(const char *line, size_t ln, const char *sig, size_t sn) {
+  if (sig_ok(line, ln, sig, sn, UPDATE_PUBKEY_PEM)) return true;
+#ifdef HAVE_TEST_KEY
+  if (g_base[0] && sig_ok(line, ln, sig, sn, UPDATE_TEST_PUBKEY_PEM)) {
+    Log.println("update: signed with the TEST key (debug build, test server)");
+    return true;
+  }
+#endif
+  return false;
+}
+
+static void do_check(void) {
+  set_state(BD_RELEASE_CHECKING, NULL);
+  char err[48] = "";
+  static char text[6144];
+  static RelCatalog c;
+  int nf;
+  // the UI catalogue first; a release from before catalogues has only Brewdeck's own description
+  int n = fetch_signed("catalog", text, sizeof text, err, sizeof err, &nf);
+  const bool old = n < 0 && nf;
+  if (old) n = fetch_signed("update", text, sizeof text, err, sizeof err, &nf);
+  const char *bad = NULL;
   if (n < 0) {
     Log.printf("update: check failed: %s\n", err);
     set_state(BD_RELEASE_FAILED, err);
     g_next_check = clock_ms() + RETRY_MS;
     return;
   }
-  text[n] = 0;
   const char *line, *sig;
   size_t ln, sn;
-  RelDesc d;
-  const char *bad = !rel_split(text, (size_t)n, &line, &ln, &sig, &sn) ? "not a release description" : NULL;
-  if (!bad) {
-    bool ok = sig_ok(line, ln, sig, sn, UPDATE_PUBKEY_PEM);
-#ifdef HAVE_TEST_KEY
-    if (!ok && g_base[0] && sig_ok(line, ln, sig, sn, UPDATE_TEST_PUBKEY_PEM)) {
-      ok = true;
-      Log.println("update: signed with the TEST key (debug build, test server)");
+  if (!rel_split(text, (size_t)n, &line, &ln, &sig, &sn)) bad = "not a release description";
+  else if (!signed_ok(line, ln, sig, sn)) bad = "signature does not match";
+  else if (old) {
+    RelDesc d;
+    if (!rel_parse_line(line, ln, &d)) bad = "description unreadable";
+    else {   // Brewdeck alone, under its usual file name
+      memset(&c, 0, sizeof c);
+      snprintf(c.version, sizeof c.version, "%s", d.version);
+      snprintf(c.chip, sizeof c.chip, "%s", d.chip);
+      c.n = 1;
+      snprintf(c.ui[0].name, sizeof c.ui[0].name, "screen");
+      snprintf(c.ui[0].title, sizeof c.ui[0].title, "Brewdeck");
+      snprintf(c.ui[0].file, sizeof c.ui[0].file, "brewdeck-%s-%s.bin", d.version, CHIP);
+      c.ui[0].size = d.size;
+      memcpy(c.ui[0].sha256, d.sha256, sizeof d.sha256);
     }
-#endif
-    bad = !ok ? "signature does not match" : !rel_parse_line(line, ln, &d) ? "description unreadable"
-        : strcmp(d.chip, CHIP) != 0 ? "release for another chip" : NULL;
-  }
+  } else if (!rel_parse_catalog(line, ln, &c)) bad = "catalogue unreadable";
+  if (!bad && strcmp(c.chip, CHIP) != 0) bad = "release for another chip";
   if (bad) {
     Log.printf("update: check refused: %s\n", bad);
     set_state(BD_RELEASE_FAILED, bad);
     g_next_check = clock_ms() + RETRY_MS;
     return;
   }
-  const bool newer = rel_newer(d.version, g_running);
   portENTER_CRITICAL(&g_mux);
-  g_desc = d;
-  snprintf(g_rel.version, sizeof g_rel.version, "%s", d.version);
-  g_rel.size = d.size;
+  if (strcmp(g_cat.version, c.version) || g_cat.n != c.n) {   // another release: its previews are others
+    g_pv_reset = true;
+    g_pv_want = g_pv_failed = 0;
+  }
+  g_cat = c;
+  const int me = cat_find(BD_UI.name);
+  snprintf(g_rel.version, sizeof g_rel.version, "%s", c.version);
+  g_rel.size = me >= 0 ? c.ui[me].size : 0;
   portEXIT_CRITICAL(&g_mux);
-  set_state(newer ? BD_RELEASE_AVAILABLE : BD_RELEASE_CURRENT, NULL);
-  Log.printf("update: newest release %s (%u bytes), running %s: %s\n", d.version, (unsigned)d.size,
-             g_running[0] ? g_running : "?", newer ? "update available" : "up to date");
+  const bool newer = me >= 0 && rel_newer(c.version, g_running);
+  set_state(newer ? BD_RELEASE_AVAILABLE : BD_RELEASE_CURRENT,
+            me < 0 && rel_newer(c.version, g_running) ? "this interface is not in the newest release" : NULL);
+  Log.printf("update: newest release %s (%d interface%s), running %s \"%s\": %s\n", c.version, c.n, c.n == 1 ? "" : "s",
+             g_running[0] ? g_running : "?", BD_UI.name,
+             newer ? "update available" : me < 0 ? "this interface is not in it" : "up to date");
   g_next_check = clock_ms() + CHECK_EVERY_MS;
 }
 
 static void do_install(void) {
-  RelDesc d;
+  RelDesc d;          // what is checked below: the chosen UI's size and SHA-256 in that release
+  char file[sizeof g_cat.ui[0].file], name[sizeof g_install_name], title[sizeof g_cat.ui[0].title];
   portENTER_CRITICAL(&g_mux);
-  d = g_desc;
+  const int k = cat_find(g_install_name);
+  memset(&d, 0, sizeof d);
+  if (k >= 0) {
+    snprintf(d.version, sizeof d.version, "%s", g_cat.version);
+    d.size = g_cat.ui[k].size;
+    memcpy(d.sha256, g_cat.ui[k].sha256, sizeof d.sha256);
+    snprintf(file, sizeof file, "%s", g_cat.ui[k].file);
+    snprintf(title, sizeof title, "%s", g_cat.ui[k].title);
+  }
+  snprintf(name, sizeof name, "%s", g_install_name);
   portEXIT_CRITICAL(&g_mux);
+  if (k < 0) {
+    set_installing(false, "not in the catalogue");
+    return;
+  }
   char url[200], err[48] = "", msg[160] = "";
-  image_url(d.version, url, sizeof url);
-  Log.printf("update: downloading %s\n", d.version);
+  image_url(d.version, file, url, sizeof url);
+  Log.printf("update: downloading %s for \"%s\"%s\n", d.version, name, strcmp(name, BD_UI.name) ? " (another interface)" : "");
   esp_http_client_handle_t h;
   int64_t len;
   if (!http_open(url, &h, &len, err, sizeof err)) {
@@ -282,7 +390,7 @@ static void do_install(void) {
         break;
       }
       mbedtls_sha256_update(&sha, buf, (size_t)n);
-      if (!opened ? ota_open(d.size, buf, (size_t)n, d.version, source_name(), msg, sizeof msg)
+      if (!opened ? ota_open(d.size, buf, (size_t)n, d.version, title, source_name(), msg, sizeof msg)
                   : ota_write(buf, (size_t)n, msg, sizeof msg)) {
         opened = true;
       } else {
@@ -314,8 +422,44 @@ static void do_install(void) {
   ota_restart();
 }
 
+// one preview into PSRAM, checked against its signed SHA-256
+static void do_preview(int k) {
+  char url[200], err[48] = "", file[sizeof g_cat.ui[0].preview], ver[sizeof g_cat.version];
+  uint8_t want[32];
+  uint32_t size;
+  portENTER_CRITICAL(&g_mux);
+  snprintf(file, sizeof file, "%s", g_cat.ui[k].preview);
+  snprintf(ver, sizeof ver, "%s", g_cat.version);
+  size = g_cat.ui[k].psize;
+  memcpy(want, g_cat.ui[k].psha256, sizeof want);
+  portEXIT_CRITICAL(&g_mux);
+  image_url(ver, file, url, sizeof url);
+  uint16_t *px = (uint16_t *)heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
+  esp_http_client_handle_t h;
+  int64_t len;
+  bool ok = false;
+  if (px && http_open(url, &h, &len, err, sizeof err)) {
+    const int n = read_full(h, (uint8_t *)px, (int)size);
+    esp_http_client_cleanup(h);
+    uint8_t sum[32];
+    ok = n == (int)size && mbedtls_sha256((const uint8_t *)px, size, sum, 0) == 0 && !memcmp(sum, want, sizeof sum);
+    if (!ok && !err[0]) snprintf(err, sizeof err, n == (int)size ? "checksum does not match" : "incomplete");
+  } else if (!px) {
+    snprintf(err, sizeof err, "no memory");
+  }
+  portENTER_CRITICAL(&g_mux);
+  const bool same = !strcmp(ver, g_cat.version) && !g_pv_reset;
+  if (ok && same && !g_pv_px[k]) { g_pv_px[k] = px; px = NULL; }
+  else if (!ok) g_pv_failed |= 1u << k;
+  g_seq++;
+  portEXIT_CRITICAL(&g_mux);
+  if (px) heap_caps_free(px);
+  if (!ok) Log.printf("update: preview %s: %s\n", file, err);
+}
+
 static void job(void *arg) {
-  if (arg) do_install();
+  if (g_pv_job >= 0) { do_preview(g_pv_job); g_pv_job = -1; }
+  else if (arg) do_install();
   else do_check();
   g_busy = false;
   vTaskDelete(NULL);
@@ -327,6 +471,7 @@ static void start(bool install) {
   if (xTaskCreatePinnedToCore(job, install ? "update_dl" : "update_chk", 8192, install ? (void *)1 : NULL, 2, NULL, 0)
       != pdPASS) {
     g_busy = false;
+    g_pv_job = -1;
     Log.println("update: no memory for the task");
     if (install) set_installing(false, "no memory");
   }
@@ -338,10 +483,29 @@ void update_begin(const char *running_version) {
 }
 
 void update_tick(uint32_t now) {
+  if (g_pv_reset && !g_busy) {   // on the UI task: no UI tick is copying a preview now
+    portENTER_CRITICAL(&g_mux);
+    uint16_t *old[REL_MAX_UIS];
+    memcpy(old, g_pv_px, sizeof old);
+    memset(g_pv_px, 0, sizeof g_pv_px);
+    g_pv_reset = false;
+    portEXIT_CRITICAL(&g_mux);
+    for (int k = 0; k < REL_MAX_UIS; k++) if (old[k]) heap_caps_free(old[k]);
+  }
   if (g_busy) return;
   if (g_want_install) {
     g_want_install = false;
     start(true);
+    return;
+  }
+  portENTER_CRITICAL(&g_mux);
+  int pk = -1;
+  for (int k = 0; k < REL_MAX_UIS && pk < 0; k++)
+    if (g_pv_want & 1u << k) { pk = k; g_pv_want &= ~(1u << k); }
+  portEXIT_CRITICAL(&g_mux);
+  if (pk >= 0 && net_wifi_up(NULL)) {   // a preview the UI shows now
+    g_pv_job = pk;
+    start(false);
     return;
   }
   const bool due = g_want_check || (int32_t)(now - g_next_check) >= 0;

@@ -146,6 +146,17 @@ To try the real thing against the latest published release, build a debug firmwa
 (`BREWDECK_VERSION=v0.2.9-test ./build.sh ui-p4-debug --ota`): it offers that release in Menu > About and installs it
 from GitHub. The screen then runs the release image, without the debug server.
 
+**Interfaces.** Each release also carries `catalog-esp32p4.txt`: the same two-line format, listing Brewdeck (`screen`)
+and every UI in `uis.json` that built against the release's core, each with its image file, size and SHA-256 and a
+picture of its Ready screen (`preview-<tag>-<name>.rgb565`, 320 x 192 RGB565, its own SHA-256; made by
+`tools/release-preview.sh` from the emulator; the screen downloads one only while the Interface page shows it)
+(`tools/uis.py catalog`, run by the release workflow in a job of its own: the UIs themselves are built without the
+key). The screen reads the catalogue first and falls back to `update-esp32p4.txt` for older releases. To try it
+without a release, sign a catalogue with the test key: put `screen.bin` and e.g. `ledger.bin` (release builds, `UI=`
+for the other), optionally `<name>.preview` (`tools/release-preview.sh`), in a folder, run `tools/uis.py catalog v0.9.0 esp32p4 <folder> <test key.pem> <out>`, serve `<out>`
+and use `/release?base=...`, then `/release?install=ledger` (or Menu > Interface). Holding the screen 5 s at start
+boots the other app slot.
+
 The test key's public half goes in `include/update_test_key.h` (git-ignored, `UPDATE_TEST_PUBKEY_PEM`); without it a
 debug build accepts only the release key. Never publish a debug build's image: it carries the Wi-Fi password and the
 OTA password.
@@ -209,7 +220,7 @@ waits about 5 s for IPv6 over mDNS.
 | `/flashtest?op=erase\|write&ms=5000[&pre=1&chunk=256]` | flash erases or writes alone on the free app slot, to see what the panel does meanwhile (longest pause in the answer) |
 | `/ppatest?stall=1` | P4: the next 2D-engine copy hangs, as the known PPA bugs make it; checks that the screen switches to CPU rotation within 100 ms and keeps running (until a restart) |
 | `POST /ota` | a new firmware image (`build.sh <env> --ota`, see [Over Wi-Fi](#over-wi-fi-debug-builds)) |
-| `/release` | the release state (newest version, last error, the running app slot); `?base=<url>` takes releases from there (test key accepted), `?base=` from GitHub again; `?check=1` looks now; `?install=1` installs the newer release (see [Releases over Wi-Fi](#releases-over-wi-fi-esp32-p4)) |
+| `/release` | the release state (newest version, last error, the running app slot); `?base=<url>` takes releases from there (test key accepted), `?base=` from GitHub again; `?check=1` looks now; `?install=1` installs the newer release, `?install=<name>` that interface from the catalogue (see [Releases over Wi-Fi](#releases-over-wi-fi-esp32-p4)) |
 | `/log`, `/log/prev`, `/loghost?to=` | the memory log, the log from before a crash, the log server (see [Serial log](#serial-log)) |
 | `/bl?pct=&hz=` | sets the backlight level and PWM frequency |
 

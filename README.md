@@ -61,6 +61,9 @@ A tour of every screen, with animations: **[User manual](docs/manual.md)**.
   is wrong, the screen says what (Wi-Fi out of range, wrong password, machine not answering) and offers the fix.
 - **Updates over Wi-Fi** (ESP32-P4, from v0.3.0): a newer Brewdeck release shows in Menu > About; Install
   downloads it, checks its signature and checksum, and keeps the old version as a fallback.
+- **Other interfaces** (ESP32-P4, from the next release): Menu > Interface lists the interfaces of the newest release,
+  such as [Ledger](https://github.com/pongells/brewdeck-ui-ledger), and installs one; holding the screen for 5 s
+  while it starts goes back to the previous one.
 
 ## What Brewdeck sends to the machine
 
@@ -272,8 +275,8 @@ Plans, not promises:
 
 - **Updates over Wi-Fi**: done for the ESP32-P4 (v0.3.0); the ESP32-S3 needs its memory first
   ([#3](https://github.com/pongells/brewdeck/issues/3)).
-- **Switching between UIs** from the screen itself, built on the updates over Wi-Fi
-  ([#5](https://github.com/pongells/brewdeck/issues/5)).
+- **Switching between UIs** from the screen itself ([#5](https://github.com/pongells/brewdeck/issues/5)): built for
+  the ESP32-P4, in the next release.
 - Maybe: **sounds**, off by default: a beep before the pressure release, perhaps when a shot ends. The ESP32-P4 board
   has a speaker output; the ESP32-S3 board needs a small piezo added.
 - Maybe, for fun: **a camera on the ESP32-P4**, watching the shot pour, or taking a picture of you waiting for

@@ -11,7 +11,7 @@ lv_obj_t *g_menu_page[MENU_PAGES];
 int g_menu_cur = -1;           // the page shown, -1 = the menu list
 int g_menu_entry = -1;         // page opened straight from the offline screen: its Back returns there
 bool g_in_wifi_pages = false;  // menu open on Wi-Fi list / details / password / address: offline screen away
-static lv_obj_t *g_mrow_val[7];                    // value text of each main row
+static lv_obj_t *g_mrow_val[8];                    // value text of each main row
 static lv_obj_t *g_info[MENU_PAGES][7];            // status page values: [page][row]
 static lv_obj_t *g_disp_val[2];                    // Display page: brightness, idle time
 // Display page toggles: [0] idle clock Still / Bouncing, [1] splash at start On / Off
@@ -46,6 +46,211 @@ static void on_rel_install(lv_event_t *e) {
   bd_log("ui: install %s: %s", g_rel_ver, r == BD_OK ? "started" : r == BD_ERR_BUSY ? "machine busy" : "not available");
   menu_refresh();
 }
+// Interface pages (menu row "Interface"): the interfaces of the newest release (bd_ui_catalog), each with a picture of
+// its Ready screen (bd_ui_preview, copied here: the core's copy lasts one tick); a row opens its details, Install is
+// only there (tap, then "Tap again" within 3 s)
+static const int IF_ROWS = BD_MAX_UIS, PV_W = 320, PV_H = 192, TH_W = 160, TH_H = 96;
+static lv_obj_t *g_if_row[IF_ROWS], *g_if_title[IF_ROWS], *g_if_state[IF_ROWS], *g_if_about[IF_ROWS];
+static lv_obj_t *g_if_thumb[IF_ROWS], *g_if_empty;
+static uint16_t *g_if_px[IF_ROWS], *g_if_th[IF_ROWS];   // our copies: 320 x 192 and the 160 x 96 thumbnail
+static lv_image_dsc_t g_if_dsc[IF_ROWS], g_if_tdsc[IF_ROWS];
+static char g_if_ver[16];                        // the release the copies belong to
+static int g_if_sel = -1;                        // the entry the details page shows
+static lv_obj_t *g_ifd_img, *g_ifd_about, *g_ifd_size, *g_ifd_state, *g_ifd_btn, *g_ifd_btn_lbl;
+static uint32_t g_ifd_armed = 0;                 // lv_tick of the first Install tap, 0 = not armed
+static char g_ifd_title[24];
+
+static void dsc_init(lv_image_dsc_t *d, const uint16_t *px, int w, int h) {
+  memset(d, 0, sizeof *d);
+  d->header.magic = LV_IMAGE_HEADER_MAGIC;
+  d->header.cf = LV_COLOR_FORMAT_RGB565;
+  d->header.w = w;
+  d->header.h = h;
+  d->header.stride = w * 2;
+  d->data = (const uint8_t *)px;
+  d->data_size = (uint32_t)(w * h * 2);
+}
+// takes the core's picture of entry k once it is there: a copy, and a thumbnail of 2 x 2 averages
+static void if_take_preview(int k, const char *name) {
+  if (g_if_px[k]) return;
+  const bd_picture *p = bd_ui_preview(name);    // asking starts the download
+  if (!p || p->w != PV_W || p->h != PV_H) return;
+  g_if_px[k] = (uint16_t *)bd_alloc(PV_W * PV_H * 2, BD_MEM_PSRAM);
+  g_if_th[k] = (uint16_t *)bd_alloc(TH_W * TH_H * 2, BD_MEM_PSRAM);
+  if (!g_if_px[k] || !g_if_th[k]) {
+    bd_free(g_if_px[k]);
+    bd_free(g_if_th[k]);
+    g_if_px[k] = g_if_th[k] = NULL;
+    return;
+  }
+  memcpy(g_if_px[k], p->px, PV_W * PV_H * 2);
+  for (int y = 0; y < TH_H; y++)
+    for (int x = 0; x < TH_W; x++) {
+      const uint16_t *s = g_if_px[k] + 2 * y * PV_W + 2 * x;
+      const uint16_t q[4] = {s[0], s[1], s[PV_W], s[PV_W + 1]};
+      int r = 0, g = 0, b = 0;
+      for (int i = 0; i < 4; i++) { r += q[i] >> 11; g += (q[i] >> 5) & 63; b += q[i] & 31; }
+      g_if_th[k][y * TH_W + x] = (uint16_t)((r / 4) << 11 | (g / 4) << 5 | (b / 4));
+    }
+  dsc_init(&g_if_dsc[k], g_if_px[k], PV_W, PV_H);
+  dsc_init(&g_if_tdsc[k], g_if_th[k], TH_W, TH_H);
+  lv_image_set_src(g_if_thumb[k], &g_if_tdsc[k]);
+  if (g_if_sel == k) lv_image_set_src(g_ifd_img, &g_if_dsc[k]);
+}
+static void if_forget_previews(void) {           // another release: other pictures
+  for (int k = 0; k < IF_ROWS; k++) {
+    lv_image_set_src(g_if_thumb[k], NULL);
+    bd_free(g_if_px[k]);
+    bd_free(g_if_th[k]);
+    g_if_px[k] = g_if_th[k] = NULL;
+  }
+  lv_image_set_src(g_ifd_img, NULL);
+}
+static void on_if_row(lv_event_t *e) {
+  g_if_sel = (int)(intptr_t)lv_event_get_user_data(e);
+  g_ifd_armed = 0;
+  const bd_catalog *c = bd_ui_catalog();
+  if (g_if_sel >= c->n) return;
+  snprintf(g_ifd_title, sizeof g_ifd_title, "%s", c->ui[g_if_sel].title);
+  lv_image_set_src(g_ifd_img, g_if_px[g_if_sel] ? &g_if_dsc[g_if_sel] : NULL);
+  menu_show_page(MP_IFACE_DETAIL);
+}
+static void on_ifd_install(lv_event_t *e) {
+  (void)e;
+  const bd_catalog *c = bd_ui_catalog();
+  if (g_if_sel < 0 || g_if_sel >= c->n) return;
+  if (!g_ifd_armed) {                            // first tap: "Tap again" for 3 s
+    g_ifd_armed = stamp_nz(lv_tick_get());
+    menu_refresh();
+    return;
+  }
+  g_ifd_armed = 0;
+  const bd_result r = bd_ui_install(c->ui[g_if_sel].name);   // OK: the update page takes over (BD_EV_UPDATE)
+  if (r == BD_ERR_BUSY) {
+    snprintf(g_rel_err, sizeof g_rel_err, "Not while the machine is busy");
+    g_rel_note_at = stamp_nz(lv_tick_get());
+  }
+  bd_log("ui: switch to interface \"%s\": %s", c->ui[g_if_sel].name,
+         r == BD_OK ? "started" : r == BD_ERR_BUSY ? "machine busy" : "not available");
+  menu_refresh();
+}
+static void if_refresh(void) {
+  if (!g_if_empty) return;
+  const bd_catalog *c = bd_ui_catalog();
+  if (strcmp(g_if_ver, c->version)) {
+    if_forget_previews();
+    snprintf(g_if_ver, sizeof g_if_ver, "%s", c->version);
+  }
+  const bool shown = g_menu_cur == MP_INTERFACE || g_menu_cur == MP_IFACE_DETAIL;
+  for (int k = 0; k < IF_ROWS; k++) {
+    const bool on = k < c->n;
+    set_hidden(g_if_row[k], !on);
+    if (!on) continue;
+    const bd_ui_entry *u = &c->ui[k];
+    set_text(g_if_title[k], u->title);
+    set_text(g_if_about[k], u->about);
+    set_text(g_if_state[k], u->current ? "Running" : "");
+    if (shown && u->has_preview) if_take_preview(k, u->name);   // only while shown: the download is on demand
+  }
+  const char *empty = c->n ? NULL
+                    : g_rel_state == BD_RELEASE_CHECKING ? "Looking for the newest release..."
+                    : g_rel_state == BD_RELEASE_FAILED ? "Could not reach the release list. The screen tries again later."
+                    : "The list comes with the newest release: the screen looks for it at start and once a day.";
+  set_hidden(g_if_empty, !empty);
+  if (empty) set_text(g_if_empty, empty);
+  // details
+  if (g_if_sel < 0 || g_if_sel >= c->n) return;
+  if (g_ifd_armed && lv_tick_elaps(g_ifd_armed) > REL_ARM_MS) g_ifd_armed = 0;
+  if (g_rel_note_at && lv_tick_elaps(g_rel_note_at) > REL_NOTE_MS) { g_rel_note_at = 0; g_rel_err[0] = 0; }
+  const bd_ui_entry *u = &c->ui[g_if_sel];
+  char b[64];
+  set_text(g_ifd_about, u->about[0] ? u->about : "");
+  snprintf(b, sizeof b, "%.1f MB \xC2\xB7 %s", u->size / 1048576.0, c->version);
+  set_text(g_ifd_size, b);
+  const bool can = !u->current && !g_rel_installing;
+  set_hidden(g_ifd_btn, !can);
+  set_text(g_ifd_state, u->current ? "Running now" : g_rel_err[0] ? g_rel_err : "");
+  set_tc(g_ifd_state, u->current ? COL_GREEN : COL_WARN);
+  set_bg(g_ifd_btn, g_ifd_armed ? COL_WARN_BG : COL_CARD);
+  set_tc(g_ifd_btn_lbl, g_ifd_armed ? COL_WARN : COL_TEXT);
+  set_text(g_ifd_btn_lbl, g_ifd_armed ? "Tap again to install" : "Install");
+}
+static void build_interface_page(void) {
+  // the list: one 112 px row per interface (thumbnail, title, one line), the note at the bottom
+  lv_obj_t *pg = g_menu_page[MP_INTERFACE] = box(g_menu, 24, 96, 752, 360, COL_BG, 0);
+  tag(pg, "screen.interface");
+  lv_obj_t *c = flex(pg, LV_FLEX_FLOW_COLUMN, 0);
+  lv_obj_set_size(c, 752, 304);
+  lv_obj_add_flag(c, LV_OBJ_FLAG_SCROLLABLE);    // more interfaces than fit: the list scrolls
+  hairline(c, LV_BORDER_SIDE_TOP);
+  static const char *const ROW_TAG[2] = {"row.interface.0", "row.interface.1"};
+  for (int k = 0; k < IF_ROWS; k++) {
+    lv_obj_t *r = g_if_row[k] = box(c, 0, 0, 752, 112, COL_BG, 0);
+    hairline(r, LV_BORDER_SIDE_BOTTOM);
+    make_button(r, COL_CARD);
+    lv_obj_add_event_cb(r, on_if_row, LV_EVENT_CLICKED, (void *)(intptr_t)k);
+    if (k < 2) tag(r, ROW_TAG[k]);
+    lv_obj_t *frame = box(r, 0, 8, TH_W, TH_H, COL_CARD, RAD_INNER);   // grey until the picture is there
+    lv_obj_set_style_clip_corner(frame, true, 0);
+    lv_obj_set_style_border_width(frame, 1, 0);   // a dark interface on the dark page still has an edge
+    lv_obj_set_style_border_color(frame, COL_BORDER, 0);
+    lv_obj_set_style_border_post(frame, true, 0);
+    lv_obj_remove_flag(frame, LV_OBJ_FLAG_CLICKABLE);
+    g_if_thumb[k] = lv_image_create(frame);
+    lv_obj_set_pos(g_if_thumb[k], 0, 0);
+    g_if_title[k] = label(r, "", F_ROW_B, COL_TEXT);
+    lv_obj_set_pos(g_if_title[k], TH_W + 20, 24);
+    g_if_about[k] = label(r, "", F_TEXT, COL_MUTED);
+    lv_label_set_long_mode(g_if_about[k], LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_width(g_if_about[k], 752 - TH_W - 20 - 120);
+    lv_obj_set_pos(g_if_about[k], TH_W + 20, 54);
+    g_if_state[k] = label(r, "", F_TEXT, COL_GREEN);
+    lv_obj_align(g_if_state[k], LV_ALIGN_RIGHT_MID, -28, 0);
+    lv_obj_t *ch = icon_box(r, 16, 16);
+    lv_obj_align(ch, LV_ALIGN_RIGHT_MID, 0, 0);
+    icon_chevron_right(ch, COL_MUTED);
+    lv_obj_set_hidden(r, true);
+  }
+  g_if_empty = label(c, "", F_TEXT, COL_MUTED);
+  lv_obj_set_style_pad_top(g_if_empty, 16, 0);
+  lv_obj_t *n = label(pg, "Tap one to see it. To go back after installing another, hold the screen for 5 s while it "
+                          "starts.", F_TEXT, COL_MUTED);
+  lv_label_set_long_mode(n, LV_LABEL_LONG_MODE_WRAP);
+  lv_obj_set_width(n, 752);
+  lv_obj_align(n, LV_ALIGN_BOTTOM_LEFT, 0, -4);
+
+  // the details: the picture at full size, the description, size and release, Install (or "Running now")
+  lv_obj_t *d = g_menu_page[MP_IFACE_DETAIL] = box(g_menu, 24, 96, 752, 360, COL_BG, 0);
+  tag(d, "screen.interface_detail");
+  lv_obj_t *frame = box(d, 0, 0, PV_W, PV_H, COL_CARD, RAD_CARD);
+  lv_obj_set_style_clip_corner(frame, true, 0);
+  lv_obj_set_style_border_width(frame, 1, 0);
+  lv_obj_set_style_border_color(frame, COL_BORDER, 0);
+  lv_obj_set_style_border_post(frame, true, 0);
+  g_ifd_img = lv_image_create(frame);
+  lv_obj_set_pos(g_ifd_img, 0, 0);
+  g_ifd_about = label(d, "", F_TEXT, COL_TEXT);
+  lv_label_set_long_mode(g_ifd_about, LV_LABEL_LONG_MODE_WRAP);
+  lv_obj_set_width(g_ifd_about, 752 - PV_W - 24);
+  lv_obj_set_pos(g_ifd_about, PV_W + 24, 0);
+  g_ifd_size = label(d, "", F_TEXT, COL_MUTED);
+  lv_obj_set_pos(g_ifd_size, PV_W + 24, 120);
+  g_ifd_state = label(d, "", F_TEXT, COL_GREEN);
+  lv_obj_set_pos(g_ifd_state, PV_W + 24, 152);
+  g_ifd_btn = box(d, PV_W + 24, PV_H - 52, 260, 52, COL_CARD, RAD_CTRL);
+  make_button(g_ifd_btn, COL_CARD_PR);
+  lv_obj_add_event_cb(g_ifd_btn, on_ifd_install, LV_EVENT_CLICKED, NULL);
+  tag(g_ifd_btn, "action.interface_install");
+  g_ifd_btn_lbl = label(g_ifd_btn, "Install", F_TEXT_B, COL_TEXT);
+  lv_obj_center(g_ifd_btn_lbl);
+  lv_obj_t *n2 = label(d, "Installing it restarts the screen with this interface; your Wi-Fi and machine stay set, and "
+                          "it keeps its own settings. To go back, hold the screen for 5 s while it starts.", F_TEXT,
+                       COL_MUTED);
+  lv_label_set_long_mode(n2, LV_LABEL_LONG_MODE_WRAP);
+  lv_obj_set_width(n2, 752);
+  lv_obj_align(n2, LV_ALIGN_BOTTOM_LEFT, 0, -4);
+}
+
 void ui_set_release(int state, const char *version, bool installing, const char *error) {
   g_rel_state = state;
   snprintf(g_rel_ver, sizeof g_rel_ver, "%s", version ? version : "");
@@ -56,7 +261,8 @@ void ui_set_release(int state, const char *version, bool installing, const char 
 }
 static const int IDLE_OPTS[] = {0, 1, 2, 5, 10, 20, 30, 60};
 static const char *const PAGE_NAMES[MENU_PAGES] = {"Display", "Scale", "Wi-Fi", "About", "", "", "Machine address",
-                                                     "Shot history"};
+                                                     "Shot history",
+                                                     "Interface", ""};
 
 void ui_on_settings(void (*cb)(int bright, int idle_min, bool bounce, bool splash)) { g_settings_cb = cb; }
 void ui_set_settings(int bright, int idle_min, bool bounce, bool splash) {
@@ -116,6 +322,13 @@ static void menu_refresh(void) {
     else snprintf(b, sizeof b, "Screen firmware");
     set_text(g_mrow_val[5], b);
   }
+  {                                               // Interface: the running one's title
+    const bd_catalog *c = bd_ui_catalog();
+    const char *t = "Brewdeck";
+    for (int k = 0; k < c->n; k++) if (c->ui[k].current) t = c->ui[k].title;
+    set_text(g_mrow_val[7], t);
+  }
+  if_refresh();
   if (g_hx_ok && g_hx->n > 0) {                   // newest stored shot
     char w[32];
     fmt_when(g_hx->e[0].ts, w, sizeof w);
@@ -199,7 +412,8 @@ void menu_show_page(int k) {            // MP_LIST = the menu list
   } else {
     lv_obj_set_hidden(g_menu_page[k], false);
     lv_obj_set_hidden(g_menu_back, false);
-    set_text(g_menu_title, k == MP_WIFI_DETAILS ? (g_wifi_ssid[0] ? g_wifi_ssid : "Wi-Fi")
+    set_text(g_menu_title, k == MP_IFACE_DETAIL ? g_ifd_title
+                           : k == MP_WIFI_DETAILS ? (g_wifi_ssid[0] ? g_wifi_ssid : "Wi-Fi")
                            : k == MP_PASSWORD   ? g_wj_ssid
                                                 : PAGE_NAMES[k]);
     lv_obj_set_x(g_menu_title, 92);
@@ -229,7 +443,7 @@ static void on_menu_back(lv_event_t *e) {
   (void)e;
   if (g_menu_cur >= 0 && g_menu_cur == g_menu_entry) { menu_close(); return; }   // back to the offline screen
   menu_show_page(g_menu_cur == MP_WIFI_DETAILS || g_menu_cur == MP_PASSWORD ? MP_WIFI
-                 : g_menu_cur == MP_ADDRESS ? MP_WIFI_DETAILS : MP_LIST);
+                 : g_menu_cur == MP_ADDRESS ? MP_WIFI_DETAILS : g_menu_cur == MP_IFACE_DETAIL ? MP_INTERFACE : MP_LIST);
 }
 static void on_menu_row(lv_event_t *e) { menu_show_page((int)(intptr_t)lv_event_get_user_data(e)); }
 static void menu_timer(lv_timer_t *t) {
@@ -353,23 +567,24 @@ void build_menu(lv_obj_t *scr) {
   g_menu_main = box(g_menu, 24, 96, 752, 360, COL_BG, 0);   // lists start at 96
   tag(g_menu_main, "screen.menu");
   // R[] also has the web-UI-only rows (0, 3), not shown; its indexes are g_mrow_val's
-  static const struct { const char *name; int page; bool grey; } R[7] = {
+  static const struct { const char *name; int page; bool grey; } R[8] = {
     {"Edit profile", -1, true}, {"Scale", MP_SCALE, false}, {"Display", MP_DISPLAY, false},
     {"Maintenance", -1, true}, {"Wi-Fi", MP_WIFI, false}, {"About", MP_ABOUT, false},
-    {"Shot history", MP_HISTORY, false}};
+    {"Shot history", MP_HISTORY, false}, {"Interface", MP_INTERFACE, false}};
   // only the rows that open something; the web-UI-only items are one line at the bottom
-  static const int ORDER[5] = {6, 1, 2, 4, 5};      // Shot history, Scale, Display, Wi-Fi, About
-  static const int ICON[5] = {IC_HISTORY, IC_SCALE, IC_DISPLAY, IC_WIFI, IC_ABOUT};
+  static const int ORDER[6] = {6, 1, 2, 4, 7, 5};   // Shot history, Scale, Display, Wi-Fi, Interface, About
+  static const int ICON[6] = {IC_HISTORY, IC_SCALE, IC_DISPLAY, IC_WIFI, IC_INTERFACE, IC_ABOUT};
   lv_obj_t *col = menu_column(g_menu_main, 0);
-  for (int j = 0; j < 5; j++) {
+  for (int j = 0; j < 6; j++) {
     const int i = ORDER[j];
     lv_obj_t *r = menu_row(col, R[i].name, &g_mrow_val[i], R[i].page >= 0, R[i].grey);
-    lv_obj_set_size(r, 752, 64);
+    lv_obj_set_size(r, 752, 56);                  // six rows above the note (were 64 px for five)
     lv_obj_t *ic = line_icon(r, ICON[j], 24, COL_BLUE);
     lv_obj_align(ic, LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_align(lv_obj_get_child(r, 0), LV_ALIGN_LEFT_MID, 40, 0);   // the name, after the icon
     if (R[i].page >= 0) lv_obj_add_event_cb(r, on_menu_row, LV_EVENT_CLICKED, (void *)(intptr_t)R[i].page);
     if (R[i].page == MP_WIFI) tag(r, "action.wifi_settings");
+    if (R[i].page == MP_INTERFACE) tag(r, "action.interface");
   }
   lv_obj_align(label(g_menu_main, "Profiles and maintenance are in the machine's web UI.", F_TEXT, COL_MUTED),
                LV_ALIGN_BOTTOM_LEFT, 0, -4);
@@ -383,6 +598,7 @@ void build_menu(lv_obj_t *scr) {
     {"Network", "Signal", "Access point", "Screen", "Machine"}};
   build_wifi(g_menu);                              // the Wi-Fi list and password / address pages
   build_hist(g_menu);                              // shot history
+  build_interface_page();                          // interfaces of the newest release
   for (int k = 0; k < 5; k++) {
     if (k == MP_WIFI) continue;
     g_menu_page[k] = box(g_menu, 24, 96, 752, 360, COL_BG, 0);

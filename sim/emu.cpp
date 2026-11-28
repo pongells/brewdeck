@@ -218,6 +218,13 @@ static bool g_upd_stop = false;
 static bd_release g_rel = {BD_RELEASE_CURRENT, "v0.2.0", 1677721, false, ""};
 static uint32_t g_rel_seq = 1;
 static bool g_upd_rel = false;               // the running fake update is a release download
+static char g_upd_title[24] = "";            // the interface it installs
+// the interfaces of that release (bd_ui_catalog): Brewdeck's own and Ledger, as the release workflow builds them
+static bd_catalog g_cat = {"v0.2.0", 2, {
+    {"screen", "Brewdeck", "This screen's own interface: every screen, shot review, history and settings.",
+     1677721, true, true},
+    {"ledger", "Ledger", "Light and printed-looking: the boiler temperature set huge, the profile's values in ruled rows.",
+     1612000, false, true}}};
 static void on_flush(int mode) {
   static const char *const N[8] = {"", "", "FLUSH", "", "", "FLUSH_AUTO", "", "HOME"};
   const char *n = mode >= 0 && mode < 8 ? N[mode] : "";
@@ -851,6 +858,48 @@ bd_result bd_release_install(void) {
                     : BD_OK;
   logged(r, false, "release_install %s", g_rel.version);
   if (r != BD_OK) return r;
+  snprintf(g_upd_title, sizeof g_upd_title, "Brewdeck");
+  g_rel.installing = true;
+  g_rel.error[0] = 0;
+  g_rel_seq++;
+  g_upd_ms = stamp_nz(SDL_GetTicks());
+  g_upd_stop = false;
+  g_upd_rel = true;
+  return r;
+}
+const bd_catalog *bd_ui_catalog(void) {
+  snprintf(g_cat.version, sizeof g_cat.version, "%s", g_rel.version);
+  for (int i = 0; i < g_cat.n; i++) g_cat.ui[i].current = !strcmp(g_cat.ui[i].name, BD_UI.name);
+  return &g_cat;
+}
+// previews: sim/data/preview-<name>.rgb565 (tools/uis.py preview of docs/images/ready.png / ui-ledger.png)
+const bd_picture *bd_ui_preview(const char *name) {
+  static bd_picture pic[BD_MAX_UIS];
+  static uint16_t *px[BD_MAX_UIS];
+  for (int i = 0; i < g_cat.n; i++) {
+    if (!name || strcmp(g_cat.ui[i].name, name)) continue;
+    if (!px[i]) {
+      char fn[64];
+      size_t n = 0;
+      snprintf(fn, sizeof fn, "preview-%s.rgb565", name);
+      char *b = read_file(fn, &n);
+      if (!b || n != 320 * 192 * 2) { free(b); return NULL; }
+      px[i] = (uint16_t *)b;
+    }
+    pic[i] = {px[i], 320, 192};
+    return &pic[i];
+  }
+  return NULL;
+}
+bd_result bd_ui_install(const char *name) {
+  const bool busy = g_m.brew_active || g_m.steam_active || g_m.hot_water_active || !strncmp(g_m.mode, "FLUSH", 5);
+  bool known = false;
+  for (int i = 0; i < g_cat.n; i++) known |= name && !strcmp(g_cat.ui[i].name, name);
+  const bd_result r = busy ? BD_ERR_BUSY : !known || g_rel.installing ? BD_ERR_UNKNOWN_ID : BD_OK;
+  logged(r, false, "ui_install %s", name ? name : "(null)");
+  if (r != BD_OK) return r;
+  for (int i = 0; i < g_cat.n; i++)
+    if (!strcmp(g_cat.ui[i].name, name)) snprintf(g_upd_title, sizeof g_upd_title, "%s", g_cat.ui[i].title);
   g_rel.installing = true;
   g_rel.error[0] = 0;
   g_rel_seq++;
@@ -1532,6 +1581,7 @@ static void update_step(uint32_t now) {
   e.u.update.built = "24 Nov 2026 21:40";
   e.u.update.from = g_upd_rel ? "github.com" : "192.168.1.10";
   e.u.update.version = g_upd_rel ? g_rel.version : "";
+  e.u.update.title = g_upd_rel ? g_upd_title : "";
   bd_ui_event(&e);
   if (st == BD_UPDATE_NONE || st == BD_UPDATE_STOPPED) {
     printf("emulator: update %s\n", st == BD_UPDATE_NONE ? "installed, restarted" : "stopped at 38 %");

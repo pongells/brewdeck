@@ -178,6 +178,12 @@ static void icon_draw(lv_event_t *e) {
       break;
     case IC_WIFI: C(12, 20, 13, 225, 315); C(12, 20, 8.5f, 225, 315); D(12, 19, 1.4f); break;
     case IC_ABOUT: C(12, 12, 8.5f, 0, 360); L(12, 11, 12, 16.5f); D(12, 7.8f, 1); break;
+    case IC_INTERFACE:                             // four squares: interchangeable interfaces
+      for (int k = 0; k < 4; k++) {
+        const float x = k % 2 ? 13.5f : 4.5f, y = k / 2 ? 13.5f : 4.5f, w = 6;
+        L(x, y, x + w, y); L(x + w, y, x + w, y + w); L(x + w, y + w, x, y + w); L(x, y + w, x, y);
+      }
+      break;
     case IC_PROFILES:
       L(9, 7, 20, 7); L(9, 12, 20, 12); L(9, 17, 20, 17); D(5, 7, 1.2f); D(5, 12, 1.2f); D(5, 17, 1.2f);
       break;

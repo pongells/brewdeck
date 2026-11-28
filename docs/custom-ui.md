@@ -60,16 +60,25 @@ Its status table is in that workflow's run summary.
 
 To be listed, a UI must:
 - live in a public repository named as above, with the `brewdeck-ui` topic and a license that lets Brewdeck's CI build
-  it (and, later, offer it from the screen: [#5](https://github.com/pongells/brewdeck/issues/5));
+  it and offer the built image from the screen;
+- use its `BD_UI` name as its `name` in `uis.json` (the screen finds its own entry by it, for updates);
 - build against the current core (emulator, ESP32-S3 and ESP32-P4 firmware);
 - pass **S1** (says it is unofficial) and **X1** (sends no command without a user action). Everything else in the
   table is reported, not required: an experimental UI is welcome.
 
 Open a pull request adding your entry to `uis.json` (`tools/uis.py validate` checks it): `name` (your `BD_UI` name),
 `title`, `repo` (`owner/name`), `commit` (a full commit SHA, never a branch: what was reviewed is what gets built),
-`folder` (the UI folder in your repository, e.g. `ui`), `license` and a one-line `description`. A newer version of
+`folder` (the UI folder in your repository, e.g. `ui`), `license` and a one-line `description` (title up to 23 and
+description up to 95 characters, without `{ } [ ] " \\`: the screen shows them). A newer version of
 your UI is another pull request moving the commit. If a listed UI stops building after a core change, the workflow
 says so: a core bug gets fixed here, anything else is raised with the UI's author.
+
+**On the screen.** Each release builds every listed UI against its core (in a job without the signing key), takes a
+picture of its Ready screen in the emulator with the fake machine (`tools/release-preview.sh`: make sure your Ready
+screen is tagged `screen.ready` and looks good there) and signs a catalogue of them, `catalog-esp32p4.txt`. A P4 screen lists them under Menu > Interface (or your UI's own page, with
+`bd_ui_catalog`): installing one replaces the firmware with that UI, keeps Wi-Fi and the machine's address, and
+starts with the UI's own settings. A UI that does not build for a release is left out of that release's catalogue.
+Updates follow the installed UI: a screen running yours gets your image of the next release.
 
 ## What a UI implements
 
@@ -136,6 +145,7 @@ Live values are meaningful only while `link == BD_LINK_ONLINE`.
 - **Without a graphics library:** draw RGB565 pixels into your own buffer and hand finished rectangles to
   `bd_display_flush(x1, y1, x2, y2, px)`; read touches with `bd_touch_read(&x, &y)`. `bd_display()` gives the size
   (800 x 480, landscape) and how many rows of a strip fit in fast memory.
+- **Interfaces** (`BD_HAS_UI_CATALOG`, ESP32-P4): `bd_ui_catalog()` lists the interfaces of the newest release (Brewdeck's own is `screen`; `current` marks the running one), `bd_ui_install(name)` installs one (same rules and progress as a release install). `bd_ui_preview(name)` gives a picture of its Ready screen (320 x 192 RGB565) once downloaded: ask only while you show it (asking starts the download) and copy it to keep it on screen. Your UI does not have to offer this: holding the screen for 5 s while it starts always boots the previous firmware. Optional (feature X9).
 - **Releases** (`BD_HAS_RELEASES`): `bd_release_info()` says whether a newer Brewdeck release is out (the core looks at start and once a day; `bd_seq_release()` changes with it), `bd_release_install()` installs it (refused with `BD_ERR_BUSY` while the machine is busy; progress as `BD_EV_UPDATE`). Ask for a confirmation first: the screen restarts. Optional (feature X8); ESP32-P4 only for now.
 - **Brightness:** `bd_set_backlight(level)`: 0 = off, 20-100 = the panel's dimmest useful level up to fully on (the board maps levels onto its panel in steps that look even; below 20 = 20). Dimming and turning the screen off when idle are up to your UI;
   `bd_ui_wake` tells you when the core wants it on.

@@ -240,6 +240,33 @@ const bd_release *bd_release_info(void);
 uint32_t          bd_seq_release(void);
 void              bd_release_check(void);       // look now (a check already running: nothing)
 bd_result         bd_release_install(void);
+// interfaces (BD_HAS_UI_CATALOG): the UIs a release offers on this chip, from the same check (Brewdeck's own is
+// "screen"; the others are the UIs listed in Brewdeck's uis.json, built and signed by its release workflow). Installing
+// one replaces the whole firmware (same core, that UI) like a release install; its settings are its own, Wi-Fi and the
+// machine address are kept. If a UI offers no way back, holding the screen for 5 s while it starts boots the previous
+// firmware. n = 0 until a check answered (or on a board without updates over Wi-Fi).
+#define BD_MAX_UIS 8
+typedef struct {
+  char     name[16];              // its BD_UI name
+  char     title[24];
+  char     about[96];             // one line about it ("" = none)
+  uint32_t size;                  // image bytes
+  bool     current;               // the UI running now
+  bool     has_preview;           // the release has a picture of its Ready screen (bd_ui_preview)
+} bd_ui_entry;
+typedef struct {
+  char        version[16];        // the release they come from
+  int         n;
+  bd_ui_entry ui[BD_MAX_UIS];
+} bd_catalog;
+const bd_catalog *bd_ui_catalog(void);                // changes with bd_seq_release
+bd_result         bd_ui_install(const char *name);    // BUSY / UNKNOWN_ID as bd_release_install; also the running UI
+                                                      // (a reinstall); progress: BD_EV_UPDATE
+// a picture of an interface's Ready screen (RGB565, 320 x 192), or NULL: not downloaded yet (asking starts the
+// download; ask only while you show it) or none in the release. Valid until the next bd_ui_tick (copy it to keep it on
+// screen); bd_seq_release changes when one arrives.
+typedef struct { const uint16_t *px; int w, h; } bd_picture;
+const bd_picture *bd_ui_preview(const char *name);
 // key-value storage for the UI's own settings, in the UI's own namespace (flash, survives updates of the UI)
 int32_t bd_store_get_int(const char *key, int32_t def);
 void    bd_store_set_int(const char *key, int32_t v);
@@ -311,6 +338,7 @@ typedef enum { BD_JOIN_IDLE = 0, BD_JOIN_BUSY, BD_JOIN_OK, BD_JOIN_FAILED } bd_j
 typedef enum { BD_UPDATE_NONE = 0, BD_UPDATE_RECEIVING, BD_UPDATE_INSTALLED, BD_UPDATE_STOPPED } bd_update;
 #define BD_HAS_UPDATE_EVENT 1   // additions within API 1.x come with a macro: a UI can still build against an older core
 #define BD_HAS_RELEASES 1       // bd_release_*, bd_event.u.update.version
+#define BD_HAS_UI_CATALOG 1     // bd_ui_catalog, bd_ui_install
 
 typedef struct {
   bd_event_type type;
@@ -329,7 +357,8 @@ typedef struct {
              uint32_t received, total;                            //   bytes
              const char *built;                                   //   the new firmware's build date ("24 Nov 2026 21:40", "" = not known)
              const char *from;                                    //   the sender's address or "github.com" ("" = not known)
-             const char *version; } update;                       //   the release being installed ("" = a debug push)
+             const char *version;                                 //   the release being installed ("" = a debug push)
+             const char *title; } update;                         //   the interface being installed ("" = not known)
   } u;
 } bd_event;
 

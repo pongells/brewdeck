@@ -61,7 +61,7 @@ static void on_up_timer(lv_timer_t *t) {
 }
 
 void ui_set_update(int state, int pct, uint32_t got, uint32_t total, const char *built, const char *from,
-                   const char *version) {
+                   const char *version, const char *title) {
   if (state == BD_UPDATE_NONE) {
     g_up_state = state;
     lv_obj_set_hidden(g_up, true);
@@ -82,12 +82,23 @@ void ui_set_update(int state, int pct, uint32_t got, uint32_t total, const char 
     lv_obj_invalidate(g_up_dot);
     set_text(g_up_title, state == BD_UPDATE_RECEIVING ? "Updating the screen"
                          : state == BD_UPDATE_INSTALLED ? "Update installed" : "Update stopped");
-    set_text(g_up_body,
-             state == BD_UPDATE_RECEIVING ? "New Brewdeck firmware is arriving over Wi-Fi. Leave the screen on: the machine works as usual."
-             : state == BD_UPDATE_INSTALLED ? "Restarting now. If the new version does not run properly, the screen goes back to this one by itself."
-                                            : "The update did not arrive completely. Nothing changed: the screen keeps its current version.");
+    // another interface (Menu > Interface) is named; Brewdeck's own updates keep the usual words
+    const bool other = title && title[0] && strcmp(title, "Brewdeck") != 0;
+    char body[160];
+    if (state == BD_UPDATE_RECEIVING && other)
+      snprintf(body, sizeof body, "%s is arriving over Wi-Fi. Leave the screen on: the machine works as usual.", title);
+    else if (state == BD_UPDATE_INSTALLED && other)
+      snprintf(body, sizeof body, "Restarting with %s now. If it does not run properly, the screen goes back to this one "
+               "by itself.", title);
+    else
+      snprintf(body, sizeof body, "%s",
+               state == BD_UPDATE_RECEIVING ? "New Brewdeck firmware is arriving over Wi-Fi. Leave the screen on: the machine works as usual."
+               : state == BD_UPDATE_INSTALLED ? "Restarting now. If the new version does not run properly, the screen goes back to this one by itself."
+                                              : "The update did not arrive completely. Nothing changed: the screen keeps its current version.");
+    set_text(g_up_body, body);
     set_bg(g_up_fill, state == BD_UPDATE_RECEIVING ? COL_BLUE : state == BD_UPDATE_INSTALLED ? COL_GREEN : COL_BORDER);
-    if (version && version[0]) snprintf(b, sizeof b, "Brewdeck %s \xC2\xB7 from %s", version, from && from[0] ? from : "?");
+    if (version && version[0])
+      snprintf(b, sizeof b, "%s %s \xC2\xB7 from %s", title && title[0] ? title : "Brewdeck", version, from && from[0] ? from : "?");
     else if (built && built[0] && from && from[0]) snprintf(b, sizeof b, "New version built %s \xC2\xB7 sent from %s", built, from);
     else if (built && built[0]) snprintf(b, sizeof b, "New version built %s", built);
     else snprintf(b, sizeof b, "%s", from && from[0] ? from : "");

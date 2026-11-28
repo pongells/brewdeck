@@ -19,8 +19,8 @@ static portMUX_TYPE g_umux = portMUX_INITIALIZER_UNLOCKED;
 static struct {
   bd_update state;
   uint32_t received, total, seq;
-  char built[24], from[24], version[16];
-} g_up = {BD_UPDATE_NONE, 0, 0, 0, "", "", ""};
+  char built[24], from[24], version[16], title[24];
+} g_up = {BD_UPDATE_NONE, 0, 0, 0, "", "", "", ""};
 static void up_set(bd_update st, uint32_t got, uint32_t total) {
   portENTER_CRITICAL(&g_umux);
   g_up.state = st;
@@ -31,7 +31,7 @@ static void up_set(bd_update st, uint32_t got, uint32_t total) {
 }
 bool ota_poll(bd_event *ev) {
   static uint32_t seen = 0, sent_at = 0;
-  static char built[sizeof g_up.built], from[sizeof g_up.from], version[sizeof g_up.version];
+  static char built[sizeof g_up.built], from[sizeof g_up.from], version[sizeof g_up.version], title[sizeof g_up.title];
   portENTER_CRITICAL(&g_umux);
   const uint32_t seq = g_up.seq;
   const bd_update st = g_up.state;
@@ -39,6 +39,7 @@ bool ota_poll(bd_event *ev) {
   memcpy(built, g_up.built, sizeof built);
   memcpy(from, g_up.from, sizeof from);
   memcpy(version, g_up.version, sizeof version);
+  memcpy(title, g_up.title, sizeof title);
   portEXIT_CRITICAL(&g_umux);
   if (seq == seen) return false;
   if (st == BD_UPDATE_RECEIVING && seen && clock_ms() - sent_at < 250) return false;   // progress: 4 per second is plenty
@@ -52,6 +53,7 @@ bool ota_poll(bd_event *ev) {
   ev->u.update.built = built;
   ev->u.update.from = from;
   ev->u.update.version = version;
+  ev->u.update.title = title;
   return true;
 }
 // the new image's build date from its app description ("Nov 24 2026", "21:40:12") as "24 Nov 2026 21:40"
@@ -91,8 +93,8 @@ static struct {
   uint32_t len, got, t0, last_log, flash_us;
 } g_w;
 
-bool ota_open(uint32_t len, const uint8_t *first, size_t n, const char *version, const char *from, char *msg,
-              size_t cap) {
+bool ota_open(uint32_t len, const uint8_t *first, size_t n, const char *version, const char *title, const char *from,
+              char *msg, size_t cap) {
   if (g_w.open) return snprintf(msg, cap, "refused: another update is being written\n"), false;
   if (ota_machine_busy(msg, cap)) return false;
   if (ota_on_trial())   // the way back must lead to a firmware that passed its trial
@@ -118,6 +120,7 @@ bool ota_open(uint32_t len, const uint8_t *first, size_t n, const char *version,
   memcpy(g_up.built, built, sizeof built);
   snprintf(g_up.from, sizeof g_up.from, "%s", from ? from : "");
   snprintf(g_up.version, sizeof g_up.version, "%s", version ? version : "");
+  snprintf(g_up.title, sizeof g_up.title, "%s", title ? title : "");
   portEXIT_CRITICAL(&g_umux);
   g_w.open = true;
   g_w.part = next;
@@ -200,6 +203,42 @@ const char *ota_slot(void) {
   return b;
 }
 
+void ota_recovery_check(void) {
+  int x, y;
+  if (!bd_touch_read(&x, &y)) return;
+  Log.println("ota: the screen is pressed at start: hold 5 s to start the previous firmware");
+  const uint32_t t0 = clock_ms();
+  uint32_t last = t0;
+  while (clock_ms() - t0 < 5000) {
+    wait_ms(50);
+    if (bd_touch_read(&x, &y)) last = clock_ms();
+    else if (clock_ms() - last > 300) {   // let go (short gaps are the touch controller's, not the finger's)
+      Log.println("ota: released, starting as usual");
+      return;
+    }
+  }
+  const esp_partition_t *other = esp_ota_get_next_update_partition(NULL);
+  esp_app_desc_t d;
+  esp_ota_img_states_t st = ESP_OTA_IMG_UNDEFINED;
+  const bool app = other && esp_ota_get_partition_description(other, &d) == ESP_OK;
+  if (other) esp_ota_get_state_partition(other, &st);
+  if (!app || st == ESP_OTA_IMG_INVALID || st == ESP_OTA_IMG_ABORTED) {
+    Log.println("ota: no other firmware to start (only one was ever installed): starting as usual");
+    for (int i = 0; i < 2; i++) { bd_set_backlight(0); wait_ms(150); bd_set_backlight(100); wait_ms(150); }
+    return;
+  }
+  Log.printf("ota: held 5 s: starting the firmware in %s (%s, built %s %s)\n", other->label, d.version, d.date, d.time);
+  bd_set_backlight(0);   // one blink: taken
+  wait_ms(300);
+  bd_set_backlight(100);
+  if (esp_ota_set_boot_partition(other) != ESP_OK) {
+    Log.println("ota: could not select it: starting as usual");
+    return;
+  }
+  wait_ms(500);
+  esp_restart();
+}
+
 static volatile uint32_t g_loop_ms = 0;
 void ota_loop_alive(void) { g_loop_ms = clock_ms(); }
 
@@ -257,7 +296,7 @@ bool ota_receive(TcpConn &c, size_t len, const char *token, char *msg, size_t ca
     if (!got) {
       char from[16];
       c.peer_ip(from, sizeof from);   // outside any lock: peer_ip() waits on lwIP
-      if (!ota_open(len, buf, n, "", from, msg, cap)) return false;
+      if (!ota_open(len, buf, n, "", "", from, msg, cap)) return false;
     } else if (!ota_write(buf, n, msg, cap)) {
       return false;
     }

@@ -14,8 +14,10 @@
 // One image at a time. ota_open takes the image's first bytes (its header: an app image for this chip) and erases the
 // free slot; ota_write adds the rest; ota_finish checks the whole image and makes it the next boot (on trial).
 // Each returns false with msg set ("refused: ...", "write failed ...") and the page on STOPPED; nothing changes then.
-// version: the release being installed ("" = not known), from: where it comes from (an address, "github.com").
-bool ota_open(uint32_t len, const uint8_t *first, size_t n, const char *version, const char *from, char *msg, size_t cap);
+// version: the release being installed ("" = not known), title: the interface ("" = not known), from: where it comes
+// from (an address, "github.com").
+bool ota_open(uint32_t len, const uint8_t *first, size_t n, const char *version, const char *title, const char *from,
+              char *msg, size_t cap);
 bool ota_write(const uint8_t *b, size_t n, char *msg, size_t cap);
 bool ota_finish(char *msg, size_t cap);
 void ota_abort(const char *why);   // stop an open image (STOPPED); why is logged
@@ -24,6 +26,9 @@ bool ota_machine_busy(char *why, size_t cap);   // a shot, steam, hot water or a
 bool ota_on_trial(void);                        // the running firmware is new and not kept yet (no update then)
 void ota_restart(void);         // after INSTALLED: gives the page and the log a moment, then restarts
 void ota_begin(void);           // at boot: keeps or rolls back a new image (see above)
+// At start, before the UI: a press held for 5 s boots the other app slot (the previous firmware or interface), so an
+// interface without a way back can always be left. Only waits when the screen is already pressed.
+void ota_recovery_check(void);
 void ota_loop_alive(void);      // every UI loop pass: the trial's "UI loop alive"
 const char *ota_slot(void);     // "app0 (kept)", "app1 (on trial)", ... for GET /heap
 // The UI loop: true (and ev filled) when the update page should change (BD_EV_UPDATE; progress at most every 250 ms)
