@@ -1,0 +1,2 @@
+# raw pictures (interface previews, RGB565): never shown as text in diffs
+*.rgb565 binary
