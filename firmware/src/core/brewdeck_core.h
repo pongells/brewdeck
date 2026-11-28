@@ -252,7 +252,7 @@ typedef struct {
   char     about[96];             // one line about it ("" = none)
   uint32_t size;                  // image bytes
   bool     current;               // the UI running now
-  bool     has_preview;           // the release has a picture of its Ready screen (bd_ui_preview)
+  bool     has_preview;           // the release has pictures of it (bd_ui_preview)
 } bd_ui_entry;
 typedef struct {
   char        version[16];        // the release they come from
@@ -262,10 +262,11 @@ typedef struct {
 const bd_catalog *bd_ui_catalog(void);                // changes with bd_seq_release
 bd_result         bd_ui_install(const char *name);    // BUSY / UNKNOWN_ID as bd_release_install; also the running UI
                                                       // (a reinstall); progress: BD_EV_UPDATE
-// a picture of an interface's Ready screen (RGB565, 320 x 192), or NULL: not downloaded yet (asking starts the
-// download; ask only while you show it) or none in the release. Valid until the next bd_ui_tick (copy it to keep it on
-// screen); bd_seq_release changes when one arrives.
-typedef struct { const uint16_t *px; int w, h; } bd_picture;
+// pictures of an interface (RGB565, w x h = 320 x 192 each, `frames` of them one after another: its Ready screen,
+// then brewing and steam when the release has them), or NULL: not downloaded yet (asking starts the download; ask
+// only while you show them) or none in the release. Valid until the next bd_ui_tick (copy them to keep them on
+// screen); bd_seq_release changes when they arrive.
+typedef struct { const uint16_t *px; int w, h, frames; } bd_picture;
 const bd_picture *bd_ui_preview(const char *name);
 // key-value storage for the UI's own settings, in the UI's own namespace (flash, survives updates of the UI)
 int32_t bd_store_get_int(const char *key, int32_t def);

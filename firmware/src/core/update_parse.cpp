@@ -142,7 +142,9 @@ bool rel_parse_catalog(const char *line, size_t n, RelCatalog *out) {
       if (!str_field(o, on, "about", u->about, sizeof u->about)) u->about[0] = 0;   // optional
       if (str_field(o, on, "preview", u->preview, sizeof u->preview)) {            // optional, all three or none
         if (!file_ok(u->preview) || !num_field(o, on, "psize", &u->psize) ||
-            u->psize != REL_PREVIEW_W * REL_PREVIEW_H * 2 || !sha_field(o, on, u->psha256, "psha256")) return false;
+            u->psize % (REL_PREVIEW_W * REL_PREVIEW_H * 2) ||
+            u->psize / (REL_PREVIEW_W * REL_PREVIEW_H * 2) > REL_PREVIEW_FRAMES ||
+            !sha_field(o, on, u->psha256, "psha256")) return false;
       } else u->preview[0] = 0;
       for (int k = 0; k < out->n; k++)
         if (!strcmp(out->ui[k].name, u->name)) return false;                     // a name twice

@@ -150,8 +150,9 @@ from GitHub. The screen then runs the release image, without the debug server.
 
 **Interfaces.** Each release also carries `catalog-esp32p4.txt`: the same two-line format, listing Brewdeck (`screen`)
 and every UI in `uis.json` that built against the release's core, each with its image file, size and SHA-256 and a
-picture of its Ready screen (`preview-<tag>-<name>.rgb565`, 320 x 192 RGB565, its own SHA-256; made by
-`tools/release-preview.sh` from the emulator; the screen downloads one only while the Interface page shows it)
+file of pictures (`preview-<tag>-<name>.rgb565`: Ready, brewing and steam, 320 x 192 RGB565 each one after another,
+its own SHA-256; made by `tools/release-preview.sh` from the emulator; the screen downloads it only while the
+Interface page shows it)
 (`tools/uis.py catalog`, run by the release workflow in a job of its own: the UIs themselves are built without the
 key). The screen reads the catalogue first and falls back to `update-esp32p4.txt` for older releases. To try it
 without a release, sign a catalogue with the test key: put `screen.bin` and e.g. `ledger.bin` (release builds, `UI=`

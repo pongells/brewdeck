@@ -13,7 +13,8 @@ which changes only when a custom UI would need changes.
 On the screen:
 - ESP32-P4: other interfaces. Menu > Interface (a sixth menu row; the rows are a little lower) lists the interfaces of
   the newest release, Brewdeck's own and the UIs listed in `uis.json` (for now Ledger), each with a picture of its
-  Ready screen; a row opens its details, where Install (tap twice) installs it like an update.
+  Ready screen; a row opens its details, with pictures of it while brewing and steaming too (Ready | Brewing |
+  Steam), where Install (tap twice) installs it like an update.
   Holding the screen for 5 s while it starts boots the previous firmware, whatever interface is installed.
 
 For developers:

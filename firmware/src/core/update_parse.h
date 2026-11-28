@@ -21,12 +21,14 @@ bool rel_parse_line(const char *line, size_t n, RelDesc *out);
 //   line 1: {"version":"v0.3.1","chip":"esp32p4","uis":[{"name":"screen","title":"Brewdeck","file":"brewdeck-...bin",
 //            "size":1503232,"sha256":"<64 hex>","about":"...",
 //            "preview":"preview-v0.3.1-screen.rgb565","psize":122880,"psha256":"<64 hex>"}, ...]}
-// preview (optional): the interface's Ready screen, 320 x 192 RGB565 little-endian (REL_PREVIEW_W / _H).
+// preview (optional): pictures of the interface, 320 x 192 RGB565 little-endian each (REL_PREVIEW_W / _H), one
+// after another: Ready, then brewing and steam when the UI showed them (psize = 1 to REL_PREVIEW_FRAMES pictures).
 // Titles and descriptions never contain { } [ ] " or \ (uis.py refuses them), so each entry is the text between one
 // { and the next }.
 #define REL_MAX_UIS 8
 #define REL_PREVIEW_W 320
 #define REL_PREVIEW_H 192
+#define REL_PREVIEW_FRAMES 3
 typedef struct {
   char     name[16];     // the UI's BD_UI name ("screen" = Brewdeck's own)
   char     title[24];
@@ -35,7 +37,7 @@ typedef struct {
   uint32_t size;
   uint8_t  sha256[32];
   char     preview[64];  // "" = none
-  uint32_t psize;        // REL_PREVIEW_W * REL_PREVIEW_H * 2 when there is one
+  uint32_t psize;        // a multiple of REL_PREVIEW_W * REL_PREVIEW_H * 2 (1 to REL_PREVIEW_FRAMES pictures)
   uint8_t  psha256[32];
 } RelUi;
 typedef struct {

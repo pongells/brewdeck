@@ -12,6 +12,13 @@ expect_visible screen.interface_detail 2000
 expect_touch_targets 48
 expect_no_cmd
 shot X9: one interface's details
+# its other pictures (Brewdeck: Ready | Brewing | Steam under the picture): looking sends nothing
+tap_tag action.interface_pic_brewing
+expect_no_cmd
+shot X9: its brewing picture
+tap_tag action.interface_pic_steam
+expect_no_cmd
+shot X9: its steam picture
 tap_tag action.interface_install
 expect_no_cmd
 tap_tag action.interface_install

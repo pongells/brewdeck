@@ -99,7 +99,7 @@ jobs:
         with:
           python-version: '3.13'
       - run: sudo apt-get update && sudo apt-get install -y libsdl2-dev && pip install pillow
-      - name: Its Ready screen (the emulator, a fake machine) as the catalogue's preview
+      - name: Its Ready, brewing and steam screens (the emulator, a fake machine) as the catalogue's pictures
         run: tools/release-preview.sh "$UI_DIR" images/${{ matrix.ui }}.preview
       - uses: actions/upload-artifact@v7
         with:
@@ -110,7 +110,7 @@ jobs:
           if-no-files-found: error
 
   screen-preview:
-    name: Brewdeck's Ready screen for the catalogue
+    name: Brewdeck's pictures for the catalogue
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

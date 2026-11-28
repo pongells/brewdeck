@@ -76,6 +76,12 @@ int main() {
     memcpy(badp, withp, sizeof withp);
     memcpy(strstr(badp, "122880"), "122881", 6);                 // a preview of the wrong size: refused
     CHECK(!rel_parse_catalog(badp, strlen(badp), &c));
+    memcpy(strstr(badp, "122881"), "368640", 6);                 // three pictures (Ready, brewing, steam): fine
+    CHECK(rel_parse_catalog(badp, strlen(badp), &c) && c.ui[0].psize == 368640);
+    memcpy(strstr(badp, "368640"), "491520", 6);                 // four: too many
+    CHECK(!rel_parse_catalog(badp, strlen(badp), &c));
+    memcpy(strstr(badp, "491520"), "184320", 6);                 // one and a half
+    CHECK(!rel_parse_catalog(badp, strlen(badp), &c));
     // refused: a path as the file name, an upper-case name, a name twice, no entries, a bad hash
     struct { const char *what, *text; } bad[] = {
         {"path", "{\"version\":\"v0.3.1\",\"chip\":\"esp32p4\",\"uis\":[{\"name\":\"x\",\"title\":\"X\",\"file\":\"../x.bin\","

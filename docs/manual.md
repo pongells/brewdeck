@@ -174,12 +174,13 @@ the machine has released it.
   freeze, power dip or a system reset, e.g. after flashing a P4 board), memory, and the machine's firmware, screen and
   web UI versions, plus a pending machine update.
 - **Interface** (ESP32-P4): the interfaces of the newest release, Brewdeck's own and those made by others (such as
-  Ledger), each with a picture of its Ready screen and a line about it. Tap one for its details: a larger picture,
-  its size and **Install** (tap, then *Tap again to install*), which replaces Brewdeck with that interface: the
-  screen downloads and checks it like an update and restarts with it. Your Wi-Fi and the machine's address stay set;
-  each interface keeps its own settings. To come back, use the other interface's own page if it has one, or **hold the
-  screen for 5 s while it starts** (power it off and on, then keep a finger on it): it blinks once and starts the
-  previous firmware.
+  Ledger), each with a picture of its Ready screen and a line about it. Tap one for its details: a larger picture
+  (**Ready | Brewing | Steam** under it shows the interface during a shot and while steaming), its size and
+  **Install** (tap, then *Tap again to install*), which replaces Brewdeck with that interface: the screen downloads
+  and checks it like an update and restarts with it. Your Wi-Fi and the machine's address stay set; each interface
+  keeps its own settings. To come back, use the other interface's own page if it has one, or **hold the screen for
+  5 s while it starts** (power it off and on, then keep a finger on it): it blinks once and starts the previous
+  firmware.
 - **Updating Brewdeck** (ESP32-P4): the screen looks for a newer Brewdeck release once a day. When there is one, the
   menu's About row says *Update available*, the notices list it once, and About shows it next to *Brewdeck version*
   with an **Install** button: tap it, then *Tap again* within 3 s. The screen downloads the release (about 15 s),

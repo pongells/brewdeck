@@ -8,9 +8,10 @@
                                      the release's UI catalogue: <images dir>/screen.bin (Brewdeck) and <name>.bin per
                                      listed UI (missing ones are left out) -> <out dir>/brewdeck-<version>[-<name>]-
                                      <chip>.bin and catalog-<chip>.txt, signed like update-<chip>.txt (sign-update.sh)
-  tools/uis.py preview <screen.raw | .png> <out>
-                                     an 800 x 480 screenshot (the emulator's "save", RGB565, or a PNG) as the screen's
-                                     320 x 192 RGB565 preview; catalog picks up <images dir>/<name>.preview
+  tools/uis.py preview <out> <screen.raw | .png> [<screen> <screen>]
+                                     800 x 480 screenshots (the emulator's "save", RGB565, or PNGs: Ready, brewing,
+                                     steam) as the UI's preview: each shrunk to 320 x 192 RGB565, one after another;
+                                     catalog picks up <images dir>/<name>.preview
   tools/uis.py check <name> <status.md>
                                      the listing bar on a status table from tests/ui/run.sh: S1 (says it is
                                      unofficial) and X1 (no command without a user action) must be "done"; the whole
@@ -27,6 +28,8 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REQUIRED = ("S1", "X1")
 PREVIEW_W, PREVIEW_H = 320, 192   # firmware/src/core/update_parse.h REL_PREVIEW_W / _H
+PREVIEW_FRAMES = 3                # REL_PREVIEW_FRAMES: Ready, brewing, steam
+FRAME = PREVIEW_W * PREVIEW_H * 2
 FIELDS = ("name", "title", "repo", "commit", "folder", "license", "description")
 # Brewdeck's own UI, always first in a catalogue (its BD_UI name is "screen")
 BREWDECK = {"name": "screen", "title": "Brewdeck", "description": "This screen's own interface: every screen, shot review, history and settings."}
@@ -110,8 +113,8 @@ def catalog(uis, version, chip, images, key, out):
         pv = os.path.join(images, u["name"] + ".preview")
         if os.path.isfile(pv):
             pdata = open(pv, "rb").read()
-            if len(pdata) != PREVIEW_W * PREVIEW_H * 2:
-                sys.exit("catalog: %s is not a %d x %d RGB565 preview" % (pv, PREVIEW_W, PREVIEW_H))
+            if not pdata or len(pdata) % FRAME or len(pdata) // FRAME > PREVIEW_FRAMES:
+                sys.exit("catalog: %s is not 1 to %d %d x %d RGB565 pictures" % (pv, PREVIEW_FRAMES, PREVIEW_W, PREVIEW_H))
             pfn = "preview-%s-%s.rgb565" % (version, u["name"])
             shutil.copyfile(pv, os.path.join(out, pfn))
             e.update({"preview": pfn, "psize": len(pdata), "psha256": hashlib.sha256(pdata).hexdigest()})
@@ -135,27 +138,30 @@ def catalog(uis, version, chip, images, key, out):
     print("Signed: %s (%s)" % (path, ", ".join(e["name"] for e in entries)))
 
 
-def preview(src, out):
+def preview(out, srcs):
     from PIL import Image
-    if src.endswith(".png"):
-        im = Image.open(src).convert("RGB")
-    else:   # the emulator's save: 800 x 480 RGB565 little-endian
-        raw = open(src, "rb").read()
-        if len(raw) != 800 * 480 * 2:
-            sys.exit("preview: %s is not an 800 x 480 RGB565 screen" % src)
-        px = bytearray(800 * 480 * 3)
-        for i in range(800 * 480):
-            v = raw[2 * i] | raw[2 * i + 1] << 8
-            r, g, b = v >> 11, (v >> 5) & 63, v & 31
-            px[3 * i:3 * i + 3] = bytes(((r << 3) | (r >> 2), (g << 2) | (g >> 4), (b << 3) | (b >> 2)))
-        im = Image.frombytes("RGB", (800, 480), bytes(px))
-    im = im.resize((PREVIEW_W, PREVIEW_H), Image.LANCZOS)
-    rgb, o = im.tobytes(), bytearray()
-    for i in range(0, len(rgb), 3):
-        v = (rgb[i] >> 3) << 11 | (rgb[i + 1] >> 2) << 5 | rgb[i + 2] >> 3
-        o += bytes((v & 255, v >> 8))
+    if not 1 <= len(srcs) <= PREVIEW_FRAMES:
+        sys.exit("preview: 1 to %d screens" % PREVIEW_FRAMES)
+    o = bytearray()
+    for src in srcs:
+        if src.endswith(".png"):
+            im = Image.open(src).convert("RGB")
+        else:   # the emulator's save: 800 x 480 RGB565 little-endian
+            raw = open(src, "rb").read()
+            if len(raw) != 800 * 480 * 2:
+                sys.exit("preview: %s is not an 800 x 480 RGB565 screen" % src)
+            px = bytearray(800 * 480 * 3)
+            for i in range(800 * 480):
+                v = raw[2 * i] | raw[2 * i + 1] << 8
+                r, g, b = v >> 11, (v >> 5) & 63, v & 31
+                px[3 * i:3 * i + 3] = bytes(((r << 3) | (r >> 2), (g << 2) | (g >> 4), (b << 3) | (b >> 2)))
+            im = Image.frombytes("RGB", (800, 480), bytes(px))
+        rgb = im.resize((PREVIEW_W, PREVIEW_H), Image.LANCZOS).tobytes()
+        for i in range(0, len(rgb), 3):
+            v = (rgb[i] >> 3) << 11 | (rgb[i + 1] >> 2) << 5 | rgb[i + 2] >> 3
+            o += bytes((v & 255, v >> 8))
     open(out, "wb").write(o)
-    print("preview: %s (%d x %d RGB565)" % (out, PREVIEW_W, PREVIEW_H))
+    print("preview: %s (%d x %d x %d RGB565)" % (out, len(srcs), PREVIEW_W, PREVIEW_H))
 
 
 def check(u, status_md):
@@ -194,8 +200,8 @@ def main():
         fetch(find(uis, sys.argv[2]), sys.argv[3])
     elif cmd == "catalog" and len(sys.argv) == 7:
         catalog(uis, *sys.argv[2:7])
-    elif cmd == "preview" and len(sys.argv) == 4:
-        preview(sys.argv[2], sys.argv[3])
+    elif cmd == "preview" and 4 <= len(sys.argv) <= 3 + PREVIEW_FRAMES:
+        preview(sys.argv[2], sys.argv[3:])
     elif cmd == "check" and len(sys.argv) == 4:
         return check(find(uis, sys.argv[2]), sys.argv[3])
     else:

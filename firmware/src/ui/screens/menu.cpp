@@ -52,11 +52,15 @@ static void on_rel_install(lv_event_t *e) {
 static const int IF_ROWS = BD_MAX_UIS, PV_W = 320, PV_H = 192, TH_W = 160, TH_H = 96;
 static lv_obj_t *g_if_row[IF_ROWS], *g_if_title[IF_ROWS], *g_if_state[IF_ROWS], *g_if_about[IF_ROWS];
 static lv_obj_t *g_if_thumb[IF_ROWS], *g_if_empty;
-static uint16_t *g_if_px[IF_ROWS], *g_if_th[IF_ROWS];   // our copies: 320 x 192 and the 160 x 96 thumbnail
-static lv_image_dsc_t g_if_dsc[IF_ROWS], g_if_tdsc[IF_ROWS];
+static uint16_t *g_if_px[IF_ROWS], *g_if_th[IF_ROWS];   // our copies: 320 x 192 each picture, the 160 x 96 thumbnail
+static int g_if_nf[IF_ROWS];                     // pictures in g_if_px: Ready, then brewing and steam if the release has them
+static lv_image_dsc_t g_if_tdsc[IF_ROWS], g_ifd_dsc;
 static char g_if_ver[16];                        // the release the copies belong to
 static int g_if_sel = -1;                        // the entry the details page shows
 static lv_obj_t *g_ifd_img, *g_ifd_about, *g_ifd_size, *g_ifd_state, *g_ifd_btn, *g_ifd_btn_lbl;
+static const int IFD_PICS = 3;
+static lv_obj_t *g_ifd_tog, *g_ifd_seg[IFD_PICS], *g_ifd_seg_l[IFD_PICS];   // Ready | Brewing | Steam under the picture
+static int g_ifd_pic = 0;                        // the picture shown
 static uint32_t g_ifd_armed = 0;                 // lv_tick of the first Install tap, 0 = not armed
 static char g_ifd_title[24];
 
@@ -70,12 +74,35 @@ static void dsc_init(lv_image_dsc_t *d, const uint16_t *px, int w, int h) {
   d->data = (const uint8_t *)px;
   d->data_size = (uint32_t)(w * h * 2);
 }
-// takes the core's picture of entry k once it is there: a copy, and a thumbnail of 2 x 2 averages
+// the details page's picture: the chosen one of the selected entry, and the toggle for the pictures it has
+static void ifd_show_pic(void) {
+  if (!g_ifd_tog) return;                        // the page is not built yet
+  const int k = g_if_sel, n = k >= 0 && k < IF_ROWS && g_if_px[k] ? g_if_nf[k] : 0;
+  if (g_ifd_pic >= n) g_ifd_pic = 0;
+  if (n) {
+    dsc_init(&g_ifd_dsc, g_if_px[k] + g_ifd_pic * PV_W * PV_H, PV_W, PV_H);
+    lv_image_set_src(g_ifd_img, &g_ifd_dsc);
+  } else {
+    lv_image_set_src(g_ifd_img, NULL);
+  }
+  set_hidden(g_ifd_tog, n < 2);
+  for (int i = 0; i < IFD_PICS; i++) {
+    set_hidden(g_ifd_seg[i], i >= n);
+    lv_obj_set_style_bg_opa(g_ifd_seg[i], i == g_ifd_pic ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+    set_tc(g_ifd_seg_l[i], i == g_ifd_pic ? COL_TEXT : COL_MUTED);
+  }
+}
+static void on_ifd_seg(lv_event_t *e) {
+  g_ifd_pic = (int)(intptr_t)lv_event_get_user_data(e);
+  ifd_show_pic();
+}
+// takes the core's pictures of entry k once they are there: a copy, and a thumbnail of the first (2 x 2 averages)
 static void if_take_preview(int k, const char *name) {
   if (g_if_px[k]) return;
   const bd_picture *p = bd_ui_preview(name);    // asking starts the download
-  if (!p || p->w != PV_W || p->h != PV_H) return;
-  g_if_px[k] = (uint16_t *)bd_alloc(PV_W * PV_H * 2, BD_MEM_PSRAM);
+  if (!p || p->w != PV_W || p->h != PV_H || p->frames < 1) return;
+  const int nf = p->frames < IFD_PICS ? p->frames : IFD_PICS;
+  g_if_px[k] = (uint16_t *)bd_alloc((size_t)nf * PV_W * PV_H * 2, BD_MEM_PSRAM);
   g_if_th[k] = (uint16_t *)bd_alloc(TH_W * TH_H * 2, BD_MEM_PSRAM);
   if (!g_if_px[k] || !g_if_th[k]) {
     bd_free(g_if_px[k]);
@@ -83,7 +110,8 @@ static void if_take_preview(int k, const char *name) {
     g_if_px[k] = g_if_th[k] = NULL;
     return;
   }
-  memcpy(g_if_px[k], p->px, PV_W * PV_H * 2);
+  memcpy(g_if_px[k], p->px, (size_t)nf * PV_W * PV_H * 2);
+  g_if_nf[k] = nf;
   for (int y = 0; y < TH_H; y++)
     for (int x = 0; x < TH_W; x++) {
       const uint16_t *s = g_if_px[k] + 2 * y * PV_W + 2 * x;
@@ -92,10 +120,9 @@ static void if_take_preview(int k, const char *name) {
       for (int i = 0; i < 4; i++) { r += q[i] >> 11; g += (q[i] >> 5) & 63; b += q[i] & 31; }
       g_if_th[k][y * TH_W + x] = (uint16_t)((r / 4) << 11 | (g / 4) << 5 | (b / 4));
     }
-  dsc_init(&g_if_dsc[k], g_if_px[k], PV_W, PV_H);
   dsc_init(&g_if_tdsc[k], g_if_th[k], TH_W, TH_H);
   lv_image_set_src(g_if_thumb[k], &g_if_tdsc[k]);
-  if (g_if_sel == k) lv_image_set_src(g_ifd_img, &g_if_dsc[k]);
+  if (g_if_sel == k) ifd_show_pic();
 }
 static void if_forget_previews(void) {           // another release: other pictures
   for (int k = 0; k < IF_ROWS; k++) {
@@ -103,8 +130,9 @@ static void if_forget_previews(void) {           // another release: other pictu
     bd_free(g_if_px[k]);
     bd_free(g_if_th[k]);
     g_if_px[k] = g_if_th[k] = NULL;
+    g_if_nf[k] = 0;
   }
-  lv_image_set_src(g_ifd_img, NULL);
+  ifd_show_pic();
 }
 static void on_if_row(lv_event_t *e) {
   g_if_sel = (int)(intptr_t)lv_event_get_user_data(e);
@@ -112,7 +140,8 @@ static void on_if_row(lv_event_t *e) {
   const bd_catalog *c = bd_ui_catalog();
   if (g_if_sel >= c->n) return;
   snprintf(g_ifd_title, sizeof g_ifd_title, "%s", c->ui[g_if_sel].title);
-  lv_image_set_src(g_ifd_img, g_if_px[g_if_sel] ? &g_if_dsc[g_if_sel] : NULL);
+  g_ifd_pic = 0;
+  ifd_show_pic();
   menu_show_page(MP_IFACE_DETAIL);
 }
 static void on_ifd_install(lv_event_t *e) {
@@ -219,7 +248,8 @@ static void build_interface_page(void) {
   lv_obj_set_width(n, 752);
   lv_obj_align(n, LV_ALIGN_BOTTOM_LEFT, 0, -4);
 
-  // the details: the picture at full size, the description, size and release, Install (or "Running now")
+  // the details: the picture at full size with a toggle under it for its other pictures (brewing, steam), the
+  // description, size and release, Install (or "Running now")
   lv_obj_t *d = g_menu_page[MP_IFACE_DETAIL] = box(g_menu, 24, 96, 752, 360, COL_BG, 0);
   tag(d, "screen.interface_detail");
   lv_obj_t *frame = box(d, 0, 0, PV_W, PV_H, COL_CARD, RAD_CARD);
@@ -229,6 +259,29 @@ static void build_interface_page(void) {
   lv_obj_set_style_border_post(frame, true, 0);
   g_ifd_img = lv_image_create(frame);
   lv_obj_set_pos(g_ifd_img, 0, 0);
+  g_ifd_tog = flex(d, LV_FLEX_FLOW_ROW, 2);     // like the shot review's Target | Previous
+  lv_obj_set_pos(g_ifd_tog, 0, PV_H + 12);
+  lv_obj_set_size(g_ifd_tog, PV_W, 54);
+  lv_obj_set_style_pad_all(g_ifd_tog, 3, 0);
+  lv_obj_set_style_radius(g_ifd_tog, RAD_CTRL, 0);
+  lv_obj_set_style_bg_opa(g_ifd_tog, LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_color(g_ifd_tog, COL_WELL, 0);
+  static const char *pics[IFD_PICS] = {"Ready", "Brewing", "Steam"};
+  static const char *tags[IFD_PICS] = {"action.interface_pic_ready", "action.interface_pic_brewing",
+                                       "action.interface_pic_steam"};
+  for (int i = 0; i < IFD_PICS; i++) {
+    g_ifd_seg[i] = flex(g_ifd_tog, LV_FLEX_FLOW_ROW, 0);
+    lv_obj_set_flex_align(g_ifd_seg[i], LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_height(g_ifd_seg[i], 48);
+    lv_obj_set_flex_grow(g_ifd_seg[i], 1);
+    lv_obj_set_style_radius(g_ifd_seg[i], RAD_INNER, 0);
+    lv_obj_set_style_bg_color(g_ifd_seg[i], COL_PK_BTN, 0);
+    lv_obj_set_clickable(g_ifd_seg[i], true);
+    lv_obj_add_event_cb(g_ifd_seg[i], on_ifd_seg, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+    tag(g_ifd_seg[i], tags[i]);
+    g_ifd_seg_l[i] = label(g_ifd_seg[i], pics[i], F_TEXT_B, COL_MUTED);
+  }
+  set_hidden(g_ifd_tog, true);
   g_ifd_about = label(d, "", F_TEXT, COL_TEXT);
   lv_label_set_long_mode(g_ifd_about, LV_LABEL_LONG_MODE_WRAP);
   lv_obj_set_width(g_ifd_about, 752 - PV_W - 24);

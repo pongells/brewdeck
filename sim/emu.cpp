@@ -872,10 +872,11 @@ const bd_catalog *bd_ui_catalog(void) {
   for (int i = 0; i < g_cat.n; i++) g_cat.ui[i].current = !strcmp(g_cat.ui[i].name, BD_UI.name);
   return &g_cat;
 }
-// previews: sim/data/preview-<name>.rgb565 (tools/uis.py preview of docs/images/ready.png / ui-ledger.png)
+// previews: sim/data/preview-<name>.rgb565 (tools/release-preview.sh: Ready, brewing, steam), 1 to 3 pictures
 const bd_picture *bd_ui_preview(const char *name) {
   static bd_picture pic[BD_MAX_UIS];
   static uint16_t *px[BD_MAX_UIS];
+  static int frames[BD_MAX_UIS];
   for (int i = 0; i < g_cat.n; i++) {
     if (!name || strcmp(g_cat.ui[i].name, name)) continue;
     if (!px[i]) {
@@ -883,10 +884,12 @@ const bd_picture *bd_ui_preview(const char *name) {
       size_t n = 0;
       snprintf(fn, sizeof fn, "preview-%s.rgb565", name);
       char *b = read_file(fn, &n);
-      if (!b || n != 320 * 192 * 2) { free(b); return NULL; }
+      const size_t f = 320 * 192 * 2;
+      if (!b || !n || n % f || n / f > 3) { free(b); return NULL; }
       px[i] = (uint16_t *)b;
+      frames[i] = (int)(n / f);
     }
-    pic[i] = {px[i], 320, 192};
+    pic[i] = {px[i], 320, 192, frames[i]};
     return &pic[i];
   }
   return NULL;

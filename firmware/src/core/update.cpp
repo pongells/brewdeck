@@ -99,6 +99,7 @@ const bd_picture *bd_ui_preview(const char *name) {
     pic.px = g_pv_px[k];
     pic.w = REL_PREVIEW_W;
     pic.h = REL_PREVIEW_H;
+    pic.frames = (int)(g_cat.ui[k].psize / (REL_PREVIEW_W * REL_PREVIEW_H * 2));
     r = &pic;
   } else if (k >= 0 && g_cat.ui[k].preview[0] && !(g_pv_failed & 1u << k)) {
     g_pv_want |= 1u << k;   // update_tick starts the download
